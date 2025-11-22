@@ -1,0 +1,142 @@
+import { useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Button } from "@/components/ui/button";
+import { LogOut, Wallet, TrendingUp, History } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { useToast } from "@/hooks/use-toast";
+import AccountOverview from "./member/AccountOverview";
+import TransactionHistory from "./member/TransactionHistory";
+import LoanApplication from "./member/LoanApplication";
+import SavingsTracker from "./member/SavingsTracker";
+
+interface AccountData {
+  id: string;
+  balance: number;
+  total_savings: number;
+  account_number: string;
+}
+
+const MemberDashboard = () => {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [account, setAccount] = useState<AccountData | null>(null);
+  const [activeLoans, setActiveLoans] = useState(0);
+
+  useEffect(() => {
+    loadAccountData();
+  }, []);
+
+  const loadAccountData = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    
+    if (user) {
+      const { data: accountData } = await supabase
+        .from("accounts")
+        .select("id, balance, total_savings, account_number")
+        .eq("user_id", user.id)
+        .single();
+
+      if (accountData) {
+        setAccount(accountData);
+      }
+
+      const { count } = await supabase
+        .from("loans")
+        .select("id", { count: "exact" })
+        .eq("account_id", accountData?.id)
+        .in("status", ["approved", "disbursed"]);
+
+      setActiveLoans(count || 0);
+    }
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    toast({
+      title: "Logged out",
+      description: "You have been logged out successfully",
+    });
+    navigate("/auth");
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+      <div className="container mx-auto p-6 space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">My Account</h1>
+            <p className="text-muted-foreground">Account: {account?.account_number}</p>
+          </div>
+          <Button variant="outline" onClick={handleLogout}>
+            <LogOut className="mr-2 h-4 w-4" />
+            Logout
+          </Button>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Current Balance</CardTitle>
+              <Wallet className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">UGX {account?.balance.toLocaleString() || 0}</div>
+              <p className="text-xs text-muted-foreground">Available funds</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Total Savings</CardTitle>
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">UGX {account?.total_savings.toLocaleString() || 0}</div>
+              <p className="text-xs text-muted-foreground">Accumulated savings</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Active Loans</CardTitle>
+              <History className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{activeLoans}</div>
+              <p className="text-xs text-muted-foreground">Loans in progress</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Tabs defaultValue="overview" className="space-y-4">
+          <TabsList>
+            <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="transactions">Transactions</TabsTrigger>
+            <TabsTrigger value="loans">Apply for Loan</TabsTrigger>
+            <TabsTrigger value="savings">Savings</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="overview" className="space-y-4">
+            <AccountOverview />
+          </TabsContent>
+
+          <TabsContent value="transactions" className="space-y-4">
+            <TransactionHistory />
+          </TabsContent>
+
+          <TabsContent value="loans" className="space-y-4">
+            <LoanApplication onApplicationSubmitted={loadAccountData} />
+          </TabsContent>
+
+          <TabsContent value="savings" className="space-y-4">
+            <SavingsTracker />
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
+};
+
+export default MemberDashboard;
