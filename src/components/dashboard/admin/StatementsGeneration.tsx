@@ -83,7 +83,7 @@ const StatementsGeneration = () => {
       .eq("account_id", profile.accounts[0].id);
 
     // Generate statement text
-    let statement = `SACCO MEMBER STATEMENT\n`;
+    let statement = `KINONI SACCO - MEMBER STATEMENT\n`;
     statement += `Generated: ${format(new Date(), "MMMM dd, yyyy")}\n\n`;
     statement += `Member: ${profile.full_name}\n`;
     statement += `Email: ${profile.email}\n`;
@@ -150,7 +150,7 @@ const StatementsGeneration = () => {
     const totalSavings = accounts?.reduce((sum, acc) => sum + Number(acc.total_savings), 0) || 0;
     const totalLoans = loans?.reduce((sum, loan) => sum + Number(loan.outstanding_balance), 0) || 0;
 
-    let statement = `SACCO GROUP STATEMENT\n`;
+    let statement = `KINONI SACCO - GROUP STATEMENT\n`;
     statement += `Generated: ${format(new Date(), "MMMM dd, yyyy")}\n\n`;
     statement += `Total Members: ${accounts?.length || 0}\n`;
     statement += `Total Balance: UGX ${totalBalance.toLocaleString()}\n`;

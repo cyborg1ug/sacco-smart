@@ -10,6 +10,7 @@ import AccountOverview from "./member/AccountOverview";
 import TransactionHistory from "./member/TransactionHistory";
 import LoanApplication from "./member/LoanApplication";
 import SavingsTracker from "./member/SavingsTracker";
+import MemberStatement from "./member/MemberStatement";
 
 interface AccountData {
   id: string;
@@ -66,7 +67,7 @@ const MemberDashboard = () => {
       <div className="container mx-auto p-6 space-y-6">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">My Account</h1>
+            <h1 className="text-3xl font-bold text-foreground">KINONI SACCO</h1>
             <p className="text-muted-foreground">Account: {account?.account_number}</p>
           </div>
           <Button variant="outline" onClick={handleLogout}>
@@ -111,11 +112,12 @@ const MemberDashboard = () => {
         </div>
 
         <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList>
+          <TabsList className="flex-wrap h-auto gap-1">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
             <TabsTrigger value="loans">Apply for Loan</TabsTrigger>
             <TabsTrigger value="savings">Savings</TabsTrigger>
+            <TabsTrigger value="statement">Statement</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
@@ -132,6 +134,10 @@ const MemberDashboard = () => {
 
           <TabsContent value="savings" className="space-y-4">
             <SavingsTracker />
+          </TabsContent>
+
+          <TabsContent value="statement" className="space-y-4">
+            <MemberStatement />
           </TabsContent>
         </Tabs>
       </div>

@@ -3,13 +3,14 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { LogOut, Users, DollarSign, TrendingUp, FileText } from "lucide-react";
+import { LogOut, Users, DollarSign, TrendingUp, FileText, BarChart3 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import MembersManagement from "./admin/MembersManagement";
 import TransactionsManagement from "./admin/TransactionsManagement";
 import LoansManagement from "./admin/LoansManagement";
 import StatementsGeneration from "./admin/StatementsGeneration";
+import ReportsGeneration from "./admin/ReportsGeneration";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -57,7 +58,7 @@ const AdminDashboard = () => {
       <div className="container mx-auto p-6 space-y-6">
         <div className="flex justify-between items-center">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Admin Dashboard</h1>
+            <h1 className="text-3xl font-bold text-foreground">KINONI SACCO - Admin</h1>
             <p className="text-muted-foreground">Manage your SACCO operations</p>
           </div>
           <Button variant="outline" onClick={handleLogout}>
@@ -113,11 +114,12 @@ const AdminDashboard = () => {
         </div>
 
         <Tabs defaultValue="members" className="space-y-4">
-          <TabsList>
+          <TabsList className="flex-wrap h-auto gap-1">
             <TabsTrigger value="members">Members</TabsTrigger>
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
             <TabsTrigger value="loans">Loans</TabsTrigger>
             <TabsTrigger value="statements">Statements</TabsTrigger>
+            <TabsTrigger value="reports">Reports</TabsTrigger>
           </TabsList>
 
           <TabsContent value="members" className="space-y-4">
@@ -134,6 +136,10 @@ const AdminDashboard = () => {
 
           <TabsContent value="statements" className="space-y-4">
             <StatementsGeneration />
+          </TabsContent>
+
+          <TabsContent value="reports" className="space-y-4">
+            <ReportsGeneration />
           </TabsContent>
         </Tabs>
       </div>
