@@ -2,3 +2,6 @@ project_id = "npgbotlrokivbuqqzbwm"
 
 [functions.create-member]
 verify_jwt = false
+
+[functions.send-reminder-email]
+verify_jwt = true
