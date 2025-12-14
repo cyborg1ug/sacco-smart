@@ -70,19 +70,14 @@ const MembersManagement = () => {
     const fullName = formData.get("fullName") as string;
     const phoneNumber = formData.get("phoneNumber") as string;
 
-    const { error } = await supabase.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-      user_metadata: {
-        full_name: fullName,
-      },
+    const { data, error } = await supabase.functions.invoke('create-member', {
+      body: { email, password, fullName, phoneNumber }
     });
 
-    if (error) {
+    if (error || data?.error) {
       toast({
         title: "Error",
-        description: error.message,
+        description: error?.message || data?.error || "Failed to create member",
         variant: "destructive",
       });
     } else {
