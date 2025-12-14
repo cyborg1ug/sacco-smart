@@ -93,6 +93,18 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
 
     if (!account) return;
 
+    // Validate sufficient balance for withdrawals and loan repayments
+    if (type === "withdrawal" || type === "loan_repayment") {
+      if (account.balance < amount) {
+        toast({
+          title: "Insufficient Balance",
+          description: `Cannot process ${type.replace("_", " ")}. Available balance: UGX ${account.balance.toLocaleString()}, Requested: UGX ${amount.toLocaleString()}`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     let newBalance = account.balance;
     let newTotalSavings = account.total_savings;
 
