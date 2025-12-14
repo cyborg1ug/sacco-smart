@@ -1,0 +1,311 @@
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
+import { format } from "date-fns";
+
+interface Transaction {
+  created_at: string;
+  transaction_type: string;
+  amount: number;
+  status: string;
+  description?: string;
+}
+
+interface Loan {
+  amount: number;
+  interest_rate: number;
+  total_amount: number;
+  outstanding_balance: number;
+  status: string;
+}
+
+interface SavingsRecord {
+  week_start: string;
+  week_end: string;
+  amount: number;
+}
+
+interface MemberStatementData {
+  memberName: string;
+  email: string;
+  phoneNumber?: string;
+  accountNumber: string;
+  balance: number;
+  totalSavings: number;
+  transactions: Transaction[];
+  loans: Loan[];
+  savings: SavingsRecord[];
+}
+
+interface GroupReportData {
+  totalMembers: number;
+  totalBalance: number;
+  totalSavings: number;
+  totalOutstandingLoans: number;
+  periodDeposits: number;
+  periodWithdrawals: number;
+  pendingLoans: number;
+  approvedLoans: number;
+  disbursedLoans: number;
+  completedLoans: number;
+  members: {
+    name: string;
+    accountNumber: string;
+    balance: number;
+    savings: number;
+  }[];
+  dateRange: { start: Date; end: Date };
+}
+
+export const generateMemberStatementPDF = (data: MemberStatementData): void => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  
+  // Header
+  doc.setFontSize(20);
+  doc.setTextColor(0, 100, 0);
+  doc.text("KINONI SACCO", pageWidth / 2, 20, { align: "center" });
+  
+  doc.setFontSize(14);
+  doc.setTextColor(100, 100, 100);
+  doc.text("Member Statement", pageWidth / 2, 30, { align: "center" });
+  
+  doc.setFontSize(10);
+  doc.text(`Generated: ${format(new Date(), "MMMM dd, yyyy 'at' hh:mm a")}`, pageWidth / 2, 38, { align: "center" });
+  
+  // Member Info
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
+  doc.text("ACCOUNT DETAILS", 14, 50);
+  doc.setDrawColor(0, 100, 0);
+  doc.line(14, 52, pageWidth - 14, 52);
+  
+  doc.setFontSize(10);
+  doc.text(`Member Name: ${data.memberName}`, 14, 60);
+  doc.text(`Email: ${data.email}`, 14, 66);
+  doc.text(`Phone: ${data.phoneNumber || "N/A"}`, 14, 72);
+  doc.text(`Account Number: ${data.accountNumber}`, 14, 78);
+  
+  doc.setFontSize(11);
+  doc.setTextColor(0, 100, 0);
+  doc.text(`Current Balance: UGX ${data.balance.toLocaleString()}`, 14, 88);
+  doc.text(`Total Savings: UGX ${data.totalSavings.toLocaleString()}`, 14, 94);
+  
+  // Transactions Table
+  let startY = 105;
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
+  doc.text("TRANSACTION HISTORY", 14, startY);
+  
+  if (data.transactions.length > 0) {
+    autoTable(doc, {
+      startY: startY + 5,
+      head: [["Date", "Type", "Amount (UGX)", "Status"]],
+      body: data.transactions.map((t) => [
+        format(new Date(t.created_at), "MMM dd, yyyy"),
+        t.transaction_type.toUpperCase().replace("_", " "),
+        t.amount.toLocaleString(),
+        t.status.toUpperCase(),
+      ]),
+      theme: "grid",
+      headStyles: { fillColor: [0, 100, 0] },
+      styles: { fontSize: 9 },
+    });
+  } else {
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text("No transactions found.", 14, startY + 10);
+  }
+  
+  // Savings Table
+  const savingsY = (doc as any).lastAutoTable?.finalY + 15 || startY + 25;
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
+  doc.text("SAVINGS RECORDS", 14, savingsY);
+  
+  if (data.savings.length > 0) {
+    autoTable(doc, {
+      startY: savingsY + 5,
+      head: [["Week", "Amount (UGX)"]],
+      body: data.savings.map((s) => [
+        `${format(new Date(s.week_start), "MMM dd")} - ${format(new Date(s.week_end), "MMM dd, yyyy")}`,
+        s.amount.toLocaleString(),
+      ]),
+      theme: "grid",
+      headStyles: { fillColor: [0, 100, 0] },
+      styles: { fontSize: 9 },
+    });
+  } else {
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text("No savings records found.", 14, savingsY + 10);
+  }
+  
+  // Loans Table
+  const loansY = (doc as any).lastAutoTable?.finalY + 15 || savingsY + 25;
+  
+  if (loansY > 250) {
+    doc.addPage();
+  }
+  
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
+  doc.text("LOAN HISTORY", 14, loansY > 250 ? 20 : loansY);
+  
+  if (data.loans.length > 0) {
+    autoTable(doc, {
+      startY: (loansY > 250 ? 20 : loansY) + 5,
+      head: [["Amount (UGX)", "Interest", "Total Payable", "Outstanding", "Status"]],
+      body: data.loans.map((l) => [
+        l.amount.toLocaleString(),
+        `${l.interest_rate}%`,
+        l.total_amount.toLocaleString(),
+        l.outstanding_balance.toLocaleString(),
+        l.status.toUpperCase(),
+      ]),
+      theme: "grid",
+      headStyles: { fillColor: [0, 100, 0] },
+      styles: { fontSize: 9 },
+    });
+  } else {
+    doc.setFontSize(10);
+    doc.setTextColor(100, 100, 100);
+    doc.text("No loan records found.", 14, (loansY > 250 ? 20 : loansY) + 10);
+  }
+  
+  // Footer
+  const footerY = doc.internal.pageSize.getHeight() - 15;
+  doc.setFontSize(8);
+  doc.setTextColor(100, 100, 100);
+  doc.text("This statement is generated by KINONI SACCO Management System.", pageWidth / 2, footerY, { align: "center" });
+  
+  doc.save(`kinoni_statement_${data.accountNumber}_${format(new Date(), "yyyyMMdd")}.pdf`);
+};
+
+export const generateGroupReportPDF = (data: GroupReportData): void => {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  
+  // Header
+  doc.setFontSize(20);
+  doc.setTextColor(0, 100, 0);
+  doc.text("KINONI SACCO", pageWidth / 2, 20, { align: "center" });
+  
+  doc.setFontSize(14);
+  doc.setTextColor(100, 100, 100);
+  doc.text("Group Report", pageWidth / 2, 30, { align: "center" });
+  
+  doc.setFontSize(10);
+  doc.text(`Period: ${format(data.dateRange.start, "MMM dd, yyyy")} - ${format(data.dateRange.end, "MMM dd, yyyy")}`, pageWidth / 2, 38, { align: "center" });
+  doc.text(`Generated: ${format(new Date(), "MMMM dd, yyyy 'at' hh:mm a")}`, pageWidth / 2, 44, { align: "center" });
+  
+  // Executive Summary
+  doc.setFontSize(12);
+  doc.setTextColor(0, 0, 0);
+  doc.text("EXECUTIVE SUMMARY", 14, 56);
+  doc.setDrawColor(0, 100, 0);
+  doc.line(14, 58, pageWidth - 14, 58);
+  
+  doc.setFontSize(10);
+  const summaryData = [
+    ["Total Members", data.totalMembers.toString()],
+    ["Combined Balance", `UGX ${data.totalBalance.toLocaleString()}`],
+    ["Combined Savings", `UGX ${data.totalSavings.toLocaleString()}`],
+    ["Outstanding Loans", `UGX ${data.totalOutstandingLoans.toLocaleString()}`],
+  ];
+  
+  autoTable(doc, {
+    startY: 62,
+    body: summaryData,
+    theme: "plain",
+    styles: { fontSize: 10 },
+    columnStyles: { 0: { fontStyle: "bold" } },
+  });
+  
+  // Period Activity
+  const activityY = (doc as any).lastAutoTable?.finalY + 10 || 100;
+  doc.setFontSize(12);
+  doc.text("PERIOD ACTIVITY", 14, activityY);
+  doc.line(14, activityY + 2, pageWidth - 14, activityY + 2);
+  
+  autoTable(doc, {
+    startY: activityY + 6,
+    body: [
+      ["Total Deposits", `UGX ${data.periodDeposits.toLocaleString()}`],
+      ["Total Withdrawals", `UGX ${data.periodWithdrawals.toLocaleString()}`],
+      ["Net Movement", `UGX ${(data.periodDeposits - data.periodWithdrawals).toLocaleString()}`],
+    ],
+    theme: "plain",
+    styles: { fontSize: 10 },
+    columnStyles: { 0: { fontStyle: "bold" } },
+  });
+  
+  // Loan Portfolio
+  const loanY = (doc as any).lastAutoTable?.finalY + 10 || 140;
+  doc.setFontSize(12);
+  doc.text("LOAN PORTFOLIO", 14, loanY);
+  doc.line(14, loanY + 2, pageWidth - 14, loanY + 2);
+  
+  autoTable(doc, {
+    startY: loanY + 6,
+    head: [["Status", "Count"]],
+    body: [
+      ["Pending", data.pendingLoans.toString()],
+      ["Approved", data.approvedLoans.toString()],
+      ["Disbursed", data.disbursedLoans.toString()],
+      ["Completed", data.completedLoans.toString()],
+    ],
+    theme: "grid",
+    headStyles: { fillColor: [0, 100, 0] },
+    styles: { fontSize: 9 },
+  });
+  
+  // Member Breakdown
+  const memberY = (doc as any).lastAutoTable?.finalY + 15 || 180;
+  
+  if (memberY > 220) {
+    doc.addPage();
+    doc.setFontSize(12);
+    doc.text("MEMBER BREAKDOWN", 14, 20);
+    doc.line(14, 22, pageWidth - 14, 22);
+    
+    autoTable(doc, {
+      startY: 26,
+      head: [["Member Name", "Account No.", "Balance (UGX)", "Savings (UGX)"]],
+      body: data.members.map((m) => [
+        m.name,
+        m.accountNumber,
+        m.balance.toLocaleString(),
+        m.savings.toLocaleString(),
+      ]),
+      theme: "grid",
+      headStyles: { fillColor: [0, 100, 0] },
+      styles: { fontSize: 9 },
+    });
+  } else {
+    doc.setFontSize(12);
+    doc.text("MEMBER BREAKDOWN", 14, memberY);
+    doc.line(14, memberY + 2, pageWidth - 14, memberY + 2);
+    
+    autoTable(doc, {
+      startY: memberY + 6,
+      head: [["Member Name", "Account No.", "Balance (UGX)", "Savings (UGX)"]],
+      body: data.members.map((m) => [
+        m.name,
+        m.accountNumber,
+        m.balance.toLocaleString(),
+        m.savings.toLocaleString(),
+      ]),
+      theme: "grid",
+      headStyles: { fillColor: [0, 100, 0] },
+      styles: { fontSize: 9 },
+    });
+  }
+  
+  // Footer
+  const footerY = doc.internal.pageSize.getHeight() - 15;
+  doc.setFontSize(8);
+  doc.setTextColor(100, 100, 100);
+  doc.text("This report is generated by KINONI SACCO Management System.", pageWidth / 2, footerY, { align: "center" });
+  
+  doc.save(`kinoni_group_report_${format(new Date(), "yyyyMMdd")}.pdf`);
+};

@@ -133,6 +133,53 @@ export type Database = {
         }
         Relationships: []
       }
+      reminders: {
+        Row: {
+          account_id: string
+          created_at: string
+          created_by: string | null
+          due_date: string | null
+          id: string
+          is_email_sent: boolean
+          is_read: boolean
+          message: string
+          reminder_type: string
+          title: string
+        }
+        Insert: {
+          account_id: string
+          created_at?: string
+          created_by?: string | null
+          due_date?: string | null
+          id?: string
+          is_email_sent?: boolean
+          is_read?: boolean
+          message: string
+          reminder_type: string
+          title: string
+        }
+        Update: {
+          account_id?: string
+          created_at?: string
+          created_by?: string | null
+          due_date?: string | null
+          id?: string
+          is_email_sent?: boolean
+          is_read?: boolean
+          message?: string
+          reminder_type?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reminders_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       savings: {
         Row: {
           account_id: string
