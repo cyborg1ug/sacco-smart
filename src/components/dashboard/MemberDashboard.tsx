@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { LogOut, Wallet, TrendingUp, History } from "lucide-react";
+import { LogOut, Wallet, TrendingUp, History, Bell, Users, PlusCircle } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -12,6 +12,9 @@ import TransactionHistory from "./member/TransactionHistory";
 import LoanApplication from "./member/LoanApplication";
 import SavingsTracker from "./member/SavingsTracker";
 import MemberStatement from "./member/MemberStatement";
+import MemberReminders from "./member/MemberReminders";
+import RecordTransaction from "./member/RecordTransaction";
+import GuarantorRequests from "./member/GuarantorRequests";
 
 interface AccountData {
   id: string;
@@ -25,6 +28,7 @@ const MemberDashboard = () => {
   const { toast } = useToast();
   const [account, setAccount] = useState<AccountData | null>(null);
   const [activeLoans, setActiveLoans] = useState(0);
+  const [pendingGuarantorRequests, setPendingGuarantorRequests] = useState(0);
 
   useEffect(() => {
     loadAccountData();
@@ -42,15 +46,25 @@ const MemberDashboard = () => {
 
       if (accountData) {
         setAccount(accountData);
+
+        // Count active loans
+        const { count: loansCount } = await supabase
+          .from("loans")
+          .select("id", { count: "exact" })
+          .eq("account_id", accountData.id)
+          .in("status", ["approved", "disbursed"]);
+
+        setActiveLoans(loansCount || 0);
+
+        // Count pending guarantor requests
+        const { count: guarantorCount } = await (supabase
+          .from("loans")
+          .select("id", { count: "exact" }) as any)
+          .eq("guarantor_account_id", accountData.id)
+          .eq("guarantor_status", "pending");
+
+        setPendingGuarantorRequests(guarantorCount || 0);
       }
-
-      const { count } = await supabase
-        .from("loans")
-        .select("id", { count: "exact" })
-        .eq("account_id", accountData?.id)
-        .in("status", ["approved", "disbursed"]);
-
-      setActiveLoans(count || 0);
     }
   };
 
@@ -80,7 +94,7 @@ const MemberDashboard = () => {
           </div>
         </div>
 
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Current Balance</CardTitle>
@@ -113,19 +127,44 @@ const MemberDashboard = () => {
               <p className="text-xs text-muted-foreground">Loans in progress</p>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Guarantor Requests</CardTitle>
+              <Users className="h-4 w-4 text-muted-foreground" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{pendingGuarantorRequests}</div>
+              <p className="text-xs text-muted-foreground">Pending approval</p>
+            </CardContent>
+          </Card>
         </div>
 
         <Tabs defaultValue="overview" className="space-y-4">
           <TabsList className="flex-wrap h-auto gap-1">
             <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="transactions">Transactions</TabsTrigger>
+            <TabsTrigger value="record">Record Transaction</TabsTrigger>
+            <TabsTrigger value="transactions">History</TabsTrigger>
             <TabsTrigger value="loans">Apply for Loan</TabsTrigger>
+            <TabsTrigger value="guarantor">
+              Guarantor Requests
+              {pendingGuarantorRequests > 0 && (
+                <span className="ml-1 bg-destructive text-destructive-foreground rounded-full px-2 py-0.5 text-xs">
+                  {pendingGuarantorRequests}
+                </span>
+              )}
+            </TabsTrigger>
             <TabsTrigger value="savings">Savings</TabsTrigger>
+            <TabsTrigger value="reminders">Reminders</TabsTrigger>
             <TabsTrigger value="statement">Statement</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
             <AccountOverview />
+          </TabsContent>
+
+          <TabsContent value="record" className="space-y-4">
+            <RecordTransaction onTransactionRecorded={loadAccountData} />
           </TabsContent>
 
           <TabsContent value="transactions" className="space-y-4">
@@ -136,8 +175,16 @@ const MemberDashboard = () => {
             <LoanApplication onApplicationSubmitted={loadAccountData} />
           </TabsContent>
 
+          <TabsContent value="guarantor" className="space-y-4">
+            <GuarantorRequests />
+          </TabsContent>
+
           <TabsContent value="savings" className="space-y-4">
             <SavingsTracker />
+          </TabsContent>
+
+          <TabsContent value="reminders" className="space-y-4">
+            <MemberReminders />
           </TabsContent>
 
           <TabsContent value="statement" className="space-y-4">
