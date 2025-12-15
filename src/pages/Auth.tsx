@@ -11,6 +11,7 @@ import { Loader2 } from "lucide-react";
 import { ForgotPasswordDialog } from "@/components/auth/ForgotPasswordDialog";
 import { UpdatePasswordForm } from "@/components/auth/UpdatePasswordForm";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { PasswordInput } from "@/components/ui/password-input";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -135,7 +136,7 @@ const Auth = () => {
       </div>
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">SACCO Management</CardTitle>
+          <CardTitle className="text-2xl font-bold text-center">KINONI SACCO</CardTitle>
           <CardDescription className="text-center">
             {isLogin ? "Sign in to your account" : "Create a new account"}
           </CardDescription>
@@ -161,10 +162,9 @@ const Auth = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="login-password">Password</Label>
-                  <Input
+                  <PasswordInput
                     id="login-password"
                     name="password"
-                    type="password"
                     required
                   />
                 </div>
@@ -238,10 +238,9 @@ const Auth = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Password</Label>
-                  <Input
+                  <PasswordInput
                     id="password"
                     name="password"
-                    type="password"
                     required
                   />
                 </div>
