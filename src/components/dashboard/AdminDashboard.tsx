@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { LogOut, Users, DollarSign, TrendingUp, FileText, BarChart3 } from "lucide-react";
+import { LogOut, Users, DollarSign, TrendingUp, FileText, BarChart3, Bell, Heart } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -12,6 +12,8 @@ import TransactionsManagement from "./admin/TransactionsManagement";
 import LoansManagement from "./admin/LoansManagement";
 import StatementsGeneration from "./admin/StatementsGeneration";
 import ReportsGeneration from "./admin/ReportsGeneration";
+import AlertsReminders from "./admin/AlertsReminders";
+import WelfareManagement from "./admin/WelfareManagement";
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -122,6 +124,8 @@ const AdminDashboard = () => {
             <TabsTrigger value="members">Members</TabsTrigger>
             <TabsTrigger value="transactions">Transactions</TabsTrigger>
             <TabsTrigger value="loans">Loans</TabsTrigger>
+            <TabsTrigger value="welfare">Welfare</TabsTrigger>
+            <TabsTrigger value="reminders">Reminders</TabsTrigger>
             <TabsTrigger value="statements">Statements</TabsTrigger>
             <TabsTrigger value="reports">Reports</TabsTrigger>
           </TabsList>
@@ -136,6 +140,14 @@ const AdminDashboard = () => {
 
           <TabsContent value="loans" className="space-y-4">
             <LoansManagement onUpdate={loadStats} />
+          </TabsContent>
+
+          <TabsContent value="welfare" className="space-y-4">
+            <WelfareManagement />
+          </TabsContent>
+
+          <TabsContent value="reminders" className="space-y-4">
+            <AlertsReminders />
           </TabsContent>
 
           <TabsContent value="statements" className="space-y-4">

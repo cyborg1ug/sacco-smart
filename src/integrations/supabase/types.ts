@@ -17,32 +17,46 @@ export type Database = {
       accounts: {
         Row: {
           account_number: string
+          account_type: string
           balance: number
           created_at: string
           id: string
+          parent_account_id: string | null
           total_savings: number
           updated_at: string
           user_id: string
         }
         Insert: {
           account_number: string
+          account_type?: string
           balance?: number
           created_at?: string
           id?: string
+          parent_account_id?: string | null
           total_savings?: number
           updated_at?: string
           user_id: string
         }
         Update: {
           account_number?: string
+          account_type?: string
           balance?: number
           created_at?: string
           id?: string
+          parent_account_id?: string | null
           total_savings?: number
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "accounts_parent_account_id_fkey"
+            columns: ["parent_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       loans: {
         Row: {
@@ -282,6 +296,41 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      welfare: {
+        Row: {
+          account_id: string
+          amount: number
+          created_at: string
+          description: string | null
+          id: string
+          week_date: string
+        }
+        Insert: {
+          account_id: string
+          amount: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          week_date: string
+        }
+        Update: {
+          account_id?: string
+          amount?: number
+          created_at?: string
+          description?: string | null
+          id?: string
+          week_date?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "welfare_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

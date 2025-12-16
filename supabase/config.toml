@@ -1,5 +1,8 @@
 project_id = "npgbotlrokivbuqqzbwm"
 
+[functions.weekly-welfare-deduction]
+verify_jwt = false
+
 [functions.create-member]
 verify_jwt = false
 
