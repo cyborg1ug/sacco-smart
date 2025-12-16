@@ -6,56 +6,64 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { UserPlus, Loader2 } from "lucide-react";
+import { UserPlus, Loader2, Link, Unlink } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 
-interface Member {
+interface Account {
   id: string;
-  email: string;
-  full_name: string;
-  phone_number: string;
   account_number: string;
   balance: number;
   total_savings: number;
+  account_type: string;
+  parent_account_id: string | null;
+  user_id: string;
+  user: {
+    full_name: string;
+    email: string;
+    phone_number: string;
+  };
 }
 
 const MembersManagement = () => {
   const { toast } = useToast();
-  const [members, setMembers] = useState<Member[]>([]);
+  const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
+  const [parentAccountId, setParentAccountId] = useState<string>("");
 
   useEffect(() => {
-    loadMembers();
+    loadAccounts();
   }, []);
 
-  const loadMembers = async () => {
-    const { data } = await supabase
-      .from("profiles")
+  const loadAccounts = async () => {
+    const { data, error } = await supabase
+      .from("accounts")
       .select(`
         id,
-        email,
-        full_name,
-        phone_number,
-        accounts (
-          account_number,
-          balance,
-          total_savings
+        account_number,
+        balance,
+        total_savings,
+        account_type,
+        parent_account_id,
+        user_id,
+        user:profiles!accounts_user_id_fkey (
+          full_name,
+          email,
+          phone_number
         )
-      `);
+      `)
+      .order("account_number");
 
     if (data) {
-      const formattedMembers = data.map((member: any) => ({
-        id: member.id,
-        email: member.email,
-        full_name: member.full_name,
-        phone_number: member.phone_number,
-        account_number: member.accounts?.[0]?.account_number || "N/A",
-        balance: member.accounts?.[0]?.balance || 0,
-        total_savings: member.accounts?.[0]?.total_savings || 0,
-      }));
-      setMembers(formattedMembers);
+      setAccounts(data as any);
+    }
+    if (error) {
+      console.error("Error loading accounts:", error);
     }
     setLoading(false);
   };
@@ -86,11 +94,85 @@ const MembersManagement = () => {
         description: "Member account created successfully",
       });
       setDialogOpen(false);
-      loadMembers();
+      loadAccounts();
     }
 
     setCreating(false);
   };
+
+  const openMergeDialog = (account: Account) => {
+    setSelectedAccount(account);
+    setParentAccountId("");
+    setMergeDialogOpen(true);
+  };
+
+  const handleMergeAccounts = async () => {
+    if (!selectedAccount || !parentAccountId) return;
+
+    if (selectedAccount.id === parentAccountId) {
+      toast({
+        title: "Error",
+        description: "Cannot set an account as its own parent",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const { error } = await supabase
+      .from("accounts")
+      .update({ 
+        parent_account_id: parentAccountId,
+        account_type: "sub"
+      })
+      .eq("id", selectedAccount.id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "Account merged successfully as sub-account",
+      });
+      setMergeDialogOpen(false);
+      loadAccounts();
+    }
+  };
+
+  const handleUnmergeAccount = async (accountId: string) => {
+    const { error } = await supabase
+      .from("accounts")
+      .update({ 
+        parent_account_id: null,
+        account_type: "main"
+      })
+      .eq("id", accountId);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "Account unmerged successfully",
+      });
+      loadAccounts();
+    }
+  };
+
+  const getParentAccountName = (parentId: string | null) => {
+    if (!parentId) return null;
+    const parent = accounts.find(a => a.id === parentId);
+    return parent ? `${parent.user.full_name} - ${parent.account_number}` : null;
+  };
+
+  const mainAccounts = accounts.filter(a => a.account_type === "main");
 
   if (loading) {
     return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>;
@@ -101,8 +183,8 @@ const MembersManagement = () => {
       <CardHeader>
         <div className="flex justify-between items-center">
           <div>
-            <CardTitle>Members Management</CardTitle>
-            <CardDescription>View and manage all member accounts</CardDescription>
+            <CardTitle>Members & Accounts Management</CardTitle>
+            <CardDescription>View and manage all member accounts with merging capability</CardDescription>
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
@@ -122,12 +204,12 @@ const MembersManagement = () => {
                   <Input id="fullName" name="fullName" required />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input id="email" name="email" type="email" required />
+                  <Label htmlFor="email">Email (optional for phone users)</Label>
+                  <Input id="email" name="email" type="email" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="phoneNumber">Phone Number</Label>
-                  <Input id="phoneNumber" name="phoneNumber" type="tel" />
+                  <Input id="phoneNumber" name="phoneNumber" type="tel" placeholder="+256 700 000000" />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="password">Temporary Password</Label>
@@ -150,24 +232,103 @@ const MembersManagement = () => {
               <TableHead>Email</TableHead>
               <TableHead>Phone</TableHead>
               <TableHead>Account Number</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Parent Account</TableHead>
               <TableHead className="text-right">Balance</TableHead>
               <TableHead className="text-right">Total Savings</TableHead>
+              <TableHead>Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {members.map((member) => (
-              <TableRow key={member.id}>
-                <TableCell className="font-medium">{member.full_name}</TableCell>
-                <TableCell>{member.email}</TableCell>
-                <TableCell>{member.phone_number || "N/A"}</TableCell>
-                <TableCell>{member.account_number}</TableCell>
-                <TableCell className="text-right">UGX {member.balance.toLocaleString()}</TableCell>
-                <TableCell className="text-right">UGX {member.total_savings.toLocaleString()}</TableCell>
+            {accounts.map((account) => (
+              <TableRow key={account.id}>
+                <TableCell className="font-medium">{account.user.full_name}</TableCell>
+                <TableCell>{account.user.email || "—"}</TableCell>
+                <TableCell>{account.user.phone_number || "—"}</TableCell>
+                <TableCell>{account.account_number}</TableCell>
+                <TableCell>
+                  <Badge variant={account.account_type === "main" ? "default" : "secondary"}>
+                    {account.account_type}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  {getParentAccountName(account.parent_account_id) || "—"}
+                </TableCell>
+                <TableCell className="text-right">UGX {account.balance.toLocaleString()}</TableCell>
+                <TableCell className="text-right">UGX {account.total_savings.toLocaleString()}</TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    {account.account_type === "main" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => openMergeDialog(account)}
+                        title="Merge as sub-account"
+                      >
+                        <Link className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {account.account_type === "sub" && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleUnmergeAccount(account.id)}
+                        title="Unmerge account"
+                      >
+                        <Unlink className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
+                </TableCell>
               </TableRow>
             ))}
           </TableBody>
         </Table>
       </CardContent>
+
+      {/* Merge Dialog */}
+      <Dialog open={mergeDialogOpen} onOpenChange={setMergeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Merge Account</DialogTitle>
+            <DialogDescription>
+              Set this account as a sub-account of another main account.
+              {selectedAccount && (
+                <p className="mt-2 font-medium">
+                  Merging: {selectedAccount.user.full_name} - {selectedAccount.account_number}
+                </p>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Select Parent (Main) Account</Label>
+              <Select value={parentAccountId} onValueChange={setParentAccountId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select main account" />
+                </SelectTrigger>
+                <SelectContent>
+                  {mainAccounts
+                    .filter(a => a.id !== selectedAccount?.id)
+                    .map((account) => (
+                      <SelectItem key={account.id} value={account.id}>
+                        {account.user.full_name} - {account.account_number}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setMergeDialogOpen(false)} className="flex-1">
+                Cancel
+              </Button>
+              <Button onClick={handleMergeAccounts} disabled={!parentAccountId} className="flex-1">
+                Merge Account
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 };
