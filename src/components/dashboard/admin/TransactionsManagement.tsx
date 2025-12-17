@@ -46,40 +46,65 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
   }, []);
 
   const loadTransactions = async () => {
-    const { data } = await supabase
+    const { data: transactionsData } = await supabase
       .from("transactions")
-      .select(`
-        *,
-        account:accounts (
-          account_number,
-          user:profiles (
-            full_name
-          )
-        )
-      `)
+      .select("*")
       .order("created_at", { ascending: false });
 
-    if (data) {
-      setTransactions(data as any);
+    if (!transactionsData) {
+      setLoading(false);
+      return;
     }
+
+    // Get account IDs and fetch accounts
+    const accountIds = [...new Set(transactionsData.map(t => t.account_id))];
+    const { data: accountsData } = await supabase
+      .from("accounts")
+      .select("id, account_number, user_id")
+      .in("id", accountIds);
+
+    // Get user IDs and fetch profiles
+    const userIds = [...new Set(accountsData?.map(a => a.user_id) || [])];
+    const { data: profilesData } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", userIds);
+
+    const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+    const accountsMap = new Map(accountsData?.map(a => [a.id, {
+      ...a,
+      user: profilesMap.get(a.user_id) || { full_name: "Unknown" }
+    }]) || []);
+
+    const transactionsWithAccounts = transactionsData.map(t => ({
+      ...t,
+      account: accountsMap.get(t.account_id) || { id: t.account_id, account_number: "Unknown", user: { full_name: "Unknown" } }
+    }));
+
+    setTransactions(transactionsWithAccounts as any);
     setLoading(false);
   };
 
   const loadMembers = async () => {
-    const { data } = await supabase
+    const { data: accountsData } = await supabase
       .from("accounts")
-      .select(`
-        id,
-        account_number,
-        balance,
-        user:profiles (
-          full_name
-        )
-      `);
+      .select("id, account_number, balance, user_id");
 
-    if (data) {
-      setMembers(data);
-    }
+    if (!accountsData) return;
+
+    const userIds = [...new Set(accountsData.map(a => a.user_id))];
+    const { data: profilesData } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", userIds);
+
+    const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+    const membersWithProfiles = accountsData.map(a => ({
+      ...a,
+      user: profilesMap.get(a.user_id) || { full_name: "Unknown" }
+    }));
+
+    setMembers(membersWithProfiles);
   };
 
   const handleApprove = async (transactionId: string, accountId: string, amount: number, type: string) => {
