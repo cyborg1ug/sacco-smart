@@ -5,8 +5,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Send, Loader2 } from "lucide-react";
+import { Check, X, Send, Loader2, Users } from "lucide-react";
 import { format } from "date-fns";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 interface Loan {
   id: string;
@@ -16,6 +17,9 @@ interface Loan {
   outstanding_balance: number;
   status: string;
   created_at: string;
+  guarantor_account_id: string | null;
+  guarantor_status: string | null;
+  max_loan_amount: number | null;
   account: {
     id: string;
     account_number: string;
@@ -23,6 +27,12 @@ interface Loan {
       full_name: string;
     };
   };
+  guarantor_account?: {
+    account_number: string;
+    user: {
+      full_name: string;
+    };
+  } | null;
 }
 
 interface LoansManagementProps {
@@ -43,10 +53,16 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
       .from("loans")
       .select(`
         *,
-        account:accounts (
+        account:accounts!loans_account_id_fkey (
           id,
           account_number,
-          user:profiles (
+          user:profiles!accounts_user_id_fkey (
+            full_name
+          )
+        ),
+        guarantor_account:accounts!loans_guarantor_account_id_fkey (
+          account_number,
+          user:profiles!accounts_user_id_fkey (
             full_name
           )
         )
@@ -59,7 +75,17 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     setLoading(false);
   };
 
-  const handleApprove = async (loanId: string) => {
+  const handleApprove = async (loan: Loan) => {
+    // Check if guarantor approval is required and pending
+    if (loan.guarantor_account_id && loan.guarantor_status !== "approved") {
+      toast({
+        title: "Cannot Approve Yet",
+        description: "The guarantor must approve this loan request first",
+        variant: "destructive",
+      });
+      return;
+    }
+
     const { data: { user } } = await supabase.auth.getUser();
 
     const { error } = await supabase
@@ -69,7 +95,7 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
         approved_by: user?.id,
         approved_at: new Date().toISOString(),
       })
-      .eq("id", loanId);
+      .eq("id", loan.id);
 
     if (error) {
       toast({
@@ -172,6 +198,18 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     }
   };
 
+  const getGuarantorStatusBadge = (status: string | null) => {
+    if (!status || status === "none") return null;
+    return (
+      <Badge variant={
+        status === "approved" ? "default" :
+        status === "pending" ? "outline" : "destructive"
+      }>
+        {status}
+      </Badge>
+    );
+  };
+
   if (loading) {
     return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
@@ -180,7 +218,7 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     <Card>
       <CardHeader>
         <CardTitle>Loans Management</CardTitle>
-        <CardDescription>Review and manage loan applications</CardDescription>
+        <CardDescription>Review and manage loan applications - Loans require guarantor approval before admin approval</CardDescription>
       </CardHeader>
       <CardContent>
         <Table>
@@ -189,6 +227,8 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
               <TableHead>Date</TableHead>
               <TableHead>Member</TableHead>
               <TableHead>Account</TableHead>
+              <TableHead>Guarantor</TableHead>
+              <TableHead>Guarantor Status</TableHead>
               <TableHead className="text-right">Amount</TableHead>
               <TableHead className="text-right">Interest</TableHead>
               <TableHead className="text-right">Total</TableHead>
@@ -203,6 +243,27 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
                 <TableCell>{format(new Date(loan.created_at), "MMM dd, yyyy")}</TableCell>
                 <TableCell>{loan.account.user.full_name}</TableCell>
                 <TableCell>{loan.account.account_number}</TableCell>
+                <TableCell>
+                  {loan.guarantor_account ? (
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger className="flex items-center gap-1">
+                          <Users className="h-4 w-4" />
+                          {loan.guarantor_account.user.full_name}
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          Account: {loan.guarantor_account.account_number}
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
+                  ) : (
+                    "—"
+                  )}
+                </TableCell>
+                <TableCell>
+                  {getGuarantorStatusBadge(loan.guarantor_status)}
+                  {!loan.guarantor_account_id && "—"}
+                </TableCell>
                 <TableCell className="text-right">UGX {loan.amount.toLocaleString()}</TableCell>
                 <TableCell className="text-right">{loan.interest_rate}%</TableCell>
                 <TableCell className="text-right">UGX {loan.total_amount.toLocaleString()}</TableCell>
@@ -219,13 +280,25 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
                 <TableCell>
                   {loan.status === "pending" && (
                     <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleApprove(loan.id)}
-                      >
-                        <Check className="h-4 w-4 text-success" />
-                      </Button>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleApprove(loan)}
+                              disabled={loan.guarantor_account_id !== null && loan.guarantor_status !== "approved"}
+                            >
+                              <Check className="h-4 w-4 text-green-600" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {loan.guarantor_account_id && loan.guarantor_status !== "approved" 
+                              ? "Waiting for guarantor approval" 
+                              : "Approve loan"}
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                       <Button
                         size="sm"
                         variant="ghost"
