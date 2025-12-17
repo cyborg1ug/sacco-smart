@@ -41,30 +41,39 @@ const MembersManagement = () => {
   }, []);
 
   const loadAccounts = async () => {
-    const { data, error } = await supabase
+    // First fetch accounts
+    const { data: accountsData, error: accountsError } = await supabase
       .from("accounts")
-      .select(`
-        id,
-        account_number,
-        balance,
-        total_savings,
-        account_type,
-        parent_account_id,
-        user_id,
-        user:profiles!accounts_user_id_fkey (
-          full_name,
-          email,
-          phone_number
-        )
-      `)
+      .select("*")
       .order("account_number");
 
-    if (data) {
-      setAccounts(data as any);
+    if (accountsError) {
+      console.error("Error loading accounts:", accountsError);
+      setLoading(false);
+      return;
     }
-    if (error) {
-      console.error("Error loading accounts:", error);
+
+    if (!accountsData || accountsData.length === 0) {
+      setAccounts([]);
+      setLoading(false);
+      return;
     }
+
+    // Get unique user_ids and fetch profiles
+    const userIds = [...new Set(accountsData.map(a => a.user_id))];
+    const { data: profilesData } = await supabase
+      .from("profiles")
+      .select("id, full_name, email, phone_number")
+      .in("id", userIds);
+
+    const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+
+    const accountsWithUsers = accountsData.map(account => ({
+      ...account,
+      user: profilesMap.get(account.user_id) || { full_name: "Unknown", email: "", phone_number: "" }
+    }));
+
+    setAccounts(accountsWithUsers as any);
     setLoading(false);
   };
 
