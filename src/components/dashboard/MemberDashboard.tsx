@@ -3,10 +3,12 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { LogOut, Wallet, TrendingUp, History, Bell, Users, PlusCircle } from "lucide-react";
+import { LogOut, Wallet, TrendingUp, History, Users, User } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import AccountOverview from "./member/AccountOverview";
 import TransactionHistory from "./member/TransactionHistory";
 import LoanApplication from "./member/LoanApplication";
@@ -15,6 +17,7 @@ import MemberStatement from "./member/MemberStatement";
 import MemberReminders from "./member/MemberReminders";
 import RecordTransaction from "./member/RecordTransaction";
 import GuarantorRequests from "./member/GuarantorRequests";
+import ProfileManagement from "./member/ProfileManagement";
 
 interface AccountData {
   id: string;
@@ -29,6 +32,8 @@ const MemberDashboard = () => {
   const [account, setAccount] = useState<AccountData | null>(null);
   const [activeLoans, setActiveLoans] = useState(0);
   const [pendingGuarantorRequests, setPendingGuarantorRequests] = useState(0);
+  const [userName, setUserName] = useState("");
+  const [activeTab, setActiveTab] = useState("overview");
 
   useEffect(() => {
     loadAccountData();
@@ -38,6 +43,17 @@ const MemberDashboard = () => {
     const { data: { user } } = await supabase.auth.getUser();
     
     if (user) {
+      // Get profile name
+      const { data: profileData } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", user.id)
+        .single();
+      
+      if (profileData) {
+        setUserName(profileData.full_name);
+      }
+
       const { data: accountData } = await supabase
         .from("accounts")
         .select("id, balance, total_savings, account_number")
@@ -77,6 +93,15 @@ const MemberDashboard = () => {
     navigate("/auth");
   };
 
+  const getInitials = (name: string) => {
+    return name
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
       <div className="container mx-auto p-6 space-y-6">
@@ -87,10 +112,35 @@ const MemberDashboard = () => {
           </div>
           <div className="flex items-center gap-2">
             <ThemeToggle />
-            <Button variant="outline" onClick={handleLogout}>
-              <LogOut className="mr-2 h-4 w-4" />
-              Logout
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" className="relative h-10 w-10 rounded-full">
+                  <Avatar className="h-10 w-10">
+                    <AvatarFallback className="bg-primary text-primary-foreground">
+                      {getInitials(userName || "U")}
+                    </AvatarFallback>
+                  </Avatar>
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56">
+                <div className="flex items-center justify-start gap-2 p-2">
+                  <div className="flex flex-col space-y-1 leading-none">
+                    <p className="font-medium">{userName}</p>
+                    <p className="text-sm text-muted-foreground">{account?.account_number}</p>
+                  </div>
+                </div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setActiveTab("profile")}>
+                  <User className="mr-2 h-4 w-4" />
+                  Profile Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleLogout}>
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Logout
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -140,7 +190,7 @@ const MemberDashboard = () => {
           </Card>
         </div>
 
-        <Tabs defaultValue="overview" className="space-y-4">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="flex-wrap h-auto gap-1">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="record">Record Transaction</TabsTrigger>
@@ -157,6 +207,7 @@ const MemberDashboard = () => {
             <TabsTrigger value="savings">Savings</TabsTrigger>
             <TabsTrigger value="reminders">Reminders</TabsTrigger>
             <TabsTrigger value="statement">Statement</TabsTrigger>
+            <TabsTrigger value="profile">Profile</TabsTrigger>
           </TabsList>
 
           <TabsContent value="overview" className="space-y-4">
@@ -189,6 +240,10 @@ const MemberDashboard = () => {
 
           <TabsContent value="statement" className="space-y-4">
             <MemberStatement />
+          </TabsContent>
+
+          <TabsContent value="profile" className="space-y-4">
+            <ProfileManagement />
           </TabsContent>
         </Tabs>
       </div>
