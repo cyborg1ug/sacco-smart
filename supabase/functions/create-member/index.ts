@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     }
 
     // Parse request body
-    const { email, password, fullName, phoneNumber } = await req.json()
+    const { email, password, fullName, phoneNumber, parentAccountId } = await req.json()
 
     // Validate required fields
     if (!email || !password || !fullName) {
@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    console.log('Creating member:', email)
+    console.log('Creating member:', email, parentAccountId ? `as sub-account of ${parentAccountId}` : '')
 
     // Create the user with admin API
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
@@ -91,6 +91,26 @@ Deno.serve(async (req) => {
         .from('profiles')
         .update({ phone_number: phoneNumber })
         .eq('id', data.user.id)
+    }
+
+    // If parentAccountId is provided, set the new account as a sub-account
+    if (parentAccountId && data.user) {
+      // Wait a moment for the trigger to create the account
+      await new Promise(resolve => setTimeout(resolve, 500))
+      
+      const { error: updateError } = await supabaseAdmin
+        .from('accounts')
+        .update({ 
+          parent_account_id: parentAccountId,
+          account_type: 'sub'
+        })
+        .eq('user_id', data.user.id)
+
+      if (updateError) {
+        console.log('Error setting parent account:', updateError.message)
+      } else {
+        console.log('Sub-account created with parent:', parentAccountId)
+      }
     }
 
     console.log('Member created successfully:', data.user?.id)
