@@ -60,11 +60,11 @@ const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) =>
       return;
     }
 
-    // Validation for withdrawals
-    if ((transactionType === "withdrawal" || transactionType === "loan_repayment") && amount > currentBalance) {
+    // Validation for loan repayments (check sufficient balance)
+    if (transactionType === "loan_repayment" && amount > currentBalance) {
       toast({
         title: "Insufficient Balance",
-        description: "You cannot withdraw or repay more than your current balance",
+        description: "You cannot repay more than your current balance",
         variant: "destructive",
       });
       setLoading(false);
@@ -126,8 +126,7 @@ const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) =>
                 <SelectValue placeholder="Select transaction type" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="deposit">Deposit</SelectItem>
-                <SelectItem value="withdrawal">Withdrawal</SelectItem>
+                <SelectItem value="deposit">Saving Deposit</SelectItem>
                 <SelectItem value="loan_repayment">Loan Repayment</SelectItem>
               </SelectContent>
             </Select>

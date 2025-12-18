@@ -17,7 +17,6 @@ interface EligibilityData {
   is_eligible: boolean;
   total_savings: number;
   max_loan_amount: number;
-  has_consecutive_weeks: boolean;
 }
 
 interface MemberOption {
@@ -201,8 +200,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              You are not currently eligible for a loan. To qualify, you must have saved at least
-              UGX 10,000 per week for the past 4 consecutive weeks.
+              You are not currently eligible for a loan. To qualify, you must have savings in your account.
             </AlertDescription>
           </Alert>
         ) : (
@@ -287,7 +285,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
         <div className="pt-4 border-t">
           <h4 className="font-semibold mb-2">Loan Requirements:</h4>
           <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-            <li>Minimum of 4 consecutive weeks of savings (UGX 10,000/week)</li>
+            <li>You must have savings in your account</li>
             <li>Maximum loan: 3× your total savings</li>
             <li>Guarantor's savings must be ≥ your savings</li>
             <li>Guarantor must approve your request</li>

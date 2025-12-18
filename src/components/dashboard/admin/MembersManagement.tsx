@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { UserPlus, Loader2, Link, Unlink } from "lucide-react";
+import { UserPlus, Loader2, Link, Unlink, Plus, ArrowUpRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface Account {
@@ -31,10 +31,12 @@ const MembersManagement = () => {
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [subAccountDialogOpen, setSubAccountDialogOpen] = useState(false);
   const [mergeDialogOpen, setMergeDialogOpen] = useState(false);
   const [creating, setCreating] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [parentAccountId, setParentAccountId] = useState<string>("");
+  const [selectedParentForSubAccount, setSelectedParentForSubAccount] = useState<Account | null>(null);
 
   useEffect(() => {
     loadAccounts();
@@ -169,10 +171,55 @@ const MembersManagement = () => {
     } else {
       toast({
         title: "Success",
-        description: "Account unmerged successfully",
+        description: "Account promoted to independent member account",
       });
       loadAccounts();
     }
+  };
+
+  const openSubAccountDialog = (parent: Account) => {
+    setSelectedParentForSubAccount(parent);
+    setSubAccountDialogOpen(true);
+  };
+
+  const handleCreateSubAccount = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    if (!selectedParentForSubAccount) return;
+    
+    setCreating(true);
+
+    const formData = new FormData(e.currentTarget);
+    const email = formData.get("email") as string;
+    const password = formData.get("password") as string;
+    const fullName = formData.get("fullName") as string;
+    const phoneNumber = formData.get("phoneNumber") as string;
+
+    const { data, error } = await supabase.functions.invoke('create-member', {
+      body: { 
+        email, 
+        password, 
+        fullName, 
+        phoneNumber,
+        parentAccountId: selectedParentForSubAccount.id
+      }
+    });
+
+    if (error || data?.error) {
+      toast({
+        title: "Error",
+        description: error?.message || data?.error || "Failed to create sub-account",
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: `Sub-account created under ${selectedParentForSubAccount.user.full_name}'s account`,
+      });
+      setSubAccountDialogOpen(false);
+      loadAccounts();
+    }
+
+    setCreating(false);
   };
 
   const getParentAccountName = (parentId: string | null) => {
@@ -268,23 +315,33 @@ const MembersManagement = () => {
                 <TableCell>
                   <div className="flex gap-1">
                     {account.account_type === "main" && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => openMergeDialog(account)}
-                        title="Merge as sub-account"
-                      >
-                        <Link className="h-4 w-4" />
-                      </Button>
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openSubAccountDialog(account)}
+                          title="Create sub-account"
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => openMergeDialog(account)}
+                          title="Merge as sub-account of another"
+                        >
+                          <Link className="h-4 w-4" />
+                        </Button>
+                      </>
                     )}
                     {account.account_type === "sub" && (
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => handleUnmergeAccount(account.id)}
-                        title="Unmerge account"
+                        title="Promote to independent account"
                       >
-                        <Unlink className="h-4 w-4" />
+                        <ArrowUpRight className="h-4 w-4" />
                       </Button>
                     )}
                   </div>
@@ -336,6 +393,41 @@ const MembersManagement = () => {
               </Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create Sub-Account Dialog */}
+      <Dialog open={subAccountDialogOpen} onOpenChange={setSubAccountDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Sub-Account</DialogTitle>
+            <DialogDescription>
+              Create a new sub-account under {selectedParentForSubAccount?.user.full_name}'s account.
+              This sub-account will have full member privileges.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreateSubAccount} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="subFullName">Full Name</Label>
+              <Input id="subFullName" name="fullName" required />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="subEmail">Email (optional)</Label>
+              <Input id="subEmail" name="email" type="email" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="subPhoneNumber">Phone Number</Label>
+              <Input id="subPhoneNumber" name="phoneNumber" type="tel" placeholder="+256 700 000000" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="subPassword">Temporary Password</Label>
+              <Input id="subPassword" name="password" type="password" required />
+            </div>
+            <Button type="submit" className="w-full" disabled={creating}>
+              {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Create Sub-Account
+            </Button>
+          </form>
         </DialogContent>
       </Dialog>
     </Card>
