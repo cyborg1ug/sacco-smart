@@ -18,6 +18,7 @@ import MemberReminders from "./member/MemberReminders";
 import RecordTransaction from "./member/RecordTransaction";
 import GuarantorRequests from "./member/GuarantorRequests";
 import ProfileManagement from "./member/ProfileManagement";
+import SubAccountsManager from "./member/SubAccountsManager";
 
 interface AccountData {
   id: string;
@@ -34,6 +35,7 @@ const MemberDashboard = () => {
   const [pendingGuarantorRequests, setPendingGuarantorRequests] = useState(0);
   const [userName, setUserName] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
+  const [hasSubAccounts, setHasSubAccounts] = useState(false);
 
   useEffect(() => {
     loadAccountData();
@@ -54,11 +56,13 @@ const MemberDashboard = () => {
         setUserName(profileData.full_name);
       }
 
+      // Get main account (not sub-accounts)
       const { data: accountData } = await supabase
         .from("accounts")
         .select("id, balance, total_savings, account_number")
         .eq("user_id", user.id)
-        .single();
+        .eq("account_type", "main")
+        .maybeSingle();
 
       if (accountData) {
         setAccount(accountData);
@@ -80,6 +84,15 @@ const MemberDashboard = () => {
           .eq("guarantor_status", "pending");
 
         setPendingGuarantorRequests(guarantorCount || 0);
+
+        // Check if user has sub-accounts
+        const { count: subAccountsCount } = await supabase
+          .from("accounts")
+          .select("id", { count: "exact" })
+          .eq("parent_account_id", accountData.id)
+          .eq("account_type", "sub");
+
+        setHasSubAccounts((subAccountsCount || 0) > 0);
       }
     }
   };
@@ -207,6 +220,7 @@ const MemberDashboard = () => {
             <TabsTrigger value="savings">Savings</TabsTrigger>
             <TabsTrigger value="reminders">Reminders</TabsTrigger>
             <TabsTrigger value="statement">Statement</TabsTrigger>
+            {hasSubAccounts && <TabsTrigger value="subaccounts">Sub-Accounts</TabsTrigger>}
             <TabsTrigger value="profile">Profile</TabsTrigger>
           </TabsList>
 
@@ -241,6 +255,12 @@ const MemberDashboard = () => {
           <TabsContent value="statement" className="space-y-4">
             <MemberStatement />
           </TabsContent>
+
+          {hasSubAccounts && account && (
+            <TabsContent value="subaccounts" className="space-y-4">
+              <SubAccountsManager parentAccountId={account.id} />
+            </TabsContent>
+          )}
 
           <TabsContent value="profile" className="space-y-4">
             <ProfileManagement />

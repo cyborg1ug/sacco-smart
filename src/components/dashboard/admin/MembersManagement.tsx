@@ -70,10 +70,37 @@ const MembersManagement = () => {
 
     const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
 
-    const accountsWithUsers = accountsData.map(account => ({
-      ...account,
-      user: profilesMap.get(account.user_id) || { full_name: "Unknown", email: "", phone_number: "" }
-    }));
+    // Fetch sub-account profiles for sub-accounts
+    const subAccountIds = accountsData.filter(a => a.account_type === 'sub').map(a => a.id);
+    let subProfilesMap = new Map();
+    
+    if (subAccountIds.length > 0) {
+      const { data: subProfilesData } = await supabase
+        .from("sub_account_profiles")
+        .select("account_id, full_name, phone_number")
+        .in("account_id", subAccountIds);
+      
+      subProfilesMap = new Map(subProfilesData?.map(p => [p.account_id, p]) || []);
+    }
+
+    const accountsWithUsers = accountsData.map(account => {
+      // For sub-accounts, use sub_account_profiles; for main accounts, use profiles
+      if (account.account_type === 'sub' && subProfilesMap.has(account.id)) {
+        const subProfile = subProfilesMap.get(account.id);
+        return {
+          ...account,
+          user: { 
+            full_name: subProfile.full_name, 
+            email: "", 
+            phone_number: subProfile.phone_number || "" 
+          }
+        };
+      }
+      return {
+        ...account,
+        user: profilesMap.get(account.user_id) || { full_name: "Unknown", email: "", phone_number: "" }
+      };
+    });
 
     setAccounts(accountsWithUsers as any);
     setLoading(false);
@@ -189,18 +216,16 @@ const MembersManagement = () => {
     setCreating(true);
 
     const formData = new FormData(e.currentTarget);
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
     const fullName = formData.get("fullName") as string;
     const phoneNumber = formData.get("phoneNumber") as string;
 
+    // Create sub-account without separate auth user
     const { data, error } = await supabase.functions.invoke('create-member', {
       body: { 
-        email, 
-        password, 
         fullName, 
         phoneNumber,
-        parentAccountId: selectedParentForSubAccount.id
+        parentAccountId: selectedParentForSubAccount.id,
+        isSubAccount: true
       }
     });
 
@@ -213,7 +238,7 @@ const MembersManagement = () => {
     } else {
       toast({
         title: "Success",
-        description: `Sub-account created under ${selectedParentForSubAccount.user.full_name}'s account`,
+        description: `Sub-account created under ${selectedParentForSubAccount.user.full_name}'s account. Accessible within their account.`,
       });
       setSubAccountDialogOpen(false);
       loadAccounts();
@@ -403,7 +428,7 @@ const MembersManagement = () => {
             <DialogTitle>Create Sub-Account</DialogTitle>
             <DialogDescription>
               Create a new sub-account under {selectedParentForSubAccount?.user.full_name}'s account.
-              This sub-account will have full member privileges.
+              This sub-account shares the same login credentials and is accessible within the parent account.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateSubAccount} className="space-y-4">
@@ -412,17 +437,12 @@ const MembersManagement = () => {
               <Input id="subFullName" name="fullName" required />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="subEmail">Email (optional)</Label>
-              <Input id="subEmail" name="email" type="email" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="subPhoneNumber">Phone Number</Label>
+              <Label htmlFor="subPhoneNumber">Phone Number (optional)</Label>
               <Input id="subPhoneNumber" name="phoneNumber" type="tel" placeholder="+256 700 000000" />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="subPassword">Temporary Password</Label>
-              <Input id="subPassword" name="password" type="password" required />
-            </div>
+            <p className="text-sm text-muted-foreground">
+              No separate login required. The member can manage this sub-account from their dashboard.
+            </p>
             <Button type="submit" className="w-full" disabled={creating}>
               {creating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Create Sub-Account
