@@ -229,6 +229,50 @@ export type Database = {
           },
         ]
       }
+      sub_account_profiles: {
+        Row: {
+          account_id: string
+          address: string | null
+          created_at: string
+          full_name: string
+          id: string
+          national_id: string | null
+          occupation: string | null
+          phone_number: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_id: string
+          address?: string | null
+          created_at?: string
+          full_name: string
+          id?: string
+          national_id?: string | null
+          occupation?: string | null
+          phone_number?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_id?: string
+          address?: string | null
+          created_at?: string
+          full_name?: string
+          id?: string
+          national_id?: string | null
+          occupation?: string | null
+          phone_number?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sub_account_profiles_account_id_fkey"
+            columns: ["account_id"]
+            isOneToOne: true
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       transactions: {
         Row: {
           account_id: string

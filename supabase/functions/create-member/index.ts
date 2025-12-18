@@ -55,9 +55,88 @@ Deno.serve(async (req) => {
     }
 
     // Parse request body
-    const { email, password, fullName, phoneNumber, parentAccountId } = await req.json()
+    const { email, password, fullName, phoneNumber, parentAccountId, isSubAccount } = await req.json()
 
-    // Validate required fields
+    // Handle sub-account creation (no auth user needed)
+    if (isSubAccount && parentAccountId) {
+      if (!fullName) {
+        return new Response(
+          JSON.stringify({ error: 'Full name is required for sub-account' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      console.log('Creating sub-account under parent:', parentAccountId)
+
+      // Get the parent account to get the user_id
+      const { data: parentAccount, error: parentError } = await supabaseAdmin
+        .from('accounts')
+        .select('user_id')
+        .eq('id', parentAccountId)
+        .single()
+
+      if (parentError || !parentAccount) {
+        console.log('Parent account not found:', parentError?.message)
+        return new Response(
+          JSON.stringify({ error: 'Parent account not found' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Generate account number for sub-account
+      const accountNumber = 'ACC' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + 
+        Math.floor(Math.random() * 10000).toString().padStart(4, '0')
+
+      // Create the sub-account linked to the same user_id as parent
+      const { data: newAccount, error: accountError } = await supabaseAdmin
+        .from('accounts')
+        .insert({
+          user_id: parentAccount.user_id,
+          account_number: accountNumber,
+          account_type: 'sub',
+          parent_account_id: parentAccountId,
+          balance: 0,
+          total_savings: 0
+        })
+        .select()
+        .single()
+
+      if (accountError) {
+        console.log('Error creating sub-account:', accountError.message)
+        return new Response(
+          JSON.stringify({ error: accountError.message }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      // Create sub-account profile
+      const { error: profileError } = await supabaseAdmin
+        .from('sub_account_profiles')
+        .insert({
+          account_id: newAccount.id,
+          full_name: fullName,
+          phone_number: phoneNumber || null,
+        })
+
+      if (profileError) {
+        console.log('Error creating sub-account profile:', profileError.message)
+        // Clean up the account if profile creation fails
+        await supabaseAdmin.from('accounts').delete().eq('id', newAccount.id)
+        return new Response(
+          JSON.stringify({ error: profileError.message }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+
+      console.log('Sub-account created successfully:', newAccount.id)
+
+      return new Response(
+        JSON.stringify({ data: { account: newAccount }, error: null }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Regular member creation (with auth user)
     if (!email || !password || !fullName) {
       return new Response(
         JSON.stringify({ error: 'Email, password, and full name are required' }),
@@ -65,7 +144,7 @@ Deno.serve(async (req) => {
       )
     }
 
-    console.log('Creating member:', email, parentAccountId ? `as sub-account of ${parentAccountId}` : '')
+    console.log('Creating member:', email)
 
     // Create the user with admin API
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
@@ -91,26 +170,6 @@ Deno.serve(async (req) => {
         .from('profiles')
         .update({ phone_number: phoneNumber })
         .eq('id', data.user.id)
-    }
-
-    // If parentAccountId is provided, set the new account as a sub-account
-    if (parentAccountId && data.user) {
-      // Wait a moment for the trigger to create the account
-      await new Promise(resolve => setTimeout(resolve, 500))
-      
-      const { error: updateError } = await supabaseAdmin
-        .from('accounts')
-        .update({ 
-          parent_account_id: parentAccountId,
-          account_type: 'sub'
-        })
-        .eq('user_id', data.user.id)
-
-      if (updateError) {
-        console.log('Error setting parent account:', updateError.message)
-      } else {
-        console.log('Sub-account created with parent:', parentAccountId)
-      }
     }
 
     console.log('Member created successfully:', data.user?.id)
