@@ -46,41 +46,67 @@ const AlertsReminders = () => {
   }, []);
 
   const loadReminders = async () => {
-    const { data } = await supabase
+    const { data: remindersData } = await supabase
       .from("reminders")
-      .select(`
-        *,
-        account:accounts (
-          account_number,
-          user:profiles (
-            full_name,
-            email
-          )
-        )
-      `)
+      .select("*")
       .order("created_at", { ascending: false });
 
-    if (data) {
-      setReminders(data as any);
+    if (remindersData && remindersData.length > 0) {
+      // Get unique account_ids
+      const accountIds = [...new Set(remindersData.map(r => r.account_id))];
+      const { data: accountsData } = await supabase
+        .from("accounts")
+        .select("id, account_number, user_id")
+        .in("id", accountIds);
+
+      if (accountsData) {
+        const userIds = [...new Set(accountsData.map(a => a.user_id))];
+        const { data: profilesData } = await supabase
+          .from("profiles")
+          .select("id, full_name, email")
+          .in("id", userIds);
+
+        const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+        const accountsMap = new Map(accountsData.map(a => [a.id, { 
+          ...a, 
+          user: profilesMap.get(a.user_id) || { full_name: "Unknown", email: "" } 
+        }]));
+
+        const remindersWithAccounts = remindersData.map(reminder => ({
+          ...reminder,
+          account: accountsMap.get(reminder.account_id) || { 
+            account_number: "Unknown", 
+            user: { full_name: "Unknown", email: "" } 
+          }
+        }));
+
+        setReminders(remindersWithAccounts as any);
+      }
+    } else {
+      setReminders([]);
     }
     setLoading(false);
   };
 
   const loadMembers = async () => {
-    const { data } = await supabase
+    const { data: accountsData } = await supabase
       .from("accounts")
-      .select(`
-        id,
-        account_number,
-        balance,
-        user:profiles (
-          full_name,
-          email
-        )
-      `);
+      .select("id, account_number, balance, user_id");
 
-    if (data) {
-      setMembers(data);
+    if (accountsData && accountsData.length > 0) {
+      const userIds = [...new Set(accountsData.map(a => a.user_id))];
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("id, full_name, email")
+        .in("id", userIds);
+
+      const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+      const membersWithProfiles = accountsData.map(account => ({
+        ...account,
+        user: profilesMap.get(account.user_id) || { full_name: "Unknown", email: "" }
+      }));
+
+      setMembers(membersWithProfiles);
     }
   };
 
