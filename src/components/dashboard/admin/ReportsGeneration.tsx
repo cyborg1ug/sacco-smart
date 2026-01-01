@@ -31,19 +31,33 @@ const ReportsGeneration = () => {
   }, [showCharts, reportPeriod]);
 
   const loadMembers = async () => {
-    const { data } = await supabase
-      .from("profiles")
-      .select(`
-        id,
-        full_name,
-        accounts (
-          id,
-          account_number
-        )
-      `);
+    // Fetch all accounts first
+    const { data: accountsData } = await supabase
+      .from("accounts")
+      .select("id, account_number, user_id");
 
-    if (data) {
-      setMembers(data);
+    if (accountsData && accountsData.length > 0) {
+      const userIds = [...new Set(accountsData.map(a => a.user_id))];
+      const { data: profilesData } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", userIds);
+
+      const accountsMap = new Map<string, any[]>();
+      accountsData.forEach(acc => {
+        if (!accountsMap.has(acc.user_id)) {
+          accountsMap.set(acc.user_id, []);
+        }
+        accountsMap.get(acc.user_id)!.push(acc);
+      });
+
+      const membersWithAccounts = profilesData?.map(profile => ({
+        id: profile.id,
+        full_name: profile.full_name,
+        accounts: accountsMap.get(profile.id) || []
+      })) || [];
+
+      setMembers(membersWithAccounts);
     }
   };
 

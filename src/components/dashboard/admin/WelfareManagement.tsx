@@ -50,40 +50,54 @@ const WelfareManagement = () => {
   }, []);
 
   const loadData = async () => {
-    const [welfareResult, accountsResult] = await Promise.all([
-      supabase
-        .from("welfare")
-        .select(`
-          *,
-          account:accounts (
-            account_number,
-            user:profiles!accounts_user_id_fkey (
-              full_name
-            )
-          )
-        `)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("accounts")
-        .select(`
-          id,
-          account_number,
-          balance,
-          total_savings,
-          user:profiles!accounts_user_id_fkey (
-            full_name
-          )
-        `)
-    ]);
+    // Fetch welfare entries
+    const { data: welfareData } = await supabase
+      .from("welfare")
+      .select("*")
+      .order("created_at", { ascending: false });
 
-    if (welfareResult.data) {
-      setWelfareEntries(welfareResult.data as any);
-      const total = welfareResult.data.reduce((sum, entry) => sum + Number(entry.amount), 0);
+    // Fetch all accounts
+    const { data: accountsData } = await supabase
+      .from("accounts")
+      .select("id, account_number, balance, total_savings, user_id");
+
+    if (!accountsData || accountsData.length === 0) {
+      setLoading(false);
+      return;
+    }
+
+    // Fetch profiles for all user_ids
+    const userIds = [...new Set(accountsData.map(a => a.user_id))];
+    const { data: profilesData } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", userIds);
+
+    const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+
+    // Map accounts with user info
+    const accountsWithUsers = accountsData.map(account => ({
+      ...account,
+      user: profilesMap.get(account.user_id) || { full_name: "Unknown" }
+    }));
+
+    setAccounts(accountsWithUsers as any);
+
+    // Map welfare entries with account info
+    if (welfareData) {
+      const accountsMap = new Map(accountsWithUsers.map(a => [a.id, a]));
+      const welfareWithAccounts = welfareData.map(entry => ({
+        ...entry,
+        account: accountsMap.get(entry.account_id) || { 
+          account_number: "Unknown", 
+          user: { full_name: "Unknown" } 
+        }
+      }));
+      setWelfareEntries(welfareWithAccounts as any);
+      const total = welfareData.reduce((sum, entry) => sum + Number(entry.amount), 0);
       setTotalWelfare(total);
     }
-    if (accountsResult.data) {
-      setAccounts(accountsResult.data as any);
-    }
+    
     setLoading(false);
   };
 

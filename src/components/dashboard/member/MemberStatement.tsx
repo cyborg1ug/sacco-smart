@@ -156,24 +156,45 @@ const MemberStatement = () => {
     } else {
       // Generate statement text
       let statement = `KINONI SACCO - MEMBER STATEMENT\n`;
-      statement += `${"=".repeat(60)}\n`;
+      statement += `${"=".repeat(80)}\n`;
       statement += `Generated: ${format(new Date(), "MMMM dd, yyyy 'at' hh:mm a")}\n\n`;
+      
       statement += `ACCOUNT DETAILS\n`;
-      statement += `${"─".repeat(60)}\n`;
-      statement += `Member Name: ${accountData.profile.full_name}\n`;
-      statement += `Email: ${accountData.profile.email}\n`;
-      statement += `Account Number: ${accountData.account.account_number}\n\n`;
+      statement += `${"─".repeat(80)}\n`;
+      statement += `Member Name:    ${accountData.profile.full_name}\n`;
+      statement += `Email:          ${accountData.profile.email}\n`;
+      statement += `Phone:          ${accountData.profile.phone_number || "N/A"}\n`;
+      statement += `Account Number: ${accountData.account.account_number}\n`;
       statement += `Current Balance: UGX ${Number(accountData.account.balance).toLocaleString()}\n`;
-      statement += `Total Savings: UGX ${Number(accountData.account.total_savings).toLocaleString()}\n\n`;
+      statement += `Total Savings:   UGX ${Number(accountData.account.total_savings).toLocaleString()}\n\n`;
 
-      statement += `TRANSACTION HISTORY\n`;
-      statement += `${"─".repeat(60)}\n`;
+      // Summary
+      const totalDeposits = transactions?.filter(t => t.transaction_type === "deposit" && t.status === "approved")
+        .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+      const totalWithdrawals = transactions?.filter(t => t.transaction_type === "withdrawal" && t.status === "approved")
+        .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+      const totalLoanRepayments = transactions?.filter(t => t.transaction_type === "loan_repayment" && t.status === "approved")
+        .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+
+      statement += `FINANCIAL SUMMARY\n`;
+      statement += `${"─".repeat(80)}\n`;
+      statement += `Total Deposits:       UGX ${totalDeposits.toLocaleString()}\n`;
+      statement += `Total Withdrawals:    UGX ${totalWithdrawals.toLocaleString()}\n`;
+      statement += `Total Loan Repayments: UGX ${totalLoanRepayments.toLocaleString()}\n`;
+      statement += `Net Cash Flow:        UGX ${(totalDeposits - totalWithdrawals - totalLoanRepayments).toLocaleString()}\n\n`;
+
+      statement += `TRANSACTION HISTORY (${transactions?.length || 0} transactions)\n`;
+      statement += `${"─".repeat(80)}\n`;
+      statement += `${"Date & Time".padEnd(20)} | ${"Type".padEnd(18)} | ${"Amount".padStart(15)} | ${"Balance After".padStart(15)} | Status\n`;
+      statement += `${"-".repeat(80)}\n`;
       if (transactions && transactions.length > 0) {
         transactions.forEach((t) => {
-          statement += `${format(new Date(t.created_at), "MMM dd, yyyy")} | `;
-          statement += `${t.transaction_type.toUpperCase().padEnd(15)} | `;
-          statement += `UGX ${Number(t.amount).toLocaleString().padStart(15)} | `;
-          statement += `${t.status.toUpperCase()}\n`;
+          const dateTime = format(new Date(t.created_at), "MMM dd, yyyy HH:mm");
+          const type = t.transaction_type.replace("_", " ").toUpperCase();
+          statement += `${dateTime.padEnd(20)} | ${type.padEnd(18)} | UGX ${Number(t.amount).toLocaleString().padStart(10)} | UGX ${Number(t.balance_after).toLocaleString().padStart(10)} | ${t.status.toUpperCase()}\n`;
+          if (t.description) {
+            statement += `  └─ ${t.description}\n`;
+          }
         });
       } else {
         statement += `No transactions found.\n`;
@@ -191,20 +212,31 @@ const MemberStatement = () => {
       }
 
       statement += `\nLOAN HISTORY\n`;
-      statement += `${"─".repeat(60)}\n`;
+      statement += `${"─".repeat(80)}\n`;
       if (loans && loans.length > 0) {
         loans.forEach((l) => {
-          statement += `Amount: UGX ${Number(l.amount).toLocaleString()} | `;
-          statement += `Interest: ${l.interest_rate}% | `;
-          statement += `Outstanding: UGX ${Number(l.outstanding_balance).toLocaleString()} | `;
-          statement += `Status: ${l.status.toUpperCase()}\n`;
+          statement += `Loan ID: ${l.id.substring(0, 8)}...\n`;
+          statement += `  Principal Amount:    UGX ${Number(l.amount).toLocaleString()}\n`;
+          statement += `  Interest Rate:       ${l.interest_rate}%\n`;
+          statement += `  Total Amount:        UGX ${Number(l.total_amount).toLocaleString()}\n`;
+          statement += `  Outstanding Balance: UGX ${Number(l.outstanding_balance).toLocaleString()}\n`;
+          statement += `  Status:              ${l.status.toUpperCase()}\n`;
+          statement += `  Applied On:          ${format(new Date(l.created_at), "MMM dd, yyyy HH:mm")}\n`;
+          if (l.approved_at) {
+            statement += `  Approved On:         ${format(new Date(l.approved_at), "MMM dd, yyyy HH:mm")}\n`;
+          }
+          if (l.disbursed_at) {
+            statement += `  Disbursed On:        ${format(new Date(l.disbursed_at), "MMM dd, yyyy HH:mm")}\n`;
+          }
+          statement += `\n`;
         });
       } else {
         statement += `No loan records found.\n`;
       }
 
-      statement += `\n${"=".repeat(60)}\n`;
+      statement += `\n${"=".repeat(80)}\n`;
       statement += `This statement is generated by KINONI SACCO Management System.\n`;
+      statement += `For any queries, please contact the administrator.\n`;
 
       // Download as text file
       const blob = new Blob([statement], { type: "text/plain" });

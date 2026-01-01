@@ -73,30 +73,29 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
     const { data: { user } } = await supabase.auth.getUser();
     
     if (user) {
-      // Get all accounts except current user's
+      // Get all accounts except current user's - only main accounts
       const { data: accounts } = await supabase
         .from("accounts")
         .select("id, account_number, user_id, total_savings")
-        .neq("user_id", user.id);
+        .neq("user_id", user.id)
+        .eq("account_type", "main");
 
-      if (accounts) {
+      if (accounts && accounts.length > 0) {
         // Fetch profiles for each account
-        const membersWithProfiles = await Promise.all(
-          accounts.map(async (account) => {
-            const { data: profile } = await supabase
-              .from("profiles")
-              .select("full_name")
-              .eq("id", account.user_id)
-              .single();
+        const userIds = [...new Set(accounts.map(a => a.user_id))];
+        const { data: profiles } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", userIds);
 
-            return {
-              id: account.id,
-              account_number: account.account_number,
-              full_name: profile?.full_name || "Unknown",
-              total_savings: account.total_savings,
-            };
-          })
-        );
+        const profilesMap = new Map(profiles?.map(p => [p.id, p]) || []);
+
+        const membersWithProfiles = accounts.map((account) => ({
+          id: account.id,
+          account_number: account.account_number,
+          full_name: profilesMap.get(account.user_id)?.full_name || "Unknown",
+          total_savings: account.total_savings,
+        }));
 
         setMembers(membersWithProfiles);
       }

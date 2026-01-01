@@ -19,6 +19,7 @@ import RecordTransaction from "./member/RecordTransaction";
 import GuarantorRequests from "./member/GuarantorRequests";
 import ProfileManagement from "./member/ProfileManagement";
 import SubAccountsManager from "./member/SubAccountsManager";
+import NotificationsPopover from "./member/NotificationsPopover";
 
 interface AccountData {
   id: string;
@@ -124,6 +125,7 @@ const MemberDashboard = () => {
             <p className="text-muted-foreground">Account: {account?.account_number}</p>
           </div>
           <div className="flex items-center gap-2">
+            <NotificationsPopover />
             <ThemeToggle />
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
