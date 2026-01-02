@@ -249,7 +249,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
                   <SelectContent>
                     {eligibleGuarantors.map((member) => (
                       <SelectItem key={member.id} value={member.id}>
-                        {member.full_name}
+                        {member.account_number}
                       </SelectItem>
                     ))}
                   </SelectContent>
