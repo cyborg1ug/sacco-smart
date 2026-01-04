@@ -3,7 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { LogOut, Wallet, TrendingUp, History, Users, User } from "lucide-react";
+import { LogOut, Wallet, TrendingUp, History, Users, User, ToggleLeft, ToggleRight } from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
@@ -28,15 +28,33 @@ interface AccountData {
   account_number: string;
 }
 
+interface SubAccountData {
+  id: string;
+  balance: number;
+  total_savings: number;
+  account_number: string;
+  profile: {
+    full_name: string;
+  } | null;
+}
+
+interface JointTotals {
+  balance: number;
+  total_savings: number;
+}
+
 const MemberDashboard = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
   const [account, setAccount] = useState<AccountData | null>(null);
+  const [subAccounts, setSubAccounts] = useState<SubAccountData[]>([]);
+  const [jointTotals, setJointTotals] = useState<JointTotals>({ balance: 0, total_savings: 0 });
   const [activeLoans, setActiveLoans] = useState(0);
   const [pendingGuarantorRequests, setPendingGuarantorRequests] = useState(0);
   const [userName, setUserName] = useState("");
   const [activeTab, setActiveTab] = useState("overview");
   const [hasSubAccounts, setHasSubAccounts] = useState(false);
+  const [showJointView, setShowJointView] = useState(false);
 
   useEffect(() => {
     loadAccountData();
@@ -68,7 +86,43 @@ const MemberDashboard = () => {
       if (accountData) {
         setAccount(accountData);
 
-        // Count active loans
+        // Get sub-accounts and their profiles
+        const { data: subAccountsData } = await supabase
+          .from("accounts")
+          .select("id, balance, total_savings, account_number")
+          .eq("parent_account_id", accountData.id)
+          .eq("account_type", "sub");
+
+        if (subAccountsData && subAccountsData.length > 0) {
+          setHasSubAccounts(true);
+          
+          // Get sub-account profiles
+          const subAccountIds = subAccountsData.map(a => a.id);
+          const { data: subProfiles } = await supabase
+            .from("sub_account_profiles")
+            .select("account_id, full_name")
+            .in("account_id", subAccountIds);
+
+          const profilesMap = new Map(subProfiles?.map(p => [p.account_id, p]) || []);
+          
+          const subAccountsWithProfiles = subAccountsData.map(sa => ({
+            ...sa,
+            profile: profilesMap.get(sa.id) || null
+          }));
+          
+          setSubAccounts(subAccountsWithProfiles);
+
+          // Calculate joint totals
+          const jointBalance = accountData.balance + subAccountsData.reduce((sum, sa) => sum + Number(sa.balance), 0);
+          const jointSavings = accountData.total_savings + subAccountsData.reduce((sum, sa) => sum + Number(sa.total_savings), 0);
+          setJointTotals({ balance: jointBalance, total_savings: jointSavings });
+        } else {
+          setHasSubAccounts(false);
+          setSubAccounts([]);
+          setJointTotals({ balance: accountData.balance, total_savings: accountData.total_savings });
+        }
+
+        // Count active loans (from main account)
         const { count: loansCount } = await supabase
           .from("loans")
           .select("id", { count: "exact" })
@@ -85,15 +139,6 @@ const MemberDashboard = () => {
           .eq("guarantor_status", "pending");
 
         setPendingGuarantorRequests(guarantorCount || 0);
-
-        // Check if user has sub-accounts
-        const { count: subAccountsCount } = await supabase
-          .from("accounts")
-          .select("id", { count: "exact" })
-          .eq("parent_account_id", accountData.id)
-          .eq("account_type", "sub");
-
-        setHasSubAccounts((subAccountsCount || 0) > 0);
       }
     }
   };
@@ -159,26 +204,58 @@ const MemberDashboard = () => {
           </div>
         </div>
 
+        {/* Joint View Toggle */}
+        {hasSubAccounts && (
+          <div className="flex items-center gap-2 bg-muted/50 rounded-lg px-4 py-2 w-fit">
+            <span className="text-sm text-muted-foreground">Main Account</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="p-0 h-6"
+              onClick={() => setShowJointView(!showJointView)}
+            >
+              {showJointView ? (
+                <ToggleRight className="h-6 w-6 text-primary" />
+              ) : (
+                <ToggleLeft className="h-6 w-6 text-muted-foreground" />
+              )}
+            </Button>
+            <span className="text-sm text-muted-foreground">Joint View</span>
+          </div>
+        )}
+
         <div className="grid gap-4 md:grid-cols-4">
-          <Card>
+          <Card className={showJointView ? "border-primary/50" : ""}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Current Balance</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {showJointView ? "Joint Balance" : "Current Balance"}
+              </CardTitle>
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">UGX {account?.balance.toLocaleString() || 0}</div>
-              <p className="text-xs text-muted-foreground">Available funds</p>
+              <div className="text-2xl font-bold">
+                UGX {(showJointView ? jointTotals.balance : (account?.balance || 0)).toLocaleString()}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {showJointView ? "Main + Sub-accounts" : "Main account funds"}
+              </p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className={showJointView ? "border-primary/50" : ""}>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Savings</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                {showJointView ? "Joint Savings" : "Total Savings"}
+              </CardTitle>
               <TrendingUp className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">UGX {account?.total_savings.toLocaleString() || 0}</div>
-              <p className="text-xs text-muted-foreground">Accumulated savings</p>
+              <div className="text-2xl font-bold">
+                UGX {(showJointView ? jointTotals.total_savings : (account?.total_savings || 0)).toLocaleString()}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {showJointView ? "Combined savings" : "Main account savings"}
+              </p>
             </CardContent>
           </Card>
 
@@ -204,6 +281,28 @@ const MemberDashboard = () => {
             </CardContent>
           </Card>
         </div>
+
+        {/* Sub-Account Balances Summary */}
+        {hasSubAccounts && subAccounts.length > 0 && (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {subAccounts.map((subAcc) => (
+              <Card key={subAcc.id} className="border-dashed">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium truncate">
+                    {subAcc.profile?.full_name || subAcc.account_number}
+                  </CardTitle>
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-lg font-bold">UGX {subAcc.balance.toLocaleString()}</div>
+                  <p className="text-xs text-muted-foreground">
+                    Savings: UGX {subAcc.total_savings.toLocaleString()}
+                  </p>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
           <TabsList className="flex-wrap h-auto gap-1">
