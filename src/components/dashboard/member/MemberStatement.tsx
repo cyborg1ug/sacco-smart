@@ -12,6 +12,8 @@ const MemberStatement = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [accountData, setAccountData] = useState<any>(null);
+  const [subAccountsData, setSubAccountsData] = useState<any[]>([]);
+  const [jointTotals, setJointTotals] = useState<{ balance: number; total_savings: number } | null>(null);
   const [chartData, setChartData] = useState<{
     transactionData: { month: string; deposits: number; withdrawals: number }[];
     savingsData: { week: string; amount: number }[];
@@ -36,11 +38,40 @@ const MemberStatement = () => {
         .from("accounts")
         .select("id, account_number, balance, total_savings")
         .eq("user_id", user.id)
+        .eq("account_type", "main")
         .single();
 
       if (profile && account) {
         setAccountData({ profile, account });
         loadChartData(account.id);
+
+        // Load sub-accounts
+        const { data: subAccounts } = await supabase
+          .from("accounts")
+          .select("id, account_number, balance, total_savings")
+          .eq("parent_account_id", account.id)
+          .eq("account_type", "sub");
+
+        if (subAccounts && subAccounts.length > 0) {
+          // Get sub-account profiles
+          const subAccountIds = subAccounts.map(a => a.id);
+          const { data: subProfiles } = await supabase
+            .from("sub_account_profiles")
+            .select("account_id, full_name")
+            .in("account_id", subAccountIds);
+
+          const profilesMap = new Map(subProfiles?.map(p => [p.account_id, p]) || []);
+          const subAccountsWithProfiles = subAccounts.map(sa => ({
+            ...sa,
+            profile: profilesMap.get(sa.id) || null
+          }));
+          setSubAccountsData(subAccountsWithProfiles);
+
+          // Calculate joint totals
+          const jointBalance = account.balance + subAccounts.reduce((sum, sa) => sum + Number(sa.balance), 0);
+          const jointSavings = account.total_savings + subAccounts.reduce((sum, sa) => sum + Number(sa.total_savings), 0);
+          setJointTotals({ balance: jointBalance, total_savings: jointSavings });
+        }
       }
     }
   };
@@ -104,7 +135,7 @@ const MemberStatement = () => {
     setChartData({ transactionData, savingsData, balanceData });
   };
 
-  const generateStatement = async (asPdf = false) => {
+  const generateStatement = async (asPdf = false, includeSubAccounts = false) => {
     if (!accountData) {
       toast({
         title: "Error",
@@ -116,12 +147,24 @@ const MemberStatement = () => {
 
     setLoading(true);
 
-    // Get transactions
+    // Get main account transactions
     const { data: transactions } = await supabase
       .from("transactions")
       .select("*")
       .eq("account_id", accountData.account.id)
       .order("created_at", { ascending: false });
+
+    // Get sub-account transactions if requested
+    let subAccountTransactions: any[] = [];
+    if (includeSubAccounts && subAccountsData.length > 0) {
+      const subAccountIds = subAccountsData.map(sa => sa.id);
+      const { data: subTrans } = await supabase
+        .from("transactions")
+        .select("*")
+        .in("account_id", subAccountIds)
+        .order("created_at", { ascending: false });
+      subAccountTransactions = subTrans || [];
+    }
 
     // Get loans
     const { data: loans } = await supabase
@@ -136,17 +179,41 @@ const MemberStatement = () => {
       .eq("account_id", accountData.account.id)
       .order("week_start", { ascending: false });
 
+    // Get sub-account savings if requested
+    let subAccountSavings: any[] = [];
+    if (includeSubAccounts && subAccountsData.length > 0) {
+      const subAccountIds = subAccountsData.map(sa => sa.id);
+      const { data: subSav } = await supabase
+        .from("savings")
+        .select("*")
+        .in("account_id", subAccountIds)
+        .order("week_start", { ascending: false });
+      subAccountSavings = subSav || [];
+    }
+
+    const allTransactions = includeSubAccounts 
+      ? [...(transactions || []), ...subAccountTransactions].sort((a, b) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      : transactions || [];
+
+    const allSavings = includeSubAccounts
+      ? [...(savings || []), ...subAccountSavings]
+      : savings || [];
+
     if (asPdf) {
+      const balance = includeSubAccounts && jointTotals ? jointTotals.balance : Number(accountData.account.balance);
+      const totalSavingsAmount = includeSubAccounts && jointTotals ? jointTotals.total_savings : Number(accountData.account.total_savings);
+      
       generateMemberStatementPDF({
-        memberName: accountData.profile.full_name,
+        memberName: accountData.profile.full_name + (includeSubAccounts ? " (Joint Statement)" : ""),
         email: accountData.profile.email,
         phoneNumber: accountData.profile.phone_number,
         accountNumber: accountData.account.account_number,
-        balance: Number(accountData.account.balance),
-        totalSavings: Number(accountData.account.total_savings),
-        transactions: transactions || [],
+        balance: balance,
+        totalSavings: totalSavingsAmount,
+        transactions: allTransactions,
         loans: loans || [],
-        savings: savings || [],
+        savings: allSavings,
       });
 
       toast({
@@ -155,7 +222,7 @@ const MemberStatement = () => {
       });
     } else {
       // Generate statement text
-      let statement = `KINONI SACCO - MEMBER STATEMENT\n`;
+      let statement = `KINONI SACCO - ${includeSubAccounts ? "JOINT " : ""}MEMBER STATEMENT\n`;
       statement += `${"=".repeat(80)}\n`;
       statement += `Generated: ${format(new Date(), "MMMM dd, yyyy 'at' hh:mm a")}\n\n`;
       
@@ -168,12 +235,29 @@ const MemberStatement = () => {
       statement += `Current Balance: UGX ${Number(accountData.account.balance).toLocaleString()}\n`;
       statement += `Total Savings:   UGX ${Number(accountData.account.total_savings).toLocaleString()}\n\n`;
 
+      // Sub-accounts section
+      if (includeSubAccounts && subAccountsData.length > 0) {
+        statement += `SUB-ACCOUNTS\n`;
+        statement += `${"─".repeat(80)}\n`;
+        subAccountsData.forEach((sa) => {
+          statement += `  ${sa.profile?.full_name || sa.account_number}\n`;
+          statement += `    Account Number: ${sa.account_number}\n`;
+          statement += `    Balance:        UGX ${Number(sa.balance).toLocaleString()}\n`;
+          statement += `    Savings:        UGX ${Number(sa.total_savings).toLocaleString()}\n\n`;
+        });
+
+        statement += `JOINT TOTALS\n`;
+        statement += `${"─".repeat(80)}\n`;
+        statement += `Combined Balance: UGX ${jointTotals?.balance.toLocaleString()}\n`;
+        statement += `Combined Savings: UGX ${jointTotals?.total_savings.toLocaleString()}\n\n`;
+      }
+
       // Summary
-      const totalDeposits = transactions?.filter(t => t.transaction_type === "deposit" && t.status === "approved")
+      const totalDeposits = allTransactions.filter(t => t.transaction_type === "deposit" && t.status === "approved")
         .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
-      const totalWithdrawals = transactions?.filter(t => t.transaction_type === "withdrawal" && t.status === "approved")
+      const totalWithdrawals = allTransactions.filter(t => t.transaction_type === "withdrawal" && t.status === "approved")
         .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
-      const totalLoanRepayments = transactions?.filter(t => t.transaction_type === "loan_repayment" && t.status === "approved")
+      const totalLoanRepayments = allTransactions.filter(t => t.transaction_type === "loan_repayment" && t.status === "approved")
         .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
 
       statement += `FINANCIAL SUMMARY\n`;
@@ -183,12 +267,12 @@ const MemberStatement = () => {
       statement += `Total Loan Repayments: UGX ${totalLoanRepayments.toLocaleString()}\n`;
       statement += `Net Cash Flow:        UGX ${(totalDeposits - totalWithdrawals - totalLoanRepayments).toLocaleString()}\n\n`;
 
-      statement += `TRANSACTION HISTORY (${transactions?.length || 0} transactions)\n`;
+      statement += `TRANSACTION HISTORY (${allTransactions.length} transactions)\n`;
       statement += `${"─".repeat(80)}\n`;
       statement += `${"Date & Time".padEnd(20)} | ${"Type".padEnd(18)} | ${"Amount".padStart(15)} | ${"Balance After".padStart(15)} | Status\n`;
       statement += `${"-".repeat(80)}\n`;
-      if (transactions && transactions.length > 0) {
-        transactions.forEach((t) => {
+      if (allTransactions.length > 0) {
+        allTransactions.forEach((t) => {
           const dateTime = format(new Date(t.created_at), "MMM dd, yyyy HH:mm");
           const type = t.transaction_type.replace("_", " ").toUpperCase();
           statement += `${dateTime.padEnd(20)} | ${type.padEnd(18)} | UGX ${Number(t.amount).toLocaleString().padStart(10)} | UGX ${Number(t.balance_after).toLocaleString().padStart(10)} | ${t.status.toUpperCase()}\n`;
@@ -202,8 +286,8 @@ const MemberStatement = () => {
 
       statement += `\nSAVINGS RECORDS\n`;
       statement += `${"─".repeat(60)}\n`;
-      if (savings && savings.length > 0) {
-        savings.forEach((s) => {
+      if (allSavings.length > 0) {
+        allSavings.forEach((s) => {
           statement += `Week: ${format(new Date(s.week_start), "MMM dd")} - ${format(new Date(s.week_end), "MMM dd, yyyy")} | `;
           statement += `Amount: UGX ${Number(s.amount).toLocaleString()}\n`;
         });
@@ -243,7 +327,7 @@ const MemberStatement = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `kinoni_statement_${accountData.account.account_number}_${format(new Date(), "yyyyMMdd")}.txt`;
+      a.download = `kinoni_${includeSubAccounts ? "joint_" : ""}statement_${accountData.account.account_number}_${format(new Date(), "yyyyMMdd")}.txt`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -281,20 +365,45 @@ const MemberStatement = () => {
               <li>Complete transaction history</li>
               <li>Weekly savings records</li>
               <li>Loan history and outstanding balances</li>
+              {subAccountsData.length > 0 && <li>Joint statement includes all sub-accounts</li>}
             </ul>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={() => generateStatement(false)} className="flex-1" disabled={loading || !accountData}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              <FileText className="mr-2 h-4 w-4" />
-              Text Statement
-            </Button>
-            <Button onClick={() => generateStatement(true)} variant="outline" className="flex-1" disabled={loading || !accountData}>
-              {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              <FileDown className="mr-2 h-4 w-4" />
-              PDF Statement
-            </Button>
+          
+          {/* Main Account Statement */}
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Main Account Statement</p>
+            <div className="flex gap-2">
+              <Button onClick={() => generateStatement(false, false)} className="flex-1" disabled={loading || !accountData}>
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <FileText className="mr-2 h-4 w-4" />
+                Text
+              </Button>
+              <Button onClick={() => generateStatement(true, false)} variant="outline" className="flex-1" disabled={loading || !accountData}>
+                {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                <FileDown className="mr-2 h-4 w-4" />
+                PDF
+              </Button>
+            </div>
           </div>
+
+          {/* Joint Statement - only if sub-accounts exist */}
+          {subAccountsData.length > 0 && (
+            <div className="space-y-2 pt-4 border-t">
+              <p className="text-sm font-medium">Joint Statement (Main + Sub-accounts)</p>
+              <div className="flex gap-2">
+                <Button onClick={() => generateStatement(false, true)} variant="secondary" className="flex-1" disabled={loading || !accountData}>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <FileText className="mr-2 h-4 w-4" />
+                  Joint Text
+                </Button>
+                <Button onClick={() => generateStatement(true, true)} variant="secondary" className="flex-1" disabled={loading || !accountData}>
+                  {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  <FileDown className="mr-2 h-4 w-4" />
+                  Joint PDF
+                </Button>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

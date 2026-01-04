@@ -24,6 +24,7 @@ interface MemberOption {
   account_number: string;
   full_name: string;
   total_savings: number;
+  account_type: string;
 }
 
 const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
@@ -73,29 +74,48 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
     const { data: { user } } = await supabase.auth.getUser();
     
     if (user) {
-      // Get all accounts except current user's - only main accounts
+      // Get all accounts except current user's - both main and sub accounts
       const { data: accounts } = await supabase
         .from("accounts")
-        .select("id, account_number, user_id, total_savings")
-        .neq("user_id", user.id)
-        .eq("account_type", "main");
+        .select("id, account_number, user_id, total_savings, account_type, parent_account_id")
+        .neq("user_id", user.id);
 
       if (accounts && accounts.length > 0) {
-        // Fetch profiles for each account
-        const userIds = [...new Set(accounts.map(a => a.user_id))];
+        // Fetch profiles for main accounts
+        const userIds = [...new Set(accounts.filter(a => a.account_type === 'main').map(a => a.user_id))];
         const { data: profiles } = await supabase
           .from("profiles")
           .select("id, full_name")
           .in("id", userIds);
 
+        // Fetch sub-account profiles
+        const subAccountIds = accounts.filter(a => a.account_type === 'sub').map(a => a.id);
+        let subProfilesMap = new Map();
+        if (subAccountIds.length > 0) {
+          const { data: subProfiles } = await supabase
+            .from("sub_account_profiles")
+            .select("account_id, full_name")
+            .in("account_id", subAccountIds);
+          subProfilesMap = new Map(subProfiles?.map(p => [p.account_id, p]) || []);
+        }
+
         const profilesMap = new Map(profiles?.map(p => [p.id, p]) || []);
 
-        const membersWithProfiles = accounts.map((account) => ({
-          id: account.id,
-          account_number: account.account_number,
-          full_name: profilesMap.get(account.user_id)?.full_name || "Unknown",
-          total_savings: account.total_savings,
-        }));
+        const membersWithProfiles = accounts.map((account) => {
+          let fullName = "Unknown";
+          if (account.account_type === 'sub' && subProfilesMap.has(account.id)) {
+            fullName = subProfilesMap.get(account.id)?.full_name || "Unknown";
+          } else {
+            fullName = profilesMap.get(account.user_id)?.full_name || "Unknown";
+          }
+          return {
+            id: account.id,
+            account_number: account.account_number,
+            full_name: fullName,
+            total_savings: account.total_savings,
+            account_type: account.account_type,
+          };
+        });
 
         setMembers(membersWithProfiles);
       }
@@ -249,7 +269,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
                   <SelectContent>
                     {eligibleGuarantors.map((member) => (
                       <SelectItem key={member.id} value={member.id}>
-                        {member.account_number}
+                        {member.full_name} ({member.account_number}) {member.account_type === 'sub' ? '• Sub' : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>

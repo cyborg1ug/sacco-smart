@@ -307,6 +307,7 @@ const ReportsGeneration = () => {
 
     const { data: accounts } = await supabase.from("accounts").select("*");
     const { data: profiles } = await supabase.from("profiles").select("*");
+    const { data: subProfiles } = await supabase.from("sub_account_profiles").select("*");
     const { data: transactions } = await supabase
       .from("transactions")
       .select("*")
@@ -317,6 +318,9 @@ const ReportsGeneration = () => {
       .from("savings")
       .select("*")
       .gte("week_start", dateRange.start.toISOString());
+
+    const mainAccounts = accounts?.filter(a => a.account_type === 'main') || [];
+    const subAccounts = accounts?.filter(a => a.account_type === 'sub') || [];
 
     const totalBalance = accounts?.reduce((sum, acc) => sum + Number(acc.balance), 0) || 0;
     const totalSavingsAmount = accounts?.reduce((sum, acc) => sum + Number(acc.total_savings), 0) || 0;
@@ -329,9 +333,16 @@ const ReportsGeneration = () => {
 
     if (asPdf) {
       const membersData = accounts?.map((acc) => {
-        const profile = profiles?.find((p) => p.id === acc.user_id);
+        let name = "Unknown";
+        if (acc.account_type === 'sub') {
+          const subProfile = subProfiles?.find(p => p.account_id === acc.id);
+          name = subProfile?.full_name ? `${subProfile.full_name} (Sub)` : "Unknown (Sub)";
+        } else {
+          const profile = profiles?.find((p) => p.id === acc.user_id);
+          name = profile?.full_name || "Unknown";
+        }
         return {
-          name: profile?.full_name || "Unknown",
+          name,
           accountNumber: acc.account_number,
           balance: Number(acc.balance),
           savings: Number(acc.total_savings),
@@ -368,6 +379,8 @@ const ReportsGeneration = () => {
       report += `EXECUTIVE SUMMARY\n`;
       report += `${"─".repeat(70)}\n`;
       report += `Total Members: ${profiles?.length || 0}\n`;
+      report += `Main Accounts: ${mainAccounts.length}\n`;
+      report += `Sub-Accounts: ${subAccounts.length}\n`;
       report += `Total Accounts: ${accounts?.length || 0}\n`;
       report += `Combined Balance: UGX ${totalBalance.toLocaleString()}\n`;
       report += `Combined Savings: UGX ${totalSavingsAmount.toLocaleString()}\n`;
@@ -390,14 +403,25 @@ const ReportsGeneration = () => {
       report += `Completed Loans: ${loans?.filter(l => l.status === "completed").length || 0}\n`;
       report += `Rejected Loans: ${loans?.filter(l => l.status === "rejected").length || 0}\n\n`;
 
-      report += `MEMBER BREAKDOWN\n`;
+      report += `MAIN ACCOUNTS BREAKDOWN\n`;
       report += `${"─".repeat(70)}\n`;
-      accounts?.forEach(acc => {
+      mainAccounts.forEach(acc => {
         const profile = profiles?.find(p => p.id === acc.user_id);
         report += `${(profile?.full_name || "Unknown").padEnd(30)} | `;
         report += `${acc.account_number} | `;
         report += `Balance: UGX ${Number(acc.balance).toLocaleString().padStart(12)}\n`;
       });
+
+      if (subAccounts.length > 0) {
+        report += `\nSUB-ACCOUNTS BREAKDOWN\n`;
+        report += `${"─".repeat(70)}\n`;
+        subAccounts.forEach(acc => {
+          const subProfile = subProfiles?.find(p => p.account_id === acc.id);
+          report += `${(subProfile?.full_name || "Unknown").padEnd(30)} | `;
+          report += `${acc.account_number} | `;
+          report += `Balance: UGX ${Number(acc.balance).toLocaleString().padStart(12)}\n`;
+        });
+      }
 
       report += `\n${"═".repeat(70)}\n`;
       report += `End of Report - KINONI SACCO Management System\n`;

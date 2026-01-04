@@ -66,8 +66,11 @@ export type Database = {
           approved_by: string | null
           created_at: string
           disbursed_at: string | null
+          guarantor_account_id: string | null
+          guarantor_status: string | null
           id: string
           interest_rate: number
+          max_loan_amount: number | null
           outstanding_balance: number
           status: string
           total_amount: number
@@ -80,8 +83,11 @@ export type Database = {
           approved_by?: string | null
           created_at?: string
           disbursed_at?: string | null
+          guarantor_account_id?: string | null
+          guarantor_status?: string | null
           id?: string
           interest_rate?: number
+          max_loan_amount?: number | null
           outstanding_balance: number
           status?: string
           total_amount: number
@@ -94,8 +100,11 @@ export type Database = {
           approved_by?: string | null
           created_at?: string
           disbursed_at?: string | null
+          guarantor_account_id?: string | null
+          guarantor_status?: string | null
           id?: string
           interest_rate?: number
+          max_loan_amount?: number | null
           outstanding_balance?: number
           status?: string
           total_amount?: number
@@ -105,6 +114,13 @@ export type Database = {
           {
             foreignKeyName: "loans_account_id_fkey"
             columns: ["account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "loans_guarantor_account_id_fkey"
+            columns: ["guarantor_account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
             referencedColumns: ["id"]

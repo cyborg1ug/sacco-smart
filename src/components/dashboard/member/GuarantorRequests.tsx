@@ -36,19 +36,20 @@ const GuarantorRequests = () => {
     const { data: { user } } = await supabase.auth.getUser();
     
     if (user) {
-      // Get current user's account
-      const { data: myAccount } = await supabase
+      // Get current user's main account and sub-accounts
+      const { data: myAccounts } = await supabase
         .from("accounts")
         .select("id")
-        .eq("user_id", user.id)
-        .single();
+        .eq("user_id", user.id);
 
-      if (myAccount) {
-        // Get loan requests where I'm the guarantor
+      if (myAccounts && myAccounts.length > 0) {
+        const myAccountIds = myAccounts.map(a => a.id);
+        
+        // Get loan requests where any of my accounts is the guarantor
         const { data: loans, error } = await (supabase
           .from("loans")
           .select(`id, amount, total_amount, created_at, account_id`) as any)
-          .eq("guarantor_account_id", myAccount.id)
+          .in("guarantor_account_id", myAccountIds)
           .eq("guarantor_status", "pending");
 
         if (!error && loans) {
@@ -57,7 +58,7 @@ const GuarantorRequests = () => {
             (loans as any[]).map(async (loan: any) => {
               const { data: account } = await supabase
                 .from("accounts")
-                .select("account_number, user_id")
+                .select("account_number, user_id, account_type")
                 .eq("id", loan.account_id)
                 .single();
 
@@ -65,15 +66,29 @@ const GuarantorRequests = () => {
               let applicantEmail = "";
 
               if (account) {
-                const { data: profile } = await supabase
-                  .from("profiles")
-                  .select("full_name, email")
-                  .eq("id", account.user_id)
-                  .single();
+                // Check if it's a sub-account - get name from sub_account_profiles
+                if (account.account_type === 'sub') {
+                  const { data: subProfile } = await supabase
+                    .from("sub_account_profiles")
+                    .select("full_name")
+                    .eq("account_id", loan.account_id)
+                    .single();
+                  
+                  if (subProfile) {
+                    applicantName = subProfile.full_name + " (Sub-account)";
+                  }
+                } else {
+                  // Main account - get from profiles
+                  const { data: profile } = await supabase
+                    .from("profiles")
+                    .select("full_name, email")
+                    .eq("id", account.user_id)
+                    .single();
 
-                if (profile) {
-                  applicantName = profile.full_name;
-                  applicantEmail = profile.email;
+                  if (profile) {
+                    applicantName = profile.full_name;
+                    applicantEmail = profile.email;
+                  }
                 }
               }
 
