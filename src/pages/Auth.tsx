@@ -18,7 +18,8 @@ const Auth = () => {
   const [searchParams] = useSearchParams();
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [isLogin, setIsLogin] = useState(true);
+  const mode = searchParams.get("mode");
+  const [isLogin, setIsLogin] = useState(mode !== "signup");
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [loginMethod, setLoginMethod] = useState<"email" | "phone">("phone");
   const [signupMethod, setSignupMethod] = useState<"email" | "phone">("phone");
@@ -242,7 +243,7 @@ const Auth = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue="login" onValueChange={(v) => setIsLogin(v === "login")}>
+          <Tabs defaultValue={mode === "signup" ? "signup" : "login"} onValueChange={(v) => setIsLogin(v === "login")}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="login">Login</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>
