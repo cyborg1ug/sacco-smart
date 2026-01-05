@@ -122,20 +122,23 @@ const MemberDashboard = () => {
           setJointTotals({ balance: accountData.balance, total_savings: accountData.total_savings });
         }
 
-        // Count active loans (from main account)
+        // Get all account IDs (main + sub) for counting loans
+        const allAccountIds = [accountData.id, ...(subAccountsData?.map(sa => sa.id) || [])];
+
+        // Count active loans from main account AND sub-accounts
         const { count: loansCount } = await supabase
           .from("loans")
           .select("id", { count: "exact" })
-          .eq("account_id", accountData.id)
+          .in("account_id", allAccountIds)
           .in("status", ["approved", "disbursed"]);
 
         setActiveLoans(loansCount || 0);
 
-        // Count pending guarantor requests
+        // Count pending guarantor requests for main account AND sub-accounts
         const { count: guarantorCount } = await (supabase
           .from("loans")
           .select("id", { count: "exact" }) as any)
-          .eq("guarantor_account_id", accountData.id)
+          .in("guarantor_account_id", allAccountIds)
           .eq("guarantor_status", "pending");
 
         setPendingGuarantorRequests(guarantorCount || 0);
