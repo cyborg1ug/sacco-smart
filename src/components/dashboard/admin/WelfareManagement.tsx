@@ -237,7 +237,7 @@ const WelfareManagement = () => {
           balance_after: newBalance,
           status: "approved",
           approved_at: new Date().toISOString(),
-        });
+        } as any);
 
       if (error) {
         errors++;

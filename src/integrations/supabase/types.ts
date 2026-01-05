@@ -300,6 +300,7 @@ export type Database = {
           description: string | null
           id: string
           status: string
+          tnx_id: string
           transaction_type: string
         }
         Insert: {
@@ -312,6 +313,7 @@ export type Database = {
           description?: string | null
           id?: string
           status?: string
+          tnx_id: string
           transaction_type: string
         }
         Update: {
@@ -324,6 +326,7 @@ export type Database = {
           description?: string | null
           id?: string
           status?: string
+          tnx_id?: string
           transaction_type?: string
         }
         Relationships: [
@@ -398,6 +401,7 @@ export type Database = {
     }
     Functions: {
       check_loan_eligibility: { Args: { p_account_id: string }; Returns: Json }
+      generate_tnx_id: { Args: never; Returns: string }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]

@@ -9,17 +9,20 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Plus, Loader2 } from "lucide-react";
+import { Check, X, Plus, Loader2, FileText } from "lucide-react";
 import { format } from "date-fns";
+import { generateTransactionReceiptPDF } from "@/lib/pdfGenerator";
 
 interface Transaction {
   id: string;
+  tnx_id: string;
   transaction_type: string;
   amount: number;
   balance_after: number;
   description: string;
   status: string;
   created_at: string;
+  approved_at: string | null;
   account: {
     id: string;
     account_number: string;
@@ -238,7 +241,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
         description,
         balance_after: account.balance,
         status: "pending",
-      });
+      } as any);
 
     if (error) {
       toast({
@@ -254,6 +257,24 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
       setDialogOpen(false);
       loadTransactions();
     }
+  };
+
+  const handleGenerateReceipt = (transaction: Transaction) => {
+    generateTransactionReceiptPDF({
+      tnxId: transaction.tnx_id,
+      memberName: transaction.account.user.full_name,
+      accountNumber: transaction.account.account_number,
+      transactionType: transaction.transaction_type,
+      amount: transaction.amount,
+      balanceAfter: transaction.balance_after,
+      description: transaction.description,
+      createdAt: transaction.created_at,
+      approvedAt: transaction.approved_at || undefined,
+    });
+    toast({
+      title: "Receipt Generated",
+      description: `Receipt for transaction ${transaction.tnx_id} has been downloaded.`,
+    });
   };
 
   if (loading) {
@@ -327,6 +348,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead>TXN ID</TableHead>
               <TableHead>Date</TableHead>
               <TableHead>Member</TableHead>
               <TableHead>Account</TableHead>
@@ -340,6 +362,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
           <TableBody>
             {transactions.map((transaction) => (
               <TableRow key={transaction.id}>
+                <TableCell className="font-mono text-xs">{transaction.tnx_id}</TableCell>
                 <TableCell>{format(new Date(transaction.created_at), "MMM dd, yyyy")}</TableCell>
                 <TableCell>{transaction.account.user.full_name}</TableCell>
                 <TableCell>{transaction.account.account_number}</TableCell>
@@ -355,29 +378,43 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  {transaction.status === "pending" && (
-                    <div className="flex gap-2">
+                  <div className="flex gap-2">
+                    {transaction.status === "pending" && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleApprove(
+                            transaction.id,
+                            transaction.account.id,
+                            transaction.amount,
+                            transaction.transaction_type
+                          )}
+                          title="Approve"
+                        >
+                          <Check className="h-4 w-4 text-success" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleReject(transaction.id)}
+                          title="Reject"
+                        >
+                          <X className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </>
+                    )}
+                    {transaction.status === "approved" && (
                       <Button
                         size="sm"
                         variant="ghost"
-                        onClick={() => handleApprove(
-                          transaction.id,
-                          transaction.account.id,
-                          transaction.amount,
-                          transaction.transaction_type
-                        )}
+                        onClick={() => handleGenerateReceipt(transaction)}
+                        title="Generate Receipt"
                       >
-                        <Check className="h-4 w-4 text-success" />
+                        <FileText className="h-4 w-4 text-primary" />
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleReject(transaction.id)}
-                      >
-                        <X className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </TableCell>
               </TableRow>
             ))}

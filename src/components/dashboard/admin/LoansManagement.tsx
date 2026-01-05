@@ -180,7 +180,7 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
         balance_after: newBalance,
         description: `Loan disbursement for loan ${loanId}`,
         status: "pending",
-      });
+      } as any);
 
     if (transactionError) {
       toast({
