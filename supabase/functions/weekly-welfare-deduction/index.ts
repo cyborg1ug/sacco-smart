@@ -16,9 +16,67 @@ Deno.serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // AUTHENTICATION CHECK
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error("No authorization header provided");
+      return new Response(
+        JSON.stringify({ error: 'Authorization required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+    if (authError || !user) {
+      console.error("Invalid token:", authError?.message);
+      return new Response(
+        JSON.stringify({ error: 'Invalid authentication token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ADMIN ROLE CHECK
+    const { data: role, error: roleError } = await supabase
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'admin')
+      .single();
+
+    if (roleError || !role) {
+      console.error(`User ${user.id} attempted welfare deduction without admin role`);
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - Admin access required' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`Welfare deduction initiated by admin ${user.id} (${user.email})`);
+
     const weeklyAmount = 2000; // UGX 2,000 per week
     const today = new Date();
-    const weekDate = today.toISOString().split('T')[0];
+    
+    // Calculate week start (Sunday) for idempotency check
+    const weekStart = new Date(today);
+    weekStart.setDate(weekStart.getDate() - weekStart.getDay());
+    const weekStartStr = weekStart.toISOString().split('T')[0];
+
+    // IDEMPOTENCY CHECK - prevent duplicate deductions in same week
+    const { data: existing } = await supabase
+      .from("welfare")
+      .select("id")
+      .eq("week_date", weekStartStr)
+      .limit(1);
+
+    if (existing && existing.length > 0) {
+      console.log(`Welfare deduction already performed for week starting ${weekStartStr}`);
+      return new Response(
+        JSON.stringify({ error: 'Welfare deduction already performed this week', week: weekStartStr }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Get all accounts
     const { data: accounts, error: accountsError } = await supabase
@@ -39,13 +97,13 @@ Deno.serve(async (req) => {
     let errorCount = 0;
 
     for (const account of accounts) {
-      // Insert welfare entry
+      // Insert welfare entry with week start date for idempotency
       const { error: welfareError } = await supabase
         .from("welfare")
         .insert({
           account_id: account.id,
           amount: weeklyAmount,
-          week_date: weekDate,
+          week_date: weekStartStr,
           description: "Weekly welfare fee - Auto deducted",
         });
 
@@ -93,7 +151,7 @@ Deno.serve(async (req) => {
       successCount++;
     }
 
-    console.log(`Welfare deduction complete: ${successCount} successful, ${errorCount} failed`);
+    console.log(`Welfare deduction complete by ${user.email}: ${successCount} successful, ${errorCount} failed`);
 
     return new Response(
       JSON.stringify({
@@ -101,6 +159,7 @@ Deno.serve(async (req) => {
         message: `Processed ${successCount} accounts, ${errorCount} errors`,
         processed: successCount,
         errors: errorCount,
+        week: weekStartStr,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

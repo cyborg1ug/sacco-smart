@@ -71,54 +71,24 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
   };
 
   const loadMembers = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    
-    if (user) {
-      // Get all accounts except current user's - both main and sub accounts
-      const { data: accounts } = await supabase
-        .from("accounts")
-        .select("id, account_number, user_id, total_savings, account_type, parent_account_id")
-        .neq("user_id", user.id);
+    // Use secure RPC function that only exposes necessary data for guarantor selection
+    const { data, error } = await supabase.rpc("get_guarantor_candidates");
 
-      if (accounts && accounts.length > 0) {
-        // Fetch profiles for main accounts
-        const userIds = [...new Set(accounts.filter(a => a.account_type === 'main').map(a => a.user_id))];
-        const { data: profiles } = await supabase
-          .from("profiles")
-          .select("id, full_name")
-          .in("id", userIds);
+    if (error) {
+      console.error("Error loading guarantor candidates:", error);
+      return;
+    }
 
-        // Fetch sub-account profiles
-        const subAccountIds = accounts.filter(a => a.account_type === 'sub').map(a => a.id);
-        let subProfilesMap = new Map();
-        if (subAccountIds.length > 0) {
-          const { data: subProfiles } = await supabase
-            .from("sub_account_profiles")
-            .select("account_id, full_name")
-            .in("account_id", subAccountIds);
-          subProfilesMap = new Map(subProfiles?.map(p => [p.account_id, p]) || []);
-        }
+    if (data && data.length > 0) {
+      const membersWithProfiles = data.map((candidate: any) => ({
+        id: candidate.account_id,
+        account_number: candidate.account_number,
+        full_name: candidate.full_name,
+        total_savings: candidate.total_savings,
+        account_type: candidate.account_type,
+      }));
 
-        const profilesMap = new Map(profiles?.map(p => [p.id, p]) || []);
-
-        const membersWithProfiles = accounts.map((account) => {
-          let fullName = "Unknown";
-          if (account.account_type === 'sub' && subProfilesMap.has(account.id)) {
-            fullName = subProfilesMap.get(account.id)?.full_name || "Unknown";
-          } else {
-            fullName = profilesMap.get(account.user_id)?.full_name || "Unknown";
-          }
-          return {
-            id: account.id,
-            account_number: account.account_number,
-            full_name: fullName,
-            total_savings: account.total_savings,
-            account_type: account.account_type,
-          };
-        });
-
-        setMembers(membersWithProfiles);
-      }
+      setMembers(membersWithProfiles);
     }
   };
 
