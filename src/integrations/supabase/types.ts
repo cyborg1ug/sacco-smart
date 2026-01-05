@@ -402,6 +402,7 @@ export type Database = {
     Functions: {
       check_loan_eligibility: { Args: { p_account_id: string }; Returns: Json }
       generate_tnx_id: { Args: never; Returns: string }
+      get_email_by_phone: { Args: { p_phone_number: string }; Returns: string }
       get_guarantor_candidates: {
         Args: never
         Returns: {
