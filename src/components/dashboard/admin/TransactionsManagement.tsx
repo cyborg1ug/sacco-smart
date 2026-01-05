@@ -182,6 +182,18 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
         title: "Success",
         description: "Transaction approved successfully",
       });
+      
+      // Auto-generate receipt in background
+      supabase.functions.invoke('generate-receipt', {
+        body: { transactionId }
+      }).then(({ error: receiptError }) => {
+        if (receiptError) {
+          console.error('Error generating receipt:', receiptError);
+        } else {
+          console.log('Receipt generated automatically');
+        }
+      });
+      
       loadTransactions();
       onUpdate();
     }

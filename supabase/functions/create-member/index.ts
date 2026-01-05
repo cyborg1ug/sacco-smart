@@ -137,18 +137,26 @@ Deno.serve(async (req) => {
     }
 
     // Regular member creation (with auth user)
-    if (!email || !password || !fullName) {
+    // Email is optional - if not provided, generate a placeholder email using phone number
+    if (!password || !fullName) {
       return new Response(
-        JSON.stringify({ error: 'Email, password, and full name are required' }),
+        JSON.stringify({ error: 'Password and full name are required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       )
     }
 
-    console.log('Creating member:', email)
+    // Generate email if not provided (use phone number or timestamp-based email)
+    let userEmail = email
+    if (!userEmail || userEmail.trim() === '') {
+      const cleanPhone = phoneNumber?.replace(/\D/g, '') || Date.now().toString()
+      userEmail = `member_${cleanPhone}@kinoni.local`
+    }
+
+    console.log('Creating member with email:', userEmail)
 
     // Create the user with admin API
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
-      email,
+      email: userEmail,
       password,
       email_confirm: true,
       user_metadata: {
