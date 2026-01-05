@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, AlertCircle, CheckCircle, Users } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle, Users, Wallet } from "lucide-react";
 
 interface LoanApplicationProps {
   onApplicationSubmitted: () => void;
@@ -27,44 +27,110 @@ interface MemberOption {
   account_type: string;
 }
 
+interface AccountOption {
+  id: string;
+  account_number: string;
+  account_type: string;
+  total_savings: number;
+  full_name: string;
+}
+
 const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [eligibility, setEligibility] = useState<EligibilityData | null>(null);
   const [checkingEligibility, setCheckingEligibility] = useState(true);
-  const [accountId, setAccountId] = useState("");
+  const [myAccounts, setMyAccounts] = useState<AccountOption[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState("");
   const [members, setMembers] = useState<MemberOption[]>([]);
   const [selectedGuarantor, setSelectedGuarantor] = useState("");
   const [loanAmount, setLoanAmount] = useState("");
   const [guarantorError, setGuarantorError] = useState("");
-  const [mySavings, setMySavings] = useState(0);
 
   useEffect(() => {
-    checkEligibility();
+    loadMyAccounts();
     loadMembers();
   }, []);
 
-  const checkEligibility = async () => {
+  useEffect(() => {
+    if (selectedAccountId) {
+      checkEligibility(selectedAccountId);
+    }
+  }, [selectedAccountId]);
+
+  const loadMyAccounts = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     
-    if (user) {
-      const { data: account } = await supabase
-        .from("accounts")
-        .select("id, total_savings")
-        .eq("user_id", user.id)
-        .single();
+    if (!user) return;
 
-      if (account) {
-        setAccountId(account.id);
-        setMySavings(account.total_savings || 0);
-        
-        const { data, error } = await supabase
-          .rpc("check_loan_eligibility", { p_account_id: account.id });
+    // Get main account
+    const { data: mainAccount } = await supabase
+      .from("accounts")
+      .select("id, account_number, total_savings, account_type")
+      .eq("user_id", user.id)
+      .eq("account_type", "main")
+      .single();
 
-        if (!error && data) {
-          setEligibility(data as unknown as EligibilityData);
-        }
-      }
+    if (!mainAccount) {
+      setCheckingEligibility(false);
+      return;
+    }
+
+    // Get user profile name
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", user.id)
+      .single();
+
+    const accounts: AccountOption[] = [{
+      ...mainAccount,
+      full_name: profile?.full_name || "Main Account"
+    }];
+
+    // Get sub-accounts
+    const { data: subAccounts } = await supabase
+      .from("accounts")
+      .select("id, account_number, total_savings, account_type")
+      .eq("parent_account_id", mainAccount.id)
+      .eq("account_type", "sub");
+
+    if (subAccounts && subAccounts.length > 0) {
+      // Get sub-account profiles
+      const subAccountIds = subAccounts.map(a => a.id);
+      const { data: subProfiles } = await supabase
+        .from("sub_account_profiles")
+        .select("account_id, full_name")
+        .in("account_id", subAccountIds);
+
+      const profilesMap = new Map(subProfiles?.map(p => [p.account_id, p.full_name]) || []);
+
+      subAccounts.forEach(sa => {
+        accounts.push({
+          ...sa,
+          full_name: profilesMap.get(sa.id) || sa.account_number
+        });
+      });
+    }
+
+    setMyAccounts(accounts);
+    
+    // Default to main account
+    if (accounts.length > 0) {
+      setSelectedAccountId(accounts[0].id);
+    }
+  };
+
+  const checkEligibility = async (accountId: string) => {
+    setCheckingEligibility(true);
+    
+    const { data, error } = await supabase
+      .rpc("check_loan_eligibility", { p_account_id: accountId });
+
+    if (!error && data) {
+      setEligibility(data as unknown as EligibilityData);
+    } else {
+      setEligibility(null);
     }
     
     setCheckingEligibility(false);
@@ -92,15 +158,28 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
     }
   };
 
+  const getSelectedAccountSavings = () => {
+    const selectedAccount = myAccounts.find(a => a.id === selectedAccountId);
+    return selectedAccount?.total_savings || 0;
+  };
+
   const validateGuarantor = (guarantorId: string) => {
     if (!guarantorId) {
       setGuarantorError("Please select a guarantor");
       return false;
     }
 
+    const mySavings = getSelectedAccountSavings();
     const guarantor = members.find(m => m.id === guarantorId);
+    
+    // Make sure selected guarantor is not the same account applying
+    if (guarantorId === selectedAccountId) {
+      setGuarantorError("You cannot be your own guarantor");
+      return false;
+    }
+
     if (!guarantor || guarantor.total_savings < mySavings) {
-      setGuarantorError("Selected member's savings must be equal to or greater than yours to be your guarantor");
+      setGuarantorError("Selected member's savings must be equal to or greater than the applying account's savings");
       return false;
     }
 
@@ -114,7 +193,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
 
     const amount = parseFloat(loanAmount);
 
-    if (!eligibility) {
+    if (!eligibility || !selectedAccountId) {
       setLoading(false);
       return;
     }
@@ -141,7 +220,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
     const { error } = await supabase
       .from("loans")
       .insert({
-        account_id: accountId,
+        account_id: selectedAccountId,
         amount,
         interest_rate: interestRate,
         total_amount: totalAmount,
@@ -171,12 +250,19 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
     setLoading(false);
   };
 
-  if (checkingEligibility) {
+  if (checkingEligibility && myAccounts.length === 0) {
     return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
 
+  const mySavings = getSelectedAccountSavings();
   const selectedMember = members.find(m => m.id === selectedGuarantor);
-  const eligibleGuarantors = members.filter(m => m.total_savings >= mySavings);
+  
+  // Filter guarantors: must have savings >= applying account's savings AND not be the applying account
+  const eligibleGuarantors = members.filter(m => 
+    m.total_savings >= mySavings && m.id !== selectedAccountId
+  );
+
+  const selectedAccount = myAccounts.find(a => a.id === selectedAccountId);
 
   return (
     <Card>
@@ -185,11 +271,50 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
         <CardDescription>Submit a new loan application with a guarantor</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        {!eligibility?.is_eligible ? (
+        {/* Account Selection */}
+        {myAccounts.length > 1 && (
+          <div className="space-y-2">
+            <Label htmlFor="account">Apply From Account</Label>
+            <Select value={selectedAccountId} onValueChange={(value) => {
+              setSelectedAccountId(value);
+              setSelectedGuarantor(""); // Reset guarantor when account changes
+            }}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select account" />
+              </SelectTrigger>
+              <SelectContent>
+                {myAccounts.map((account) => (
+                  <SelectItem key={account.id} value={account.id}>
+                    <div className="flex items-center gap-2">
+                      <Wallet className="h-4 w-4" />
+                      {account.full_name} ({account.account_number})
+                      {account.account_type === 'sub' && (
+                        <span className="text-xs text-muted-foreground">• Sub-account</span>
+                      )}
+                    </div>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {selectedAccount && (
+              <p className="text-sm text-muted-foreground">
+                Account savings: UGX {selectedAccount.total_savings.toLocaleString()}
+              </p>
+            )}
+          </div>
+        )}
+
+        {checkingEligibility ? (
+          <div className="flex justify-center p-4">
+            <Loader2 className="h-6 w-6 animate-spin" />
+          </div>
+        ) : !eligibility?.is_eligible ? (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              You are not currently eligible for a loan. To qualify, you must have savings in your account.
+              {selectedAccount?.account_type === 'sub' 
+                ? "This sub-account is not eligible for a loan. To qualify, it must have savings."
+                : "You are not currently eligible for a loan. To qualify, you must have savings in your account."}
             </AlertDescription>
           </Alert>
         ) : (
@@ -197,15 +322,20 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
             <Alert>
               <CheckCircle className="h-4 w-4 text-green-600" />
               <AlertDescription>
-                You are eligible for a loan! Maximum amount: UGX {eligibility.max_loan_amount.toLocaleString()} 
-                (3× your savings of UGX {eligibility.total_savings.toLocaleString()})
+                {selectedAccount?.account_type === 'sub' ? (
+                  <>This sub-account is eligible for a loan! </>
+                ) : (
+                  <>You are eligible for a loan! </>
+                )}
+                Maximum amount: UGX {eligibility.max_loan_amount.toLocaleString()} 
+                (3× savings of UGX {eligibility.total_savings.toLocaleString()})
               </AlertDescription>
             </Alert>
 
             <Alert>
               <Users className="h-4 w-4" />
               <AlertDescription>
-                You need a guarantor whose total savings is equal to or greater than yours (UGX {mySavings.toLocaleString()}).
+                You need a guarantor whose total savings is equal to or greater than this account's savings (UGX {mySavings.toLocaleString()}).
                 The guarantor must approve your request before the loan can be processed.
               </AlertDescription>
             </Alert>
@@ -239,7 +369,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
                   <SelectContent>
                     {eligibleGuarantors.map((member) => (
                       <SelectItem key={member.id} value={member.id}>
-                        {member.full_name} ({member.account_number}) {member.account_type === 'sub' ? '• Sub' : ''}
+                        {member.full_name} ({member.account_number}) {member.account_type === 'sub' ? '• Sub-account' : ''}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -254,7 +384,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
                 )}
                 {selectedMember && (
                   <p className="text-sm text-muted-foreground">
-                    {selectedMember.full_name} will receive a request to guarantee your loan
+                    {selectedMember.full_name} will receive a request to guarantee this loan
                   </p>
                 )}
               </div>
@@ -274,9 +404,9 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
         <div className="pt-4 border-t">
           <h4 className="font-semibold mb-2">Loan Requirements:</h4>
           <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-            <li>You must have savings in your account</li>
-            <li>Maximum loan: 3× your total savings</li>
-            <li>Guarantor's savings must be ≥ your savings</li>
+            <li>The applying account must have savings</li>
+            <li>Maximum loan: 3× the account's total savings</li>
+            <li>Guarantor's savings must be ≥ applying account's savings</li>
             <li>Guarantor must approve your request</li>
             <li>Interest rate: 2%</li>
           </ul>
