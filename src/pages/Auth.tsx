@@ -78,14 +78,12 @@ const Auth = () => {
     const phone = formData.get("phone") as string;
     const password = formData.get("password") as string;
 
-    // First, find the user's email by phone number
-    const { data: profile, error: profileError } = await supabase
-      .from("profiles")
-      .select("email")
-      .eq("phone_number", phone)
-      .single();
+    // Use the RPC function to get email by phone (bypasses RLS)
+    const { data: email, error: rpcError } = await supabase.rpc("get_email_by_phone", {
+      p_phone_number: phone,
+    });
 
-    if (profileError || !profile) {
+    if (rpcError || !email) {
       toast({
         title: "Error",
         description: "No account found with this phone number",
@@ -97,7 +95,7 @@ const Auth = () => {
 
     // Then login with email
     const { error } = await supabase.auth.signInWithPassword({
-      email: profile.email,
+      email,
       password,
     });
 
