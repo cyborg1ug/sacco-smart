@@ -82,7 +82,7 @@ const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) =>
         balance_after: transactionType === "deposit" 
           ? currentBalance + amount 
           : currentBalance - amount,
-      });
+      } as any);
 
     if (error) {
       toast({
