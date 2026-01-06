@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Plus, Loader2, FileText, Banknote } from "lucide-react";
+import { Check, X, Plus, Loader2, FileText, Banknote, TrendingUp, TrendingDown, CreditCard, Wallet } from "lucide-react";
 import { format } from "date-fns";
 import { generateTransactionReceiptPDF } from "@/lib/pdfGenerator";
 
@@ -349,12 +349,79 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
     });
   };
 
+  // Calculate transaction statistics
+  const stats = {
+    totalDeposits: transactions
+      .filter(t => t.transaction_type === "deposit" && t.status === "approved")
+      .reduce((sum, t) => sum + t.amount, 0),
+    totalWithdrawals: transactions
+      .filter(t => t.transaction_type === "withdrawal" && t.status === "approved")
+      .reduce((sum, t) => sum + t.amount, 0),
+    totalLoanDisbursements: transactions
+      .filter(t => t.transaction_type === "loan_disbursement" && t.status === "approved")
+      .reduce((sum, t) => sum + t.amount, 0),
+    totalLoanRepayments: transactions
+      .filter(t => t.transaction_type === "loan_repayment" && t.status === "approved")
+      .reduce((sum, t) => sum + t.amount, 0),
+    pendingCount: transactions.filter(t => t.status === "pending").length,
+  };
+
   if (loading) {
     return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
 
   return (
-    <Card>
+    <div className="space-y-6">
+      {/* Statistics Summary */}
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-green-500" />
+              <span className="text-sm text-muted-foreground">Total Deposits</span>
+            </div>
+            <p className="text-xl font-bold mt-1">UGX {stats.totalDeposits.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <TrendingDown className="h-4 w-4 text-red-500" />
+              <span className="text-sm text-muted-foreground">Total Withdrawals</span>
+            </div>
+            <p className="text-xl font-bold mt-1">UGX {stats.totalWithdrawals.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-blue-500" />
+              <span className="text-sm text-muted-foreground">Loan Disbursements</span>
+            </div>
+            <p className="text-xl font-bold mt-1">UGX {stats.totalLoanDisbursements.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <Wallet className="h-4 w-4 text-purple-500" />
+              <span className="text-sm text-muted-foreground">Loan Repayments</span>
+            </div>
+            <p className="text-xl font-bold mt-1">UGX {stats.totalLoanRepayments.toLocaleString()}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <div className="flex items-center gap-2">
+              <Loader2 className="h-4 w-4 text-orange-500" />
+              <span className="text-sm text-muted-foreground">Pending</span>
+            </div>
+            <p className="text-xl font-bold mt-1">{stats.pendingCount} transactions</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
       <CardHeader>
         <div className="flex justify-between items-center">
           <div>
@@ -536,6 +603,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
         </Table>
       </CardContent>
     </Card>
+    </div>
   );
 };
 
