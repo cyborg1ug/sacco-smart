@@ -70,21 +70,47 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
     const accountIds = [...new Set(transactionsData.map(t => t.account_id))];
     const { data: accountsData } = await supabase
       .from("accounts")
-      .select("id, account_number, user_id")
+      .select("id, account_number, user_id, account_type")
       .in("id", accountIds);
 
-    // Get user IDs and fetch profiles
-    const userIds = [...new Set(accountsData?.map(a => a.user_id) || [])];
+    if (!accountsData) {
+      setLoading(false);
+      return;
+    }
+
+    // Separate main accounts and sub-accounts
+    const mainAccountUserIds = [...new Set(accountsData.filter(a => a.account_type === 'main').map(a => a.user_id))];
+    const subAccountIds = accountsData.filter(a => a.account_type === 'sub').map(a => a.id);
+
+    // Fetch profiles for main accounts
     const { data: profilesData } = await supabase
       .from("profiles")
       .select("id, full_name")
-      .in("id", userIds);
+      .in("id", mainAccountUserIds);
+
+    // Fetch sub_account_profiles for sub-accounts
+    const { data: subAccountProfilesData } = await supabase
+      .from("sub_account_profiles")
+      .select("account_id, full_name")
+      .in("account_id", subAccountIds);
 
     const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
-    const accountsMap = new Map(accountsData?.map(a => [a.id, {
-      ...a,
-      user: profilesMap.get(a.user_id) || { full_name: "Unknown" }
-    }]) || []);
+    const subAccountProfilesMap = new Map(subAccountProfilesData?.map(p => [p.account_id, p]) || []);
+
+    const accountsMap = new Map(accountsData.map(a => {
+      let fullName = "Unknown";
+      if (a.account_type === 'sub') {
+        const subProfile = subAccountProfilesMap.get(a.id);
+        fullName = subProfile?.full_name || "Unknown";
+      } else {
+        const profile = profilesMap.get(a.user_id);
+        fullName = profile?.full_name || "Unknown";
+      }
+      return [a.id, {
+        ...a,
+        user: { full_name: fullName }
+      }];
+    }));
 
     const transactionsWithAccounts = transactionsData.map(t => ({
       ...t,
@@ -98,21 +124,43 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
   const loadMembers = async () => {
     const { data: accountsData } = await supabase
       .from("accounts")
-      .select("id, account_number, balance, user_id");
+      .select("id, account_number, balance, user_id, account_type");
 
     if (!accountsData) return;
 
-    const userIds = [...new Set(accountsData.map(a => a.user_id))];
+    // Separate main accounts and sub-accounts
+    const mainAccountUserIds = [...new Set(accountsData.filter(a => a.account_type === 'main').map(a => a.user_id))];
+    const subAccountIds = accountsData.filter(a => a.account_type === 'sub').map(a => a.id);
+
+    // Fetch profiles for main accounts
     const { data: profilesData } = await supabase
       .from("profiles")
       .select("id, full_name")
-      .in("id", userIds);
+      .in("id", mainAccountUserIds);
+
+    // Fetch sub_account_profiles for sub-accounts
+    const { data: subAccountProfilesData } = await supabase
+      .from("sub_account_profiles")
+      .select("account_id, full_name")
+      .in("account_id", subAccountIds);
 
     const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
-    const membersWithProfiles = accountsData.map(a => ({
-      ...a,
-      user: profilesMap.get(a.user_id) || { full_name: "Unknown" }
-    }));
+    const subAccountProfilesMap = new Map(subAccountProfilesData?.map(p => [p.account_id, p]) || []);
+
+    const membersWithProfiles = accountsData.map(a => {
+      let fullName = "Unknown";
+      if (a.account_type === 'sub') {
+        const subProfile = subAccountProfilesMap.get(a.id);
+        fullName = subProfile?.full_name || "Unknown";
+      } else {
+        const profile = profilesMap.get(a.user_id);
+        fullName = profile?.full_name || "Unknown";
+      }
+      return {
+        ...a,
+        user: { full_name: fullName }
+      };
+    });
 
     setMembers(membersWithProfiles);
   };
