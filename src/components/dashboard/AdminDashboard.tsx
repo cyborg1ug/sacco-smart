@@ -30,8 +30,8 @@ const AdminDashboard = () => {
   }, []);
 
   const loadStats = async () => {
-    const [membersResult, accountsResult, loansResult, transactionsResult] = await Promise.all([
-      supabase.from("profiles").select("id", { count: "exact" }),
+    const [accountsCountResult, accountsResult, loansResult, transactionsResult] = await Promise.all([
+      supabase.from("accounts").select("id", { count: "exact" }),
       supabase.from("accounts").select("total_savings"),
       supabase.from("loans").select("id", { count: "exact" }).in("status", ["approved", "disbursed"]),
       supabase.from("transactions").select("id", { count: "exact" }).eq("status", "pending"),
@@ -40,7 +40,7 @@ const AdminDashboard = () => {
     const totalSavings = accountsResult.data?.reduce((sum, acc) => sum + Number(acc.total_savings), 0) || 0;
 
     setStats({
-      totalMembers: membersResult.count || 0,
+      totalMembers: accountsCountResult.count || 0,
       totalSavings,
       activeLoans: loansResult.count || 0,
       pendingTransactions: transactionsResult.count || 0,
