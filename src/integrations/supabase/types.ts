@@ -299,6 +299,7 @@ export type Database = {
           created_at: string
           description: string | null
           id: string
+          loan_id: string | null
           status: string
           tnx_id: string
           transaction_type: string
@@ -312,6 +313,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          loan_id?: string | null
           status?: string
           tnx_id: string
           transaction_type: string
@@ -325,6 +327,7 @@ export type Database = {
           created_at?: string
           description?: string | null
           id?: string
+          loan_id?: string | null
           status?: string
           tnx_id?: string
           transaction_type?: string
@@ -335,6 +338,13 @@ export type Database = {
             columns: ["account_id"]
             isOneToOne: false
             referencedRelation: "accounts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_loan_id_fkey"
+            columns: ["loan_id"]
+            isOneToOne: false
+            referencedRelation: "loans"
             referencedColumns: ["id"]
           },
         ]

@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Plus, Loader2, FileText, Banknote, TrendingUp, TrendingDown, CreditCard, Wallet, CalendarIcon } from "lucide-react";
+import { Check, X, Plus, Loader2, FileText, Banknote, TrendingUp, TrendingDown, CreditCard, Wallet, CalendarIcon, Trash2 } from "lucide-react";
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import { generateTransactionReceiptPDF } from "@/lib/pdfGenerator";
 import { cn } from "@/lib/utils";
@@ -26,6 +27,7 @@ interface Transaction {
   status: string;
   created_at: string;
   approved_at: string | null;
+  loan_id: string | null;
   account: {
     id: string;
     account_number: string;
@@ -33,6 +35,25 @@ interface Transaction {
       full_name: string;
     };
   };
+  loan?: {
+    id: string;
+    amount: number;
+    outstanding_balance: number;
+    total_amount: number;
+    status: string;
+  };
+}
+
+interface ActiveLoan {
+  id: string;
+  account_id: string;
+  amount: number;
+  total_amount: number;
+  outstanding_balance: number;
+  interest_rate: number;
+  status: string;
+  account_number: string;
+  member_name: string;
 }
 
 interface TransactionsManagementProps {
@@ -46,13 +67,17 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [withdrawalDialogOpen, setWithdrawalDialogOpen] = useState(false);
   const [members, setMembers] = useState<any[]>([]);
+  const [activeLoans, setActiveLoans] = useState<ActiveLoan[]>([]);
   const [dateFilter, setDateFilter] = useState<string>("all");
   const [customDateFrom, setCustomDateFrom] = useState<Date | undefined>();
   const [customDateTo, setCustomDateTo] = useState<Date | undefined>();
+  const [selectedAccountForLoan, setSelectedAccountForLoan] = useState<string>("");
+  const [selectedTransactionType, setSelectedTransactionType] = useState<string>("");
 
   useEffect(() => {
     loadTransactions();
     loadMembers();
+    loadActiveLoans();
   }, []);
 
   const loadTransactions = async () => {
@@ -163,6 +188,67 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
     });
 
     setMembers(membersWithProfiles);
+  };
+
+  const loadActiveLoans = async () => {
+    // Load all active (approved or disbursed) loans with outstanding balance > 0
+    const { data: loansData } = await supabase
+      .from("loans")
+      .select("id, account_id, amount, total_amount, outstanding_balance, interest_rate, status")
+      .in("status", ["approved", "disbursed"])
+      .gt("outstanding_balance", 0);
+
+    if (!loansData) return;
+
+    // Get account info for these loans
+    const accountIds = [...new Set(loansData.map(l => l.account_id))];
+    const { data: accountsData } = await supabase
+      .from("accounts")
+      .select("id, account_number, user_id, account_type")
+      .in("id", accountIds);
+
+    if (!accountsData) return;
+
+    const mainAccountUserIds = [...new Set(accountsData.filter(a => a.account_type === 'main').map(a => a.user_id))];
+    const subAccountIds = accountsData.filter(a => a.account_type === 'sub').map(a => a.id);
+
+    const { data: profilesData } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", mainAccountUserIds);
+
+    const { data: subAccountProfilesData } = await supabase
+      .from("sub_account_profiles")
+      .select("account_id, full_name")
+      .in("account_id", subAccountIds);
+
+    const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
+    const subAccountProfilesMap = new Map(subAccountProfilesData?.map(p => [p.account_id, p]) || []);
+
+    const accountsMap = new Map(accountsData.map(a => {
+      let fullName = "Unknown";
+      if (a.account_type === 'sub') {
+        const subProfile = subAccountProfilesMap.get(a.id);
+        fullName = subProfile?.full_name || "Unknown";
+      } else {
+        const profile = profilesMap.get(a.user_id);
+        fullName = profile?.full_name || "Unknown";
+      }
+      return [a.id, { account_number: a.account_number, member_name: fullName }];
+    }));
+
+    const loansWithAccounts: ActiveLoan[] = loansData.map(l => ({
+      ...l,
+      account_number: accountsMap.get(l.account_id)?.account_number || "Unknown",
+      member_name: accountsMap.get(l.account_id)?.member_name || "Unknown"
+    }));
+
+    setActiveLoans(loansWithAccounts);
+  };
+
+  // Get active loan for selected account
+  const getActiveLoanForAccount = (accountId: string) => {
+    return activeLoans.find(loan => loan.account_id === accountId);
   };
 
   const handleApprove = async (transactionId: string, accountId: string, amount: number, type: string) => {
@@ -282,6 +368,28 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
     }
   };
 
+  const handleDelete = async (transactionId: string) => {
+    const { error } = await supabase
+      .from("transactions")
+      .delete()
+      .eq("id", transactionId);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "Transaction deleted successfully",
+      });
+      loadTransactions();
+      onUpdate();
+    }
+  };
+
   const handleCreateTransaction = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     const formData = new FormData(e.currentTarget);
@@ -290,6 +398,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
     const type = formData.get("type") as string;
     const amount = parseFloat(formData.get("amount") as string);
     const description = formData.get("description") as string;
+    const loanId = formData.get("loanId") as string | null;
 
     const { data: account } = await supabase
       .from("accounts")
@@ -298,6 +407,19 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
       .single();
 
     if (!account) return;
+
+    // For loan repayments, validate against loan outstanding balance
+    if (type === "loan_repayment" && loanId) {
+      const loan = activeLoans.find(l => l.id === loanId);
+      if (loan && amount > loan.outstanding_balance) {
+        toast({
+          title: "Amount Exceeds Loan Balance",
+          description: `The repayment amount cannot exceed the outstanding balance of UGX ${loan.outstanding_balance.toLocaleString()}`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
 
     const { error } = await supabase
       .from("transactions")
@@ -308,6 +430,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
         description,
         balance_after: account.balance,
         status: "pending",
+        loan_id: type === "loan_repayment" && loanId ? loanId : null,
       } as any);
 
     if (error) {
@@ -322,7 +445,10 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
         description: "Transaction created successfully",
       });
       setDialogOpen(false);
+      setSelectedAccountForLoan("");
+      setSelectedTransactionType("");
       loadTransactions();
+      loadActiveLoans();
     }
   };
 
@@ -694,7 +820,12 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
               <form onSubmit={handleCreateTransaction} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="accountId">Member Account</Label>
-                  <Select name="accountId" required>
+                  <Select 
+                    name="accountId" 
+                    required 
+                    value={selectedAccountForLoan}
+                    onValueChange={(value) => setSelectedAccountForLoan(value)}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select account" />
                     </SelectTrigger>
@@ -709,7 +840,12 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="type">Transaction Type</Label>
-                  <Select name="type" required>
+                  <Select 
+                    name="type" 
+                    required
+                    value={selectedTransactionType}
+                    onValueChange={(value) => setSelectedTransactionType(value)}
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select type" />
                     </SelectTrigger>
@@ -720,15 +856,53 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
                     </SelectContent>
                   </Select>
                 </div>
+                
+                {/* Show active loan info when loan_repayment is selected */}
+                {selectedTransactionType === "loan_repayment" && selectedAccountForLoan && (
+                  <div className="space-y-2">
+                    <Label>Active Loan</Label>
+                    {(() => {
+                      const activeLoan = getActiveLoanForAccount(selectedAccountForLoan);
+                      if (activeLoan) {
+                        return (
+                          <div className="p-3 bg-muted rounded-md space-y-1">
+                            <input type="hidden" name="loanId" value={activeLoan.id} />
+                            <p className="text-sm"><span className="font-medium">Loan Amount:</span> UGX {activeLoan.amount.toLocaleString()}</p>
+                            <p className="text-sm"><span className="font-medium">Total (with {activeLoan.interest_rate}% interest):</span> UGX {activeLoan.total_amount.toLocaleString()}</p>
+                            <p className="text-sm font-semibold text-primary"><span className="font-medium">Outstanding Balance:</span> UGX {activeLoan.outstanding_balance.toLocaleString()}</p>
+                            <p className="text-sm text-muted-foreground">Status: {activeLoan.status}</p>
+                          </div>
+                        );
+                      }
+                      return (
+                        <p className="text-sm text-muted-foreground p-3 bg-muted rounded-md">
+                          No active loan found for this account.
+                        </p>
+                      );
+                    })()}
+                  </div>
+                )}
+
                 <div className="space-y-2">
                   <Label htmlFor="amount">Amount (UGX)</Label>
                   <Input id="amount" name="amount" type="number" step="0.01" required />
+                  {selectedTransactionType === "loan_repayment" && selectedAccountForLoan && (
+                    <p className="text-xs text-muted-foreground">
+                      Enter partial or full repayment amount
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="description">Description</Label>
                   <Input id="description" name="description" />
                 </div>
-                <Button type="submit" className="w-full">Create Transaction</Button>
+                <Button 
+                  type="submit" 
+                  className="w-full"
+                  disabled={selectedTransactionType === "loan_repayment" && selectedAccountForLoan && !getActiveLoanForAccount(selectedAccountForLoan)}
+                >
+                  Create Transaction
+                </Button>
               </form>
             </DialogContent>
           </Dialog>
@@ -805,6 +979,37 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
                         <FileText className="h-4 w-4 text-primary" />
                       </Button>
                     )}
+                    
+                    {/* Delete button for all transactions - admin only */}
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          title="Delete Transaction"
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Delete Transaction</AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to delete transaction {transaction.tnx_id}? 
+                            This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction 
+                            onClick={() => handleDelete(transaction.id)}
+                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                          >
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 </TableCell>
               </TableRow>
