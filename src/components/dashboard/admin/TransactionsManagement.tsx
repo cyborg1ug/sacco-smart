@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -8,10 +8,13 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Plus, Loader2, FileText, Banknote, TrendingUp, TrendingDown, CreditCard, Wallet } from "lucide-react";
-import { format } from "date-fns";
+import { Check, X, Plus, Loader2, FileText, Banknote, TrendingUp, TrendingDown, CreditCard, Wallet, CalendarIcon } from "lucide-react";
+import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import { generateTransactionReceiptPDF } from "@/lib/pdfGenerator";
+import { cn } from "@/lib/utils";
 
 interface Transaction {
   id: string;
@@ -43,6 +46,9 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [withdrawalDialogOpen, setWithdrawalDialogOpen] = useState(false);
   const [members, setMembers] = useState<any[]>([]);
+  const [dateFilter, setDateFilter] = useState<string>("all");
+  const [customDateFrom, setCustomDateFrom] = useState<Date | undefined>();
+  const [customDateTo, setCustomDateTo] = useState<Date | undefined>();
 
   useEffect(() => {
     loadTransactions();
@@ -349,21 +355,60 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
     });
   };
 
-  // Calculate transaction statistics
-  const stats = {
-    totalDeposits: transactions
+  // Filter transactions by date range
+  const filteredTransactions = useMemo(() => {
+    const now = new Date();
+    
+    return transactions.filter(t => {
+      const txDate = new Date(t.created_at);
+      
+      switch (dateFilter) {
+        case "today":
+          return isWithinInterval(txDate, { start: startOfDay(now), end: endOfDay(now) });
+        case "week":
+          return isWithinInterval(txDate, { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) });
+        case "month":
+          return isWithinInterval(txDate, { start: startOfMonth(now), end: endOfMonth(now) });
+        case "custom":
+          if (customDateFrom && customDateTo) {
+            return isWithinInterval(txDate, { start: startOfDay(customDateFrom), end: endOfDay(customDateTo) });
+          }
+          return true;
+        default:
+          return true;
+      }
+    });
+  }, [transactions, dateFilter, customDateFrom, customDateTo]);
+
+  // Calculate transaction statistics from filtered transactions
+  const stats = useMemo(() => ({
+    totalDeposits: filteredTransactions
       .filter(t => t.transaction_type === "deposit" && t.status === "approved")
       .reduce((sum, t) => sum + t.amount, 0),
-    totalWithdrawals: transactions
+    totalWithdrawals: filteredTransactions
       .filter(t => t.transaction_type === "withdrawal" && t.status === "approved")
       .reduce((sum, t) => sum + t.amount, 0),
-    totalLoanDisbursements: transactions
+    totalLoanDisbursements: filteredTransactions
       .filter(t => t.transaction_type === "loan_disbursement" && t.status === "approved")
       .reduce((sum, t) => sum + t.amount, 0),
-    totalLoanRepayments: transactions
+    totalLoanRepayments: filteredTransactions
       .filter(t => t.transaction_type === "loan_repayment" && t.status === "approved")
       .reduce((sum, t) => sum + t.amount, 0),
-    pendingCount: transactions.filter(t => t.status === "pending").length,
+    pendingCount: filteredTransactions.filter(t => t.status === "pending").length,
+  }), [filteredTransactions]);
+
+  const getDateFilterLabel = () => {
+    switch (dateFilter) {
+      case "today": return "Today";
+      case "week": return "This Week";
+      case "month": return "This Month";
+      case "custom": 
+        if (customDateFrom && customDateTo) {
+          return `${format(customDateFrom, "MMM dd")} - ${format(customDateTo, "MMM dd, yyyy")}`;
+        }
+        return "Custom Range";
+      default: return "All Time";
+    }
   };
 
   if (loading) {
@@ -372,6 +417,123 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
 
   return (
     <div className="space-y-6">
+      {/* Date Filter Controls */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm text-muted-foreground">Filter by:</span>
+        <div className="flex flex-wrap gap-2">
+          <Button 
+            variant={dateFilter === "all" ? "default" : "outline"} 
+            size="sm"
+            onClick={() => setDateFilter("all")}
+          >
+            All Time
+          </Button>
+          <Button 
+            variant={dateFilter === "today" ? "default" : "outline"} 
+            size="sm"
+            onClick={() => setDateFilter("today")}
+          >
+            Today
+          </Button>
+          <Button 
+            variant={dateFilter === "week" ? "default" : "outline"} 
+            size="sm"
+            onClick={() => setDateFilter("week")}
+          >
+            This Week
+          </Button>
+          <Button 
+            variant={dateFilter === "month" ? "default" : "outline"} 
+            size="sm"
+            onClick={() => setDateFilter("month")}
+          >
+            This Month
+          </Button>
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button 
+                variant={dateFilter === "custom" ? "default" : "outline"} 
+                size="sm"
+                className="gap-2"
+              >
+                <CalendarIcon className="h-4 w-4" />
+                Custom Range
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-4" align="start">
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>From</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !customDateFrom && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {customDateFrom ? format(customDateFrom, "PPP") : "Pick a date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={customDateFrom}
+                        onSelect={setCustomDateFrom}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-2">
+                  <Label>To</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !customDateTo && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {customDateTo ? format(customDateTo, "PPP") : "Pick a date"}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0" align="start">
+                      <Calendar
+                        mode="single"
+                        selected={customDateTo}
+                        onSelect={setCustomDateTo}
+                        disabled={(date) => customDateFrom ? date < customDateFrom : false}
+                        initialFocus
+                        className={cn("p-3 pointer-events-auto")}
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <Button 
+                  className="w-full" 
+                  size="sm"
+                  onClick={() => setDateFilter("custom")}
+                  disabled={!customDateFrom || !customDateTo}
+                >
+                  Apply Range
+                </Button>
+              </div>
+            </PopoverContent>
+          </Popover>
+        </div>
+        {dateFilter !== "all" && (
+          <Badge variant="secondary" className="ml-2">
+            Showing: {getDateFilterLabel()}
+          </Badge>
+        )}
+      </div>
+
       {/* Statistics Summary */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <Card>
@@ -541,7 +703,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {transactions.map((transaction) => (
+            {filteredTransactions.map((transaction) => (
               <TableRow key={transaction.id}>
                 <TableCell className="font-mono text-xs">{transaction.tnx_id}</TableCell>
                 <TableCell>{format(new Date(transaction.created_at), "MMM dd, yyyy")}</TableCell>
