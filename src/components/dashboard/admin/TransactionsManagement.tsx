@@ -337,7 +337,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="deposit">Saving Deposit</SelectItem>
-                      <SelectItem value="withdrawal">Withdrawal</SelectItem>
+                      <SelectItem value="loan_disbursement">Loan Disbursement</SelectItem>
                       <SelectItem value="loan_repayment">Loan Repayment</SelectItem>
                     </SelectContent>
                   </Select>
