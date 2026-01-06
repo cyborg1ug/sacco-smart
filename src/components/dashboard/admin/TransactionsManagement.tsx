@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Plus, Loader2, FileText } from "lucide-react";
+import { Check, X, Plus, Loader2, FileText, Banknote } from "lucide-react";
 import { format } from "date-fns";
 import { generateTransactionReceiptPDF } from "@/lib/pdfGenerator";
 
@@ -41,6 +41,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [withdrawalDialogOpen, setWithdrawalDialogOpen] = useState(false);
   const [members, setMembers] = useState<any[]>([]);
 
   useEffect(() => {
@@ -271,6 +272,65 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
     }
   };
 
+  const handleProcessWithdrawal = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    const formData = new FormData(e.currentTarget);
+    
+    const accountId = formData.get("accountId") as string;
+    const amount = parseFloat(formData.get("amount") as string);
+    const description = formData.get("description") as string;
+
+    const { data: account } = await supabase
+      .from("accounts")
+      .select("balance")
+      .eq("id", accountId)
+      .single();
+
+    if (!account) {
+      toast({
+        title: "Error",
+        description: "Account not found",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (account.balance < amount) {
+      toast({
+        title: "Insufficient Balance",
+        description: `Available balance: UGX ${account.balance.toLocaleString()}, Requested: UGX ${amount.toLocaleString()}`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const { error } = await supabase
+      .from("transactions")
+      .insert({
+        account_id: accountId,
+        transaction_type: "withdrawal",
+        amount,
+        description,
+        balance_after: account.balance,
+        status: "pending",
+      } as any);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "Withdrawal transaction created successfully",
+      });
+      setWithdrawalDialogOpen(false);
+      loadTransactions();
+    }
+  };
+
   const handleGenerateReceipt = (transaction: Transaction) => {
     generateTransactionReceiptPDF({
       tnxId: transaction.tnx_id,
@@ -301,13 +361,54 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
             <CardTitle>Transactions Management</CardTitle>
             <CardDescription>Review and manage all transactions</CardDescription>
           </div>
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                New Transaction
-              </Button>
-            </DialogTrigger>
+          <div className="flex gap-2">
+            <Dialog open={withdrawalDialogOpen} onOpenChange={setWithdrawalDialogOpen}>
+              <DialogTrigger asChild>
+                <Button variant="outline">
+                  <Banknote className="mr-2 h-4 w-4" />
+                  Process Withdrawal
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Process Withdrawal</DialogTitle>
+                  <DialogDescription>Admin-only: Process a withdrawal for a member</DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleProcessWithdrawal} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="withdrawalAccountId">Member Account</Label>
+                    <Select name="accountId" required>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select account" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {members.map((member) => (
+                          <SelectItem key={member.id} value={member.id}>
+                            {member.user.full_name} - {member.account_number} (Bal: UGX {member.balance.toLocaleString()})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="withdrawalAmount">Amount (UGX)</Label>
+                    <Input id="withdrawalAmount" name="amount" type="number" step="0.01" min="1" required />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="withdrawalDescription">Description</Label>
+                    <Input id="withdrawalDescription" name="description" placeholder="Reason for withdrawal" />
+                  </div>
+                  <Button type="submit" className="w-full">Process Withdrawal</Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  New Transaction
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create Transaction</DialogTitle>
@@ -354,6 +455,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
       </CardHeader>
       <CardContent>
