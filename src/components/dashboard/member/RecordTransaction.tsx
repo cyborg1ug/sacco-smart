@@ -8,10 +8,19 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Info } from "lucide-react";
+import { Loader2, Info, CreditCard } from "lucide-react";
 
 interface RecordTransactionProps {
   onTransactionRecorded: () => void;
+}
+
+interface ActiveLoan {
+  id: string;
+  amount: number;
+  total_amount: number;
+  outstanding_balance: number;
+  interest_rate: number;
+  status: string;
 }
 
 const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) => {
@@ -20,10 +29,18 @@ const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) =>
   const [accountId, setAccountId] = useState("");
   const [currentBalance, setCurrentBalance] = useState(0);
   const [transactionType, setTransactionType] = useState("");
+  const [activeLoan, setActiveLoan] = useState<ActiveLoan | null>(null);
+  const [repaymentAmount, setRepaymentAmount] = useState("");
 
   useEffect(() => {
     loadAccountData();
   }, []);
+
+  useEffect(() => {
+    if (accountId) {
+      loadActiveLoan();
+    }
+  }, [accountId]);
 
   const loadAccountData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -42,12 +59,32 @@ const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) =>
     }
   };
 
+  const loadActiveLoan = async () => {
+    if (!accountId) return;
+
+    const { data: loan } = await supabase
+      .from("loans")
+      .select("id, amount, total_amount, outstanding_balance, interest_rate, status")
+      .eq("account_id", accountId)
+      .in("status", ["approved", "disbursed"])
+      .gt("outstanding_balance", 0)
+      .maybeSingle();
+
+    setActiveLoan(loan);
+  };
+
+  const handlePayFullAmount = () => {
+    if (activeLoan) {
+      setRepaymentAmount(activeLoan.outstanding_balance.toString());
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
 
     const formData = new FormData(e.currentTarget);
-    const amount = parseFloat(formData.get("amount") as string);
+    const amount = parseFloat(transactionType === "loan_repayment" ? repaymentAmount : formData.get("amount") as string);
     const description = formData.get("description") as string;
 
     if (!transactionType) {
@@ -60,15 +97,37 @@ const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) =>
       return;
     }
 
-    // Validation for loan repayments (check sufficient balance)
-    if (transactionType === "loan_repayment" && amount > currentBalance) {
-      toast({
-        title: "Insufficient Balance",
-        description: "You cannot repay more than your current balance",
-        variant: "destructive",
-      });
-      setLoading(false);
-      return;
+    // Validation for loan repayments
+    if (transactionType === "loan_repayment") {
+      if (!activeLoan) {
+        toast({
+          title: "No Active Loan",
+          description: "You don't have an active loan to repay",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
+      if (amount > activeLoan.outstanding_balance) {
+        toast({
+          title: "Amount Exceeds Balance",
+          description: `The repayment amount cannot exceed the outstanding balance of UGX ${activeLoan.outstanding_balance.toLocaleString()}`,
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
+
+      if (amount <= 0) {
+        toast({
+          title: "Invalid Amount",
+          description: "Please enter a valid repayment amount",
+          variant: "destructive",
+        });
+        setLoading(false);
+        return;
+      }
     }
 
     const { error } = await supabase
@@ -82,6 +141,7 @@ const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) =>
         balance_after: transactionType === "deposit" 
           ? currentBalance + amount 
           : currentBalance - amount,
+        loan_id: transactionType === "loan_repayment" && activeLoan ? activeLoan.id : null,
       } as any);
 
     if (error) {
@@ -98,6 +158,7 @@ const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) =>
       onTransactionRecorded();
       (e.target as HTMLFormElement).reset();
       setTransactionType("");
+      setRepaymentAmount("");
     }
 
     setLoading(false);
@@ -132,17 +193,87 @@ const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) =>
             </Select>
           </div>
 
+          {/* Show active loan info when loan_repayment is selected */}
+          {transactionType === "loan_repayment" && (
+            <div className="space-y-3">
+              {activeLoan ? (
+                <Card className="border-primary/20 bg-primary/5">
+                  <CardContent className="pt-4 space-y-2">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CreditCard className="h-4 w-4 text-primary" />
+                      <span className="font-semibold text-sm">Active Loan Details</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Loan Amount:</span>
+                        <p className="font-medium">UGX {activeLoan.amount.toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Interest Rate:</span>
+                        <p className="font-medium">{activeLoan.interest_rate}%</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Total Amount:</span>
+                        <p className="font-medium">UGX {activeLoan.total_amount.toLocaleString()}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Outstanding Balance:</span>
+                        <p className="font-semibold text-primary">UGX {activeLoan.outstanding_balance.toLocaleString()}</p>
+                      </div>
+                    </div>
+                    <div className="pt-2">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        size="sm"
+                        onClick={handlePayFullAmount}
+                        className="w-full"
+                      >
+                        Pay Full Balance (UGX {activeLoan.outstanding_balance.toLocaleString()})
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    You don't have an active loan to repay. If you've recently received a loan, please wait for it to be disbursed.
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="amount">Amount (UGX)</Label>
-            <Input
-              id="amount"
-              name="amount"
-              type="number"
-              step="100"
-              min="100"
-              placeholder="Enter amount"
-              required
-            />
+            {transactionType === "loan_repayment" ? (
+              <Input
+                id="amount"
+                type="number"
+                step="100"
+                min="100"
+                placeholder="Enter repayment amount"
+                value={repaymentAmount}
+                onChange={(e) => setRepaymentAmount(e.target.value)}
+                required
+                disabled={!activeLoan}
+              />
+            ) : (
+              <Input
+                id="amount"
+                name="amount"
+                type="number"
+                step="100"
+                min="100"
+                placeholder="Enter amount"
+                required
+              />
+            )}
+            {transactionType === "loan_repayment" && activeLoan && (
+              <p className="text-xs text-muted-foreground">
+                Enter partial amount or use the button above to pay the full outstanding balance
+              </p>
+            )}
           </div>
 
           <div className="space-y-2">
@@ -155,7 +286,11 @@ const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) =>
             />
           </div>
 
-          <Button type="submit" className="w-full" disabled={loading || !transactionType}>
+          <Button 
+            type="submit" 
+            className="w-full" 
+            disabled={loading || !transactionType || (transactionType === "loan_repayment" && !activeLoan)}
+          >
             {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Submit Transaction
           </Button>
