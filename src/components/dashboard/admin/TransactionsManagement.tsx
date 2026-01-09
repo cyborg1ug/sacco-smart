@@ -511,7 +511,14 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
     }
   };
 
-  const handleGenerateReceipt = (transaction: Transaction) => {
+  const handleGenerateReceipt = async (transaction: Transaction) => {
+    // Fetch current account balance
+    const { data: accountData } = await supabase
+      .from("accounts")
+      .select("balance, total_savings")
+      .eq("id", transaction.account.id)
+      .single();
+
     generateTransactionReceiptPDF({
       tnxId: transaction.tnx_id,
       memberName: transaction.account.user.full_name,
@@ -519,6 +526,8 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
       transactionType: transaction.transaction_type,
       amount: transaction.amount,
       balanceAfter: transaction.balance_after,
+      currentBalance: accountData?.balance || transaction.balance_after,
+      totalSavings: accountData?.total_savings || 0,
       description: transaction.description,
       createdAt: transaction.created_at,
       approvedAt: transaction.approved_at || undefined,

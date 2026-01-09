@@ -13,6 +13,8 @@ function generateReceiptContent(data: {
   transactionType: string;
   amount: number;
   balanceAfter: number;
+  currentBalance: number;
+  totalSavings: number;
   description?: string;
   createdAt: string;
   approvedAt?: string;
@@ -49,8 +51,14 @@ TRANSACTION DETAILS
 --------------------------------------------------------------------------------
 Type:            ${data.transactionType.replace('_', ' ').toUpperCase()}
 Amount:          UGX ${data.amount.toLocaleString()}
-Balance After:   UGX ${data.balanceAfter.toLocaleString()}
 ${data.description ? `Description:     ${data.description}` : ''}
+
+--------------------------------------------------------------------------------
+ACCOUNT BALANCES (UPDATED)
+--------------------------------------------------------------------------------
+Balance After Transaction:  UGX ${data.balanceAfter.toLocaleString()}
+Current Account Balance:    UGX ${data.currentBalance.toLocaleString()}
+Total Savings:              UGX ${data.totalSavings.toLocaleString()}
 
 --------------------------------------------------------------------------------
 STATUS: APPROVED
@@ -136,6 +144,13 @@ Deno.serve(async (req) => {
             continue
           }
 
+          // Get current account balance and total savings
+          const { data: currentAccountData } = await supabaseAdmin
+            .from('accounts')
+            .select('balance, total_savings')
+            .eq('id', account.id)
+            .single()
+
           // Get member name
           let memberName = 'Unknown'
           
@@ -162,6 +177,8 @@ Deno.serve(async (req) => {
             transactionType: tx.transaction_type,
             amount: tx.amount,
             balanceAfter: tx.balance_after,
+            currentBalance: currentAccountData?.balance || tx.balance_after,
+            totalSavings: currentAccountData?.total_savings || 0,
             description: tx.description,
             createdAt: tx.created_at,
             approvedAt: tx.approved_at,
@@ -237,6 +254,13 @@ Deno.serve(async (req) => {
 
     const account = tx.accounts as any
 
+    // Get current account balance and total savings
+    const { data: currentAccountData } = await supabaseAdmin
+      .from('accounts')
+      .select('balance, total_savings')
+      .eq('id', account.id)
+      .single()
+
     // Get member name
     let memberName = 'Unknown'
     
@@ -263,6 +287,8 @@ Deno.serve(async (req) => {
       transactionType: tx.transaction_type,
       amount: tx.amount,
       balanceAfter: tx.balance_after,
+      currentBalance: currentAccountData?.balance || tx.balance_after,
+      totalSavings: currentAccountData?.total_savings || 0,
       description: tx.description,
       createdAt: tx.created_at,
       approvedAt: tx.approved_at,
