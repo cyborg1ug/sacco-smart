@@ -18,6 +18,8 @@ interface TransactionReceiptData {
   transactionType: string;
   amount: number;
   balanceAfter: number;
+  currentBalance?: number;
+  totalSavings?: number;
   description?: string;
   createdAt: string;
   approvedAt?: string;
@@ -397,10 +399,23 @@ export const generateTransactionReceiptPDF = (data: TransactionReceiptData): voi
   doc.setFontSize(9);
   doc.setTextColor(0, 0, 0);
   doc.setFont("helvetica", "normal");
-  doc.text("Balance After:", 15, yPos + 12);
+  doc.text("Balance After Transaction:", 15, yPos + 12);
   doc.text(`UGX ${data.balanceAfter.toLocaleString()}`, pageWidth - 15, yPos + 12, { align: "right" });
   
-  yPos += 30;
+  // Show current balance and savings if available
+  if (data.currentBalance !== undefined) {
+    doc.text("Current Account Balance:", 15, yPos + 18);
+    doc.text(`UGX ${data.currentBalance.toLocaleString()}`, pageWidth - 15, yPos + 18, { align: "right" });
+  }
+  
+  if (data.totalSavings !== undefined) {
+    doc.text("Total Savings:", 15, yPos + 24);
+    doc.text(`UGX ${data.totalSavings.toLocaleString()}`, pageWidth - 15, yPos + 24, { align: "right" });
+  }
+  
+  yPos += data.currentBalance !== undefined && data.totalSavings !== undefined ? 42 : 30;
+  
+  
   
   // Description
   if (data.description) {

@@ -46,11 +46,13 @@ const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) =>
     const { data: { user } } = await supabase.auth.getUser();
     
     if (user) {
+      // Use maybeSingle to avoid errors if no account exists
       const { data: account } = await supabase
         .from("accounts")
-        .select("id, balance")
+        .select("id, balance, total_savings")
         .eq("user_id", user.id)
-        .single();
+        .eq("account_type", "main")
+        .maybeSingle();
 
       if (account) {
         setAccountId(account.id);
