@@ -1,0 +1,20 @@
+import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import WelfareManagement from "@/components/dashboard/admin/WelfareManagement";
+
+const AdminWelfarePage = () => {
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
+      <div className="container mx-auto p-4 sm:p-6 space-y-6">
+        <DashboardHeader
+          title="Welfare Management"
+          subtitle="Manage welfare fees"
+          isAdmin
+          showBackButton
+        />
+        <WelfareManagement />
+      </div>
+    </div>
+  );
+};
+
+export default AdminWelfarePage;
