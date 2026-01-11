@@ -526,9 +526,16 @@ const Documentation = () => {
             <CardContent className="pt-6 text-center">
               <h3 className="text-xl font-bold mb-2">Need Help?</h3>
               <p className="text-muted-foreground mb-4">
-                If you encounter any issues or have questions, please contact the SACCO administrator 
-                at <strong>vincentcibronz@gmail.com</strong>
+                If you encounter any issues or have questions, please contact the SACCO administrator:
               </p>
+              <div className="space-y-2 mb-4">
+                <p className="text-foreground">
+                  <strong>Email:</strong> vincentcibronz@gmail.com
+                </p>
+                <p className="text-foreground">
+                  <strong>Phone:</strong> 0709131306 / 0771357395
+                </p>
+              </div>
               <Button onClick={() => navigate("/auth")} size="lg" className="gap-2">
                 Start Using KINONI SACCO
                 <ChevronRight className="h-4 w-4" />
@@ -540,8 +547,9 @@ const Documentation = () => {
 
       {/* Footer */}
       <footer className="border-t py-6 mt-8">
-        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground">
+        <div className="container mx-auto px-4 text-center text-sm text-muted-foreground space-y-2">
           <p>© {new Date().getFullYear()} KINONI SACCO. All rights reserved.</p>
+          <p>Contact: 0709131306 / 0771357395 | vincentcibronz@gmail.com</p>
         </div>
       </footer>
     </div>
