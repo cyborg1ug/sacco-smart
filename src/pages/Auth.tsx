@@ -1,11 +1,10 @@
 import { useState, useEffect } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Phone, Mail } from "lucide-react";
 import { ForgotPasswordDialog } from "@/components/auth/ForgotPasswordDialog";
@@ -19,12 +18,10 @@ const Auth = () => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const mode = searchParams.get("mode");
-  const [isLogin, setIsLogin] = useState(mode !== "signup");
+  const isSignup = mode === "signup";
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [loginMethod, setLoginMethod] = useState<"email" | "phone">("phone");
   const [signupMethod, setSignupMethod] = useState<"email" | "phone">("phone");
-  const [otpSent, setOtpSent] = useState(false);
-  const [phoneNumber, setPhoneNumber] = useState("");
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -78,7 +75,6 @@ const Auth = () => {
     const phone = formData.get("phone") as string;
     const password = formData.get("password") as string;
 
-    // Use the RPC function to get email by phone (bypasses RLS)
     const { data: email, error: rpcError } = await supabase.rpc("get_email_by_phone", {
       p_phone_number: phone,
     });
@@ -93,7 +89,6 @@ const Auth = () => {
       return;
     }
 
-    // Then login with email
     const { error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -144,7 +139,6 @@ const Auth = () => {
       return;
     }
 
-    // Update profile with additional information
     const { data: { user } } = await supabase.auth.getUser();
     if (user) {
       await supabase.from("profiles").update({
@@ -175,7 +169,6 @@ const Auth = () => {
     const occupation = formData.get("occupation") as string;
     const address = formData.get("address") as string;
 
-    // Generate a unique email for phone-only users
     const generatedEmail = `${phone.replace(/[^0-9]/g, "")}@kinoni-sacco.local`;
 
     const { error, data } = await supabase.auth.signUp({
@@ -199,7 +192,6 @@ const Auth = () => {
       return;
     }
 
-    // Update profile with phone number and other info
     if (data.user) {
       await supabase.from("profiles").update({
         phone_number: phone,
@@ -237,97 +229,13 @@ const Auth = () => {
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl font-bold text-center">KINONI SACCO</CardTitle>
           <CardDescription className="text-center">
-            {isLogin ? "Sign in to your account" : "Create a new account"}
+            {isSignup ? "Create a new account" : "Sign in to your account"}
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs defaultValue={mode === "signup" ? "signup" : "login"} onValueChange={(v) => setIsLogin(v === "login")}>
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="login">Login</TabsTrigger>
-              <TabsTrigger value="signup">Sign Up</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="login">
-              {/* Login Method Toggle */}
-              <div className="flex gap-2 mb-4">
-                <Button
-                  type="button"
-                  variant={loginMethod === "phone" ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => setLoginMethod("phone")}
-                >
-                  <Phone className="mr-2 h-4 w-4" />
-                  Phone
-                </Button>
-                <Button
-                  type="button"
-                  variant={loginMethod === "email" ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => setLoginMethod("email")}
-                >
-                  <Mail className="mr-2 h-4 w-4" />
-                  Email
-                </Button>
-              </div>
-
-              {loginMethod === "email" ? (
-                <form onSubmit={handleEmailLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="login-email">Email</Label>
-                    <Input
-                      id="login-email"
-                      name="email"
-                      type="email"
-                      placeholder="you@example.com"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="login-password">Password</Label>
-                    <PasswordInput
-                      id="login-password"
-                      name="password"
-                      required
-                    />
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <ForgotPasswordDialog />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Sign In
-                  </Button>
-                </form>
-              ) : (
-                <form onSubmit={handlePhoneLogin} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="login-phone">Phone Number</Label>
-                    <Input
-                      id="login-phone"
-                      name="phone"
-                      type="tel"
-                      placeholder="+256 700 000000"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="login-phone-password">Password</Label>
-                    <PasswordInput
-                      id="login-phone-password"
-                      name="password"
-                      required
-                    />
-                  </div>
-                  <Button type="submit" className="w-full" disabled={loading}>
-                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                    Sign In
-                  </Button>
-                </form>
-              )}
-            </TabsContent>
-
-            <TabsContent value="signup">
-              {/* Signup Method Toggle */}
+          {isSignup ? (
+            // SIGNUP CONTENT ONLY
+            <>
               <div className="flex gap-2 mb-4">
                 <Button
                   type="button"
@@ -483,8 +391,101 @@ const Auth = () => {
                   </Button>
                 </form>
               )}
-            </TabsContent>
-          </Tabs>
+
+              <div className="mt-6 text-center text-sm text-muted-foreground">
+                Already have an account?{" "}
+                <Link to="/auth?mode=login" className="text-primary hover:underline font-medium">
+                  Sign in
+                </Link>
+              </div>
+            </>
+          ) : (
+            // LOGIN CONTENT ONLY
+            <>
+              <div className="flex gap-2 mb-4">
+                <Button
+                  type="button"
+                  variant={loginMethod === "phone" ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => setLoginMethod("phone")}
+                >
+                  <Phone className="mr-2 h-4 w-4" />
+                  Phone
+                </Button>
+                <Button
+                  type="button"
+                  variant={loginMethod === "email" ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => setLoginMethod("email")}
+                >
+                  <Mail className="mr-2 h-4 w-4" />
+                  Email
+                </Button>
+              </div>
+
+              {loginMethod === "email" ? (
+                <form onSubmit={handleEmailLogin} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="login-email">Email</Label>
+                    <Input
+                      id="login-email"
+                      name="email"
+                      type="email"
+                      placeholder="you@example.com"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="login-password">Password</Label>
+                    <PasswordInput
+                      id="login-password"
+                      name="password"
+                      required
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <ForgotPasswordDialog />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Sign In
+                  </Button>
+                </form>
+              ) : (
+                <form onSubmit={handlePhoneLogin} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="login-phone">Phone Number</Label>
+                    <Input
+                      id="login-phone"
+                      name="phone"
+                      type="tel"
+                      placeholder="+256 700 000000"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="login-phone-password">Password</Label>
+                    <PasswordInput
+                      id="login-phone-password"
+                      name="password"
+                      required
+                    />
+                  </div>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Sign In
+                  </Button>
+                </form>
+              )}
+
+              <div className="mt-6 text-center text-sm text-muted-foreground">
+                Don't have an account?{" "}
+                <Link to="/auth?mode=signup" className="text-primary hover:underline font-medium">
+                  Sign up
+                </Link>
+              </div>
+            </>
+          )}
         </CardContent>
       </Card>
     </div>
