@@ -18,12 +18,16 @@ import {
   TrendingUp,
   Shield,
   Smartphone,
-  Monitor
+  Monitor,
+  Download
 } from "lucide-react";
 import { motion } from "framer-motion";
+import jsPDF from "jspdf";
+import { useToast } from "@/hooks/use-toast";
 
 const Documentation = () => {
   const navigate = useNavigate();
+  const { toast } = useToast();
 
   const fadeInUp = {
     initial: { opacity: 0, y: 20 },
@@ -39,20 +43,169 @@ const Documentation = () => {
     }
   };
 
+  const generatePDF = () => {
+    const doc = new jsPDF();
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 20;
+    const maxWidth = pageWidth - margin * 2;
+    let yPos = 20;
+
+    const addTitle = (text: string, size: number = 16) => {
+      doc.setFontSize(size);
+      doc.setFont("helvetica", "bold");
+      doc.text(text, margin, yPos);
+      yPos += size * 0.5 + 4;
+    };
+
+    const addText = (text: string, size: number = 10) => {
+      doc.setFontSize(size);
+      doc.setFont("helvetica", "normal");
+      const lines = doc.splitTextToSize(text, maxWidth);
+      doc.text(lines, margin, yPos);
+      yPos += lines.length * (size * 0.4) + 4;
+    };
+
+    const addBullet = (text: string) => {
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "normal");
+      const lines = doc.splitTextToSize(`• ${text}`, maxWidth - 5);
+      doc.text(lines, margin + 5, yPos);
+      yPos += lines.length * 4 + 2;
+    };
+
+    const checkPageBreak = (needed: number = 30) => {
+      if (yPos > doc.internal.pageSize.getHeight() - needed) {
+        doc.addPage();
+        yPos = 20;
+      }
+    };
+
+    // Title
+    addTitle("KINONI SACCO - User Guide", 20);
+    yPos += 5;
+    addText("Your complete guide to getting started with our savings and credit cooperative platform.");
+    yPos += 10;
+
+    // Section 1: Getting Started
+    checkPageBreak();
+    addTitle("1. Getting Started", 14);
+    
+    addTitle("Creating Your Account", 12);
+    addBullet("Contact the Admin: Reach out to the SACCO administrator to register as a new member. Provide your full name, email address, phone number, and National ID.");
+    addBullet("Receive Your Credentials: The admin will create your account and send you login credentials via email.");
+    addBullet("Account Number Assignment: You will be assigned a unique account number (e.g., KINONI-001) for all your transactions.");
+    yPos += 5;
+
+    checkPageBreak();
+    addTitle("Signing In", 12);
+    addText("On Desktop: Visit the KINONI SACCO website, click 'Sign In', enter your email and password, and click 'Login' to access your dashboard.");
+    addText("On Mobile: Open your mobile browser, navigate to the SACCO website, tap 'Sign In', enter credentials and tap 'Login'.");
+    addText("Tip: Use 'Forgot Password?' if you need to reset your password.");
+    yPos += 10;
+
+    // Section 2: Dashboard
+    checkPageBreak();
+    addTitle("2. Your Dashboard", 14);
+    addText("Once logged in, you'll see your personalized dashboard with key information:");
+    addBullet("Account Balance: Your current available balance in UGX");
+    addBullet("Total Savings: Cumulative savings over time");
+    addBullet("Active Loans: Number of ongoing loans");
+    addBullet("Notifications: Important alerts and reminders");
+    yPos += 10;
+
+    // Section 3: Key Features
+    checkPageBreak();
+    addTitle("3. Key Features", 14);
+    
+    addTitle("Record Transaction", 12);
+    addBullet("Deposit: Add money to your savings account");
+    addBullet("Withdrawal: Request to withdraw from your balance");
+    addBullet("Loan Repayment: Pay back your active loans");
+    addText("Note: All transactions require admin approval before they reflect in your balance.");
+    yPos += 5;
+
+    checkPageBreak();
+    addTitle("Loan Application", 12);
+    addText("Eligibility Requirements:");
+    addBullet("Saved minimum UGX 10,000/week for 4 consecutive weeks");
+    addBullet("Maximum loan: 3x your total savings");
+    addBullet("Interest rate: 2% on the loan amount");
+    addBullet("Requires a guarantor (another member)");
+    yPos += 5;
+
+    checkPageBreak();
+    addTitle("Guarantor Requests", 12);
+    addText("When another member selects you as their loan guarantor, you'll receive a request. You can approve or decline based on your willingness to guarantee their loan.");
+    yPos += 5;
+
+    checkPageBreak();
+    addTitle("Savings Tracker", 12);
+    addText("View your weekly savings history and track your progress toward loan eligibility with visual charts.");
+    yPos += 5;
+
+    checkPageBreak();
+    addTitle("Reminders & Notifications", 12);
+    addText("Stay informed with notifications about: Loan payment due dates, Transaction approvals, Guarantor requests, and Admin announcements.");
+    yPos += 5;
+
+    checkPageBreak();
+    addTitle("Statements", 12);
+    addText("Generate PDF statements for any date range showing all your transactions with running balances.");
+    yPos += 5;
+
+    checkPageBreak();
+    addTitle("Sub-Accounts", 12);
+    addText("Add family members or dependents as sub-accounts. Sub-accounts share the same account number with a suffix (e.g., KINONI-001-A).");
+    yPos += 5;
+
+    checkPageBreak();
+    addTitle("Profile Management", 12);
+    addBullet("Update your phone number and address");
+    addBullet("View your National ID and account details");
+    addBullet("Change your password securely");
+    yPos += 10;
+
+    // Contact Info
+    checkPageBreak();
+    addTitle("Need Help?", 14);
+    addText("If you encounter any issues or have questions, please contact the SACCO administrator:");
+    addText("Email: vincentcibronz@gmail.com");
+    addText("Phone: 0709131306 / 0771357395");
+    yPos += 10;
+
+    // Footer
+    doc.setFontSize(8);
+    doc.setFont("helvetica", "italic");
+    doc.text(`© ${new Date().getFullYear()} KINONI SACCO. All rights reserved.`, margin, doc.internal.pageSize.getHeight() - 10);
+
+    doc.save("KINONI_SACCO_User_Guide.pdf");
+    
+    toast({
+      title: "PDF Downloaded",
+      description: "The user guide has been downloaded successfully.",
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
       {/* Header */}
       <header className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b">
-        <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-          <Button variant="ghost" onClick={() => navigate(-1)} className="gap-2">
+        <div className="container mx-auto px-4 py-4 flex items-center justify-between gap-2">
+          <Button variant="ghost" onClick={() => navigate(-1)} className="gap-2 shrink-0">
             <ArrowLeft className="h-4 w-4" />
-            Back
+            <span className="hidden sm:inline">Back</span>
           </Button>
-          <h1 className="text-lg font-bold text-primary">KINONI SACCO Guide</h1>
-          <Button onClick={() => navigate("/auth")} className="gap-2">
-            Get Started
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <h1 className="text-lg font-bold text-primary truncate">KINONI SACCO Guide</h1>
+          <div className="flex items-center gap-2 shrink-0">
+            <Button variant="outline" onClick={generatePDF} className="gap-2">
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Download PDF</span>
+            </Button>
+            <Button onClick={() => navigate("/auth")} className="gap-2">
+              <span className="hidden sm:inline">Get Started</span>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
       </header>
 
