@@ -23,6 +23,9 @@ const Index = () => {
             <Button size="lg" variant="outline" onClick={() => navigate("/auth?mode=login")}>
               Sign In
             </Button>
+            <Button size="lg" variant="secondary" onClick={() => navigate("/document")}>
+              User Guide
+            </Button>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8 mt-16">
