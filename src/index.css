@@ -112,6 +112,12 @@ All colors MUST be HSL.
     --tracking-normal: 0em;
 
     --spacing: 0.25rem;
+
+    /* Enhanced card styles */
+    --card-highlight: 229 84% 55%;
+    --card-success: 160 84% 39%;
+    --card-warning: 38 92% 50%;
+    --card-info: 210 100% 50%;
   }
 
   .dark {

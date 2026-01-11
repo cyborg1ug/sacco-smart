@@ -1,11 +1,22 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Users, DollarSign, TrendingUp, FileText, Bell, Heart, BarChart3, CreditCard } from "lucide-react";
+import {
+  Users,
+  DollarSign,
+  TrendingUp,
+  FileText,
+  Bell,
+  Heart,
+  BarChart3,
+  CreditCard,
+  Clock,
+} from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { motion } from "framer-motion";
 import DashboardHeader from "./DashboardHeader";
-import MobileNavCard from "./MobileNavCard";
+import EnhancedMobileNavCard from "./EnhancedMobileNavCard";
+import StatCard from "./StatCard";
 import MembersManagement from "./admin/MembersManagement";
 import TransactionsManagement from "./admin/TransactionsManagement";
 import LoansManagement from "./admin/LoansManagement";
@@ -28,14 +39,25 @@ const AdminDashboard = () => {
   }, []);
 
   const loadStats = async () => {
-    const [accountsCountResult, accountsResult, loansResult, transactionsResult] = await Promise.all([
-      supabase.from("accounts").select("id", { count: "exact" }),
-      supabase.from("accounts").select("total_savings"),
-      supabase.from("loans").select("id", { count: "exact" }).in("status", ["approved", "disbursed"]),
-      supabase.from("transactions").select("id", { count: "exact" }).eq("status", "pending"),
-    ]);
+    const [accountsCountResult, accountsResult, loansResult, transactionsResult] =
+      await Promise.all([
+        supabase.from("accounts").select("id", { count: "exact" }),
+        supabase.from("accounts").select("total_savings"),
+        supabase
+          .from("loans")
+          .select("id", { count: "exact" })
+          .in("status", ["approved", "disbursed"]),
+        supabase
+          .from("transactions")
+          .select("id", { count: "exact" })
+          .eq("status", "pending"),
+      ]);
 
-    const totalSavings = accountsResult.data?.reduce((sum, acc) => sum + Number(acc.total_savings), 0) || 0;
+    const totalSavings =
+      accountsResult.data?.reduce(
+        (sum, acc) => sum + Number(acc.total_savings),
+        0
+      ) || 0;
 
     setStats({
       totalMembers: accountsCountResult.count || 0,
@@ -46,137 +68,213 @@ const AdminDashboard = () => {
   };
 
   const mobileNavItems = [
-    { to: "/admin/members", icon: Users, title: "Members", description: "Manage member accounts" },
-    { to: "/admin/transactions", icon: CreditCard, title: "Transactions", description: "View & approve transactions", badge: stats.pendingTransactions },
-    { to: "/admin/loans", icon: TrendingUp, title: "Loans", description: "Manage loan applications" },
-    { to: "/admin/welfare", icon: Heart, title: "Welfare", description: "Manage welfare fees" },
-    { to: "/admin/reminders", icon: Bell, title: "Reminders", description: "Send alerts & notifications" },
-    { to: "/admin/statements", icon: FileText, title: "Statements", description: "Generate member statements" },
-    { to: "/admin/reports", icon: BarChart3, title: "Reports", description: "Financial reports & charts" },
+    {
+      to: "/admin/members",
+      icon: Users,
+      title: "Members",
+      description: "Manage member accounts",
+    },
+    {
+      to: "/admin/transactions",
+      icon: CreditCard,
+      title: "Transactions",
+      description: "View & approve transactions",
+      badge: stats.pendingTransactions,
+    },
+    {
+      to: "/admin/loans",
+      icon: TrendingUp,
+      title: "Loans",
+      description: "Manage loan applications",
+    },
+    {
+      to: "/admin/welfare",
+      icon: Heart,
+      title: "Welfare",
+      description: "Manage welfare fees",
+    },
+    {
+      to: "/admin/reminders",
+      icon: Bell,
+      title: "Reminders",
+      description: "Send alerts & notifications",
+    },
+    {
+      to: "/admin/statements",
+      icon: FileText,
+      title: "Statements",
+      description: "Generate member statements",
+    },
+    {
+      to: "/admin/reports",
+      icon: BarChart3,
+      title: "Reports",
+      description: "Financial reports & charts",
+    },
   ];
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
-      <div className="container mx-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
-        <DashboardHeader
-          title="KINONI SACCO"
-          subtitle="Admin Dashboard"
-          isAdmin
-        />
+    <div className="min-h-screen bg-gradient-to-br from-background via-background to-muted/30">
+      <div className="container mx-auto p-4 sm:p-6 lg:p-8 space-y-6 sm:space-y-8">
+        <DashboardHeader title="KINONI SACCO" subtitle="Admin Dashboard" isAdmin />
 
         {/* Summary Cards */}
-        <div className="grid gap-3 sm:gap-4 grid-cols-2 lg:grid-cols-4">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 sm:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">Members</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground shrink-0" />
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="text-lg sm:text-2xl font-bold">{stats.totalMembers}</div>
-              <p className="text-xs text-muted-foreground">Active accounts</p>
-            </CardContent>
-          </Card>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.1 }}
+          className="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4"
+        >
+          <StatCard
+            title="Total Members"
+            value={stats.totalMembers}
+            subtitle="Active accounts"
+            icon={Users}
+            variant="primary"
+          />
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 sm:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">Savings</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground shrink-0" />
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="text-lg sm:text-2xl font-bold truncate">
-                UGX {stats.totalSavings.toLocaleString()}
-              </div>
-              <p className="text-xs text-muted-foreground">Combined</p>
-            </CardContent>
-          </Card>
+          <StatCard
+            title="Total Savings"
+            value={`UGX ${stats.totalSavings.toLocaleString()}`}
+            subtitle="Combined savings"
+            icon={DollarSign}
+            variant="success"
+          />
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 sm:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">Loans</CardTitle>
-              <TrendingUp className="h-4 w-4 text-muted-foreground shrink-0" />
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="text-lg sm:text-2xl font-bold">{stats.activeLoans}</div>
-              <p className="text-xs text-muted-foreground">Active</p>
-            </CardContent>
-          </Card>
+          <StatCard
+            title="Active Loans"
+            value={stats.activeLoans}
+            subtitle="In progress"
+            icon={TrendingUp}
+            variant="info"
+          />
 
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1 sm:pb-2">
-              <CardTitle className="text-xs sm:text-sm font-medium">Pending</CardTitle>
-              <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="text-lg sm:text-2xl font-bold">{stats.pendingTransactions}</div>
-              <p className="text-xs text-muted-foreground">Awaiting</p>
-            </CardContent>
-          </Card>
-        </div>
+          <StatCard
+            title="Pending"
+            value={stats.pendingTransactions}
+            subtitle="Awaiting approval"
+            icon={Clock}
+            variant={stats.pendingTransactions > 0 ? "warning" : "default"}
+            highlighted={stats.pendingTransactions > 0}
+          />
+        </motion.div>
 
         {/* Mobile: Navigation Cards / Desktop: Tabs */}
         {isMobile ? (
-          <div className="space-y-3">
-            <h2 className="text-lg font-semibold">Management</h2>
-            <div className="space-y-2">
-              {mobileNavItems.map((item) => (
-                <MobileNavCard
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+            className="space-y-4"
+          >
+            <h2 className="text-lg font-semibold text-foreground">Management</h2>
+            <div className="space-y-3">
+              {mobileNavItems.map((item, index) => (
+                <EnhancedMobileNavCard
                   key={item.to}
                   to={item.to}
                   icon={item.icon}
                   title={item.title}
                   description={item.description}
                   badge={item.badge}
+                  index={index}
                 />
               ))}
             </div>
-          </div>
+          </motion.div>
         ) : (
-          <Tabs defaultValue="members" className="space-y-4">
-            <TabsList className="flex flex-wrap h-auto gap-1">
-              <TabsTrigger value="members">Members</TabsTrigger>
-              <TabsTrigger value="transactions">
-                Transactions
-                {stats.pendingTransactions > 0 && (
-                  <span className="ml-1 bg-destructive text-destructive-foreground rounded-full px-2 py-0.5 text-xs">
-                    {stats.pendingTransactions}
-                  </span>
-                )}
-              </TabsTrigger>
-              <TabsTrigger value="loans">Loans</TabsTrigger>
-              <TabsTrigger value="welfare">Welfare</TabsTrigger>
-              <TabsTrigger value="reminders">Reminders</TabsTrigger>
-              <TabsTrigger value="statements">Statements</TabsTrigger>
-              <TabsTrigger value="reports">Reports</TabsTrigger>
-            </TabsList>
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+          >
+            <Tabs defaultValue="members" className="space-y-6">
+              <TabsList className="flex flex-wrap h-auto gap-1 p-1.5 bg-muted/50 rounded-xl">
+                <TabsTrigger
+                  value="members"
+                  className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  <Users className="h-4 w-4 mr-2" />
+                  Members
+                </TabsTrigger>
+                <TabsTrigger
+                  value="transactions"
+                  className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Transactions
+                  {stats.pendingTransactions > 0 && (
+                    <span className="ml-2 bg-destructive text-destructive-foreground rounded-full px-2 py-0.5 text-xs font-medium">
+                      {stats.pendingTransactions}
+                    </span>
+                  )}
+                </TabsTrigger>
+                <TabsTrigger
+                  value="loans"
+                  className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  <TrendingUp className="h-4 w-4 mr-2" />
+                  Loans
+                </TabsTrigger>
+                <TabsTrigger
+                  value="welfare"
+                  className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  <Heart className="h-4 w-4 mr-2" />
+                  Welfare
+                </TabsTrigger>
+                <TabsTrigger
+                  value="reminders"
+                  className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  <Bell className="h-4 w-4 mr-2" />
+                  Reminders
+                </TabsTrigger>
+                <TabsTrigger
+                  value="statements"
+                  className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Statements
+                </TabsTrigger>
+                <TabsTrigger
+                  value="reports"
+                  className="rounded-lg data-[state=active]:bg-background data-[state=active]:shadow-sm"
+                >
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  Reports
+                </TabsTrigger>
+              </TabsList>
 
-            <TabsContent value="members" className="space-y-4">
-              <MembersManagement />
-            </TabsContent>
+              <TabsContent value="members" className="space-y-4 mt-6">
+                <MembersManagement />
+              </TabsContent>
 
-            <TabsContent value="transactions" className="space-y-4">
-              <TransactionsManagement onUpdate={loadStats} />
-            </TabsContent>
+              <TabsContent value="transactions" className="space-y-4 mt-6">
+                <TransactionsManagement onUpdate={loadStats} />
+              </TabsContent>
 
-            <TabsContent value="loans" className="space-y-4">
-              <LoansManagement onUpdate={loadStats} />
-            </TabsContent>
+              <TabsContent value="loans" className="space-y-4 mt-6">
+                <LoansManagement onUpdate={loadStats} />
+              </TabsContent>
 
-            <TabsContent value="welfare" className="space-y-4">
-              <WelfareManagement />
-            </TabsContent>
+              <TabsContent value="welfare" className="space-y-4 mt-6">
+                <WelfareManagement />
+              </TabsContent>
 
-            <TabsContent value="reminders" className="space-y-4">
-              <AlertsReminders />
-            </TabsContent>
+              <TabsContent value="reminders" className="space-y-4 mt-6">
+                <AlertsReminders />
+              </TabsContent>
 
-            <TabsContent value="statements" className="space-y-4">
-              <StatementsGeneration />
-            </TabsContent>
+              <TabsContent value="statements" className="space-y-4 mt-6">
+                <StatementsGeneration />
+              </TabsContent>
 
-            <TabsContent value="reports" className="space-y-4">
-              <ReportsGeneration />
-            </TabsContent>
-          </Tabs>
+              <TabsContent value="reports" className="space-y-4 mt-6">
+                <ReportsGeneration />
+              </TabsContent>
+            </Tabs>
+          </motion.div>
         )}
       </div>
     </div>
