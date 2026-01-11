@@ -430,6 +430,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      user_owns_parent_account: {
+        Args: { account_parent_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       app_role: "admin" | "member"
