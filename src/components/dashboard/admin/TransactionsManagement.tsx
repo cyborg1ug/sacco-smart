@@ -599,22 +599,24 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6">
       {/* Date Filter Controls */}
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm text-muted-foreground">Filter by:</span>
-        <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+        <span className="text-xs sm:text-sm text-muted-foreground shrink-0">Filter by:</span>
+        <div className="flex flex-wrap gap-1.5 sm:gap-2">
           <Button 
             variant={dateFilter === "all" ? "default" : "outline"} 
             size="sm"
             onClick={() => setDateFilter("all")}
+            className="h-7 sm:h-8 px-2 sm:px-3 text-[10px] sm:text-xs"
           >
-            All Time
+            All
           </Button>
           <Button 
             variant={dateFilter === "today" ? "default" : "outline"} 
             size="sm"
             onClick={() => setDateFilter("today")}
+            className="h-7 sm:h-8 px-2 sm:px-3 text-[10px] sm:text-xs"
           >
             Today
           </Button>
@@ -622,41 +624,44 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
             variant={dateFilter === "week" ? "default" : "outline"} 
             size="sm"
             onClick={() => setDateFilter("week")}
+            className="h-7 sm:h-8 px-2 sm:px-3 text-[10px] sm:text-xs"
           >
-            This Week
+            Week
           </Button>
           <Button 
             variant={dateFilter === "month" ? "default" : "outline"} 
             size="sm"
             onClick={() => setDateFilter("month")}
+            className="h-7 sm:h-8 px-2 sm:px-3 text-[10px] sm:text-xs"
           >
-            This Month
+            Month
           </Button>
           <Popover>
             <PopoverTrigger asChild>
               <Button 
                 variant={dateFilter === "custom" ? "default" : "outline"} 
                 size="sm"
-                className="gap-2"
+                className="h-7 sm:h-8 px-2 sm:px-3 text-[10px] sm:text-xs gap-1"
               >
-                <CalendarIcon className="h-4 w-4" />
-                Custom Range
+                <CalendarIcon className="h-3 w-3 sm:h-4 sm:w-4" />
+                <span className="hidden xs:inline">Custom</span>
               </Button>
             </PopoverTrigger>
-            <PopoverContent className="w-auto p-4" align="start">
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <Label>From</Label>
+            <PopoverContent className="w-auto p-3 sm:p-4" align="start">
+              <div className="space-y-3 sm:space-y-4">
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label className="text-xs sm:text-sm">From</Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
+                        size="sm"
                         className={cn(
-                          "w-full justify-start text-left font-normal",
+                          "w-full justify-start text-left font-normal h-8 sm:h-9 text-xs sm:text-sm",
                           !customDateFrom && "text-muted-foreground"
                         )}
                       >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        <CalendarIcon className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         {customDateFrom ? format(customDateFrom, "PPP") : "Pick a date"}
                       </Button>
                     </PopoverTrigger>
@@ -671,18 +676,19 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
                     </PopoverContent>
                   </Popover>
                 </div>
-                <div className="space-y-2">
-                  <Label>To</Label>
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label className="text-xs sm:text-sm">To</Label>
                   <Popover>
                     <PopoverTrigger asChild>
                       <Button
                         variant="outline"
+                        size="sm"
                         className={cn(
-                          "w-full justify-start text-left font-normal",
+                          "w-full justify-start text-left font-normal h-8 sm:h-9 text-xs sm:text-sm",
                           !customDateTo && "text-muted-foreground"
                         )}
                       >
-                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        <CalendarIcon className="mr-1.5 sm:mr-2 h-3.5 w-3.5 sm:h-4 sm:w-4" />
                         {customDateTo ? format(customDateTo, "PPP") : "Pick a date"}
                       </Button>
                     </PopoverTrigger>
@@ -699,7 +705,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
                   </Popover>
                 </div>
                 <Button 
-                  className="w-full" 
+                  className="w-full h-8 sm:h-9 text-xs sm:text-sm" 
                   size="sm"
                   onClick={() => setDateFilter("custom")}
                   disabled={!customDateFrom || !customDateTo}
@@ -711,320 +717,348 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
           </Popover>
         </div>
         {dateFilter !== "all" && (
-          <Badge variant="secondary" className="ml-2">
-            Showing: {getDateFilterLabel()}
+          <Badge variant="secondary" className="shrink-0 text-[9px] sm:text-[10px]">
+            {getDateFilterLabel()}
           </Badge>
         )}
       </div>
 
       {/* Statistics Summary */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2 sm:gap-4">
         <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-green-500" />
-              <span className="text-sm text-muted-foreground">Total Deposits</span>
+          <CardContent className="p-2.5 sm:pt-4 sm:p-4">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <TrendingUp className="h-3 w-3 sm:h-4 sm:w-4 text-success shrink-0" />
+              <span className="text-[10px] sm:text-sm text-muted-foreground truncate">Deposits</span>
             </div>
-            <p className="text-xl font-bold mt-1">UGX {stats.totalDeposits.toLocaleString()}</p>
+            <p className="text-sm sm:text-lg md:text-xl font-bold mt-0.5 sm:mt-1 truncate">UGX {stats.totalDeposits.toLocaleString()}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <TrendingDown className="h-4 w-4 text-red-500" />
-              <span className="text-sm text-muted-foreground">Total Withdrawals</span>
+          <CardContent className="p-2.5 sm:pt-4 sm:p-4">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <TrendingDown className="h-3 w-3 sm:h-4 sm:w-4 text-destructive shrink-0" />
+              <span className="text-[10px] sm:text-sm text-muted-foreground truncate">Withdrawals</span>
             </div>
-            <p className="text-xl font-bold mt-1">UGX {stats.totalWithdrawals.toLocaleString()}</p>
+            <p className="text-sm sm:text-lg md:text-xl font-bold mt-0.5 sm:mt-1 truncate">UGX {stats.totalWithdrawals.toLocaleString()}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <CreditCard className="h-4 w-4 text-blue-500" />
-              <span className="text-sm text-muted-foreground">Loan Disbursements</span>
+          <CardContent className="p-2.5 sm:pt-4 sm:p-4">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <CreditCard className="h-3 w-3 sm:h-4 sm:w-4 text-blue-500 shrink-0" />
+              <span className="text-[10px] sm:text-sm text-muted-foreground truncate">Disbursed</span>
             </div>
-            <p className="text-xl font-bold mt-1">UGX {stats.totalLoanDisbursements.toLocaleString()}</p>
+            <p className="text-sm sm:text-lg md:text-xl font-bold mt-0.5 sm:mt-1 truncate">UGX {stats.totalLoanDisbursements.toLocaleString()}</p>
           </CardContent>
         </Card>
         <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <Wallet className="h-4 w-4 text-purple-500" />
-              <span className="text-sm text-muted-foreground">Loan Repayments</span>
+          <CardContent className="p-2.5 sm:pt-4 sm:p-4">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <Wallet className="h-3 w-3 sm:h-4 sm:w-4 text-purple-500 shrink-0" />
+              <span className="text-[10px] sm:text-sm text-muted-foreground truncate">Repayments</span>
             </div>
-            <p className="text-xl font-bold mt-1">UGX {stats.totalLoanRepayments.toLocaleString()}</p>
+            <p className="text-sm sm:text-lg md:text-xl font-bold mt-0.5 sm:mt-1 truncate">UGX {stats.totalLoanRepayments.toLocaleString()}</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardContent className="pt-4">
-            <div className="flex items-center gap-2">
-              <Loader2 className="h-4 w-4 text-orange-500" />
-              <span className="text-sm text-muted-foreground">Pending</span>
+        <Card className="col-span-2 sm:col-span-1">
+          <CardContent className="p-2.5 sm:pt-4 sm:p-4">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <Loader2 className="h-3 w-3 sm:h-4 sm:w-4 text-warning shrink-0" />
+              <span className="text-[10px] sm:text-sm text-muted-foreground truncate">Pending</span>
             </div>
-            <p className="text-xl font-bold mt-1">{stats.pendingCount} transactions</p>
+            <p className="text-sm sm:text-lg md:text-xl font-bold mt-0.5 sm:mt-1">{stats.pendingCount} txns</p>
           </CardContent>
         </Card>
       </div>
 
       <Card>
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <div>
-            <CardTitle>Transactions Management</CardTitle>
-            <CardDescription>Review and manage all transactions</CardDescription>
-          </div>
-          <div className="flex gap-2">
-            <Dialog open={withdrawalDialogOpen} onOpenChange={setWithdrawalDialogOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <Banknote className="mr-2 h-4 w-4" />
-                  Process Withdrawal
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
+      <CardHeader className="pb-3 sm:pb-4">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col sm:flex-row sm:justify-between sm:items-start gap-3">
+            <div className="min-w-0">
+              <CardTitle className="text-base sm:text-lg md:text-xl">Transactions</CardTitle>
+              <CardDescription className="text-xs sm:text-sm mt-0.5">Review and manage all transactions</CardDescription>
+            </div>
+            <div className="flex flex-col xs:flex-row gap-2 sm:shrink-0">
+              <Dialog open={withdrawalDialogOpen} onOpenChange={setWithdrawalDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="w-full xs:w-auto justify-center h-8 sm:h-9 text-xs sm:text-sm">
+                    <Banknote className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5" />
+                    <span>Withdraw</span>
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-[95vw] sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle className="text-base sm:text-lg">Process Withdrawal</DialogTitle>
+                    <DialogDescription className="text-xs sm:text-sm">Admin-only: Process a withdrawal for a member</DialogDescription>
+                  </DialogHeader>
+                  <form onSubmit={handleProcessWithdrawal} className="space-y-3 sm:space-y-4">
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <Label htmlFor="withdrawalAccountId" className="text-xs sm:text-sm">Member Account</Label>
+                      <Select name="accountId" required>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select account" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {members.map((member) => (
+                            <SelectItem key={member.id} value={member.id}>
+                              {member.user.full_name} - {member.account_number} (Bal: UGX {member.balance.toLocaleString()})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <Label htmlFor="withdrawalAmount" className="text-xs sm:text-sm">Amount (UGX)</Label>
+                      <Input id="withdrawalAmount" name="amount" type="number" step="0.01" min="1" required />
+                    </div>
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <Label htmlFor="withdrawalDescription" className="text-xs sm:text-sm">Description</Label>
+                      <Input id="withdrawalDescription" name="description" placeholder="Reason for withdrawal" />
+                    </div>
+                    <Button type="submit" className="w-full">Process Withdrawal</Button>
+                  </form>
+                </DialogContent>
+              </Dialog>
+              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="w-full xs:w-auto justify-center h-8 sm:h-9 text-xs sm:text-sm">
+                    <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4 mr-1.5" />
+                    <span>New Txn</span>
+                  </Button>
+                </DialogTrigger>
+              <DialogContent className="max-w-[95vw] sm:max-w-md">
                 <DialogHeader>
-                  <DialogTitle>Process Withdrawal</DialogTitle>
-                  <DialogDescription>Admin-only: Process a withdrawal for a member</DialogDescription>
+                  <DialogTitle className="text-base sm:text-lg">Create Transaction</DialogTitle>
+                  <DialogDescription className="text-xs sm:text-sm">Record a transaction for a member</DialogDescription>
                 </DialogHeader>
-                <form onSubmit={handleProcessWithdrawal} className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="withdrawalAccountId">Member Account</Label>
-                    <Select name="accountId" required>
+                <form onSubmit={handleCreateTransaction} className="space-y-3 sm:space-y-4">
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label htmlFor="accountId" className="text-xs sm:text-sm">Member Account</Label>
+                    <Select 
+                      name="accountId" 
+                      required 
+                      value={selectedAccountForLoan}
+                      onValueChange={(value) => setSelectedAccountForLoan(value)}
+                    >
                       <SelectTrigger>
                         <SelectValue placeholder="Select account" />
                       </SelectTrigger>
                       <SelectContent>
                         {members.map((member) => (
                           <SelectItem key={member.id} value={member.id}>
-                            {member.user.full_name} - {member.account_number} (Bal: UGX {member.balance.toLocaleString()})
+                            {member.user.full_name} - {member.account_number}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="withdrawalAmount">Amount (UGX)</Label>
-                    <Input id="withdrawalAmount" name="amount" type="number" step="0.01" min="1" required />
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label htmlFor="type" className="text-xs sm:text-sm">Transaction Type</Label>
+                    <Select 
+                      name="type" 
+                      required
+                      value={selectedTransactionType}
+                      onValueChange={(value) => setSelectedTransactionType(value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="deposit">Saving Deposit</SelectItem>
+                        <SelectItem value="loan_disbursement">Loan Disbursement</SelectItem>
+                        <SelectItem value="loan_repayment">Loan Repayment</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="withdrawalDescription">Description</Label>
-                    <Input id="withdrawalDescription" name="description" placeholder="Reason for withdrawal" />
+                  
+                  {/* Show active loan info when loan_repayment is selected */}
+                  {selectedTransactionType === "loan_repayment" && selectedAccountForLoan && (
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <Label className="text-xs sm:text-sm">Active Loan</Label>
+                      {(() => {
+                        const activeLoan = getActiveLoanForAccount(selectedAccountForLoan);
+                        if (activeLoan) {
+                          return (
+                            <div className="p-2 sm:p-3 bg-muted rounded-md space-y-0.5 sm:space-y-1 text-xs sm:text-sm">
+                              <input type="hidden" name="loanId" value={activeLoan.id} />
+                              <p><span className="font-medium">Loan:</span> UGX {activeLoan.amount.toLocaleString()}</p>
+                              <p><span className="font-medium">Total ({activeLoan.interest_rate}%):</span> UGX {activeLoan.total_amount.toLocaleString()}</p>
+                              <p className="font-semibold text-primary"><span className="font-medium">Outstanding:</span> UGX {activeLoan.outstanding_balance.toLocaleString()}</p>
+                            </div>
+                          );
+                        }
+                        return (
+                          <p className="text-xs sm:text-sm text-muted-foreground p-2 sm:p-3 bg-muted rounded-md">
+                            No active loan found for this account.
+                          </p>
+                        );
+                      })()}
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label htmlFor="amount" className="text-xs sm:text-sm">Amount (UGX)</Label>
+                    <Input id="amount" name="amount" type="number" step="0.01" required />
+                    {selectedTransactionType === "loan_repayment" && selectedAccountForLoan && (
+                      <p className="text-[10px] sm:text-xs text-muted-foreground">
+                        Enter partial or full repayment amount
+                      </p>
+                    )}
                   </div>
-                  <Button type="submit" className="w-full">Process Withdrawal</Button>
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label htmlFor="description" className="text-xs sm:text-sm">Description</Label>
+                    <Input id="description" name="description" />
+                  </div>
+                  <Button 
+                    type="submit" 
+                    className="w-full"
+                    disabled={selectedTransactionType === "loan_repayment" && selectedAccountForLoan && !getActiveLoanForAccount(selectedAccountForLoan)}
+                  >
+                    Create Transaction
+                  </Button>
                 </form>
               </DialogContent>
             </Dialog>
-            <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  New Transaction
-                </Button>
-              </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create Transaction</DialogTitle>
-                <DialogDescription>Record a transaction for a member</DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleCreateTransaction} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="accountId">Member Account</Label>
-                  <Select 
-                    name="accountId" 
-                    required 
-                    value={selectedAccountForLoan}
-                    onValueChange={(value) => setSelectedAccountForLoan(value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select account" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {members.map((member) => (
-                        <SelectItem key={member.id} value={member.id}>
-                          {member.user.full_name} - {member.account_number}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="type">Transaction Type</Label>
-                  <Select 
-                    name="type" 
-                    required
-                    value={selectedTransactionType}
-                    onValueChange={(value) => setSelectedTransactionType(value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="deposit">Saving Deposit</SelectItem>
-                      <SelectItem value="loan_disbursement">Loan Disbursement</SelectItem>
-                      <SelectItem value="loan_repayment">Loan Repayment</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                
-                {/* Show active loan info when loan_repayment is selected */}
-                {selectedTransactionType === "loan_repayment" && selectedAccountForLoan && (
-                  <div className="space-y-2">
-                    <Label>Active Loan</Label>
-                    {(() => {
-                      const activeLoan = getActiveLoanForAccount(selectedAccountForLoan);
-                      if (activeLoan) {
-                        return (
-                          <div className="p-3 bg-muted rounded-md space-y-1">
-                            <input type="hidden" name="loanId" value={activeLoan.id} />
-                            <p className="text-sm"><span className="font-medium">Loan Amount:</span> UGX {activeLoan.amount.toLocaleString()}</p>
-                            <p className="text-sm"><span className="font-medium">Total (with {activeLoan.interest_rate}% interest):</span> UGX {activeLoan.total_amount.toLocaleString()}</p>
-                            <p className="text-sm font-semibold text-primary"><span className="font-medium">Outstanding Balance:</span> UGX {activeLoan.outstanding_balance.toLocaleString()}</p>
-                            <p className="text-sm text-muted-foreground">Status: {activeLoan.status}</p>
-                          </div>
-                        );
-                      }
-                      return (
-                        <p className="text-sm text-muted-foreground p-3 bg-muted rounded-md">
-                          No active loan found for this account.
-                        </p>
-                      );
-                    })()}
-                  </div>
-                )}
-
-                <div className="space-y-2">
-                  <Label htmlFor="amount">Amount (UGX)</Label>
-                  <Input id="amount" name="amount" type="number" step="0.01" required />
-                  {selectedTransactionType === "loan_repayment" && selectedAccountForLoan && (
-                    <p className="text-xs text-muted-foreground">
-                      Enter partial or full repayment amount
-                    </p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Input id="description" name="description" />
-                </div>
-                <Button 
-                  type="submit" 
-                  className="w-full"
-                  disabled={selectedTransactionType === "loan_repayment" && selectedAccountForLoan && !getActiveLoanForAccount(selectedAccountForLoan)}
-                >
-                  Create Transaction
-                </Button>
-              </form>
-            </DialogContent>
-          </Dialog>
+            </div>
           </div>
         </div>
       </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>TXN ID</TableHead>
-              <TableHead>Date</TableHead>
-              <TableHead>Member</TableHead>
-              <TableHead>Account</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead className="text-right">Amount</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredTransactions.map((transaction) => (
-              <TableRow key={transaction.id}>
-                <TableCell className="font-mono text-xs">{transaction.tnx_id}</TableCell>
-                <TableCell>{format(new Date(transaction.created_at), "MMM dd, yyyy")}</TableCell>
-                <TableCell>{transaction.account.user.full_name}</TableCell>
-                <TableCell>{transaction.account.account_number}</TableCell>
-                <TableCell className="capitalize">{transaction.transaction_type.replace("_", " ")}</TableCell>
-                <TableCell className="text-right">UGX {transaction.amount.toLocaleString()}</TableCell>
-                <TableCell>{transaction.description || "—"}</TableCell>
-                <TableCell>
-                  <Badge variant={
-                    transaction.status === "approved" ? "default" :
-                    transaction.status === "pending" ? "secondary" : "destructive"
-                  }>
-                    {transaction.status}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-2">
-                    {transaction.status === "pending" && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleApprove(
-                            transaction.id,
-                            transaction.account.id,
-                            transaction.amount,
-                            transaction.transaction_type
-                          )}
-                          title="Approve"
-                        >
-                          <Check className="h-4 w-4 text-success" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleReject(transaction.id)}
-                          title="Reject"
-                        >
-                          <X className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </>
-                    )}
-                    {transaction.status === "approved" && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => handleGenerateReceipt(transaction)}
-                        title="Generate Receipt"
-                      >
-                        <FileText className="h-4 w-4 text-primary" />
-                      </Button>
-                    )}
-                    
-                    {/* Delete button for all transactions - admin only */}
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          title="Delete Transaction"
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete Transaction</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            Are you sure you want to delete transaction {transaction.tnx_id}? 
-                            This action cannot be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction 
-                            onClick={() => handleDelete(transaction.id)}
-                            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                          >
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                </TableCell>
+      <CardContent className="p-0 sm:p-4 md:p-6 pt-0">
+        <div className="overflow-x-auto -mx-4 sm:mx-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="whitespace-nowrap">TXN ID</TableHead>
+                <TableHead className="hidden sm:table-cell">Date</TableHead>
+                <TableHead className="whitespace-nowrap">Member</TableHead>
+                <TableHead className="hidden md:table-cell">Account</TableHead>
+                <TableHead className="hidden sm:table-cell">Type</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Amount</TableHead>
+                <TableHead className="hidden lg:table-cell">Description</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-center">Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {filteredTransactions.map((transaction) => (
+                <TableRow key={transaction.id}>
+                  <TableCell className="font-mono text-[9px] sm:text-[10px]">
+                    <div className="flex flex-col">
+                      <span className="truncate max-w-[60px] sm:max-w-none">{transaction.tnx_id}</span>
+                      <span className="text-[9px] sm:hidden text-muted-foreground">
+                        {format(new Date(transaction.created_at), "MMM dd")}
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell text-xs">{format(new Date(transaction.created_at), "MMM dd, yyyy")}</TableCell>
+                  <TableCell>
+                    <span className="truncate max-w-[80px] sm:max-w-[100px] block text-xs sm:text-sm">
+                      {transaction.account.user.full_name}
+                    </span>
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell font-mono text-[10px]">{transaction.account.account_number}</TableCell>
+                  <TableCell className="hidden sm:table-cell">
+                    <span className="capitalize text-[10px] sm:text-xs">
+                      {transaction.transaction_type.replace("_", " ")}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right whitespace-nowrap">
+                    <span className="text-[10px] sm:text-xs font-medium">UGX {transaction.amount.toLocaleString()}</span>
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell">
+                    <span className="truncate max-w-[100px] block text-xs">{transaction.description || "—"}</span>
+                  </TableCell>
+                  <TableCell>
+                    <Badge 
+                      variant={
+                        transaction.status === "approved" ? "default" :
+                        transaction.status === "pending" ? "secondary" : "destructive"
+                      }
+                      className="text-[8px] sm:text-[10px]"
+                    >
+                      {transaction.status}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-0.5 sm:gap-1 justify-center">
+                      {transaction.status === "pending" && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleApprove(
+                              transaction.id,
+                              transaction.account.id,
+                              transaction.amount,
+                              transaction.transaction_type
+                            )}
+                            title="Approve"
+                            className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                          >
+                            <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-success" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleReject(transaction.id)}
+                            title="Reject"
+                            className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                          >
+                            <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-destructive" />
+                          </Button>
+                        </>
+                      )}
+                      {transaction.status === "approved" && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleGenerateReceipt(transaction)}
+                          title="Receipt"
+                          className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                        >
+                          <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                        </Button>
+                      )}
+                      
+                      {/* Delete button for all transactions - admin only */}
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            title="Delete"
+                            className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                          >
+                            <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-destructive" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent className="max-w-[95vw] sm:max-w-md">
+                          <AlertDialogHeader>
+                            <AlertDialogTitle className="text-base sm:text-lg">Delete Transaction</AlertDialogTitle>
+                            <AlertDialogDescription className="text-xs sm:text-sm">
+                              Delete transaction {transaction.tnx_id}? This cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter className="gap-2 sm:gap-0">
+                            <AlertDialogCancel className="h-8 sm:h-9 text-xs sm:text-sm">Cancel</AlertDialogCancel>
+                            <AlertDialogAction 
+                              onClick={() => handleDelete(transaction.id)}
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 h-8 sm:h-9 text-xs sm:text-sm"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
     </div>

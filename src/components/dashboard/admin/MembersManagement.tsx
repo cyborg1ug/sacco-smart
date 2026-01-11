@@ -261,39 +261,39 @@ const MembersManagement = () => {
 
   return (
     <Card>
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <div>
-            <CardTitle>Members & Accounts Management</CardTitle>
-            <CardDescription>View and manage all member accounts with merging capability</CardDescription>
+      <CardHeader className="pb-3 sm:pb-4">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4">
+          <div className="min-w-0">
+            <CardTitle className="text-base sm:text-lg md:text-xl">Members & Accounts</CardTitle>
+            <CardDescription className="text-xs sm:text-sm mt-0.5">Manage all member accounts</CardDescription>
           </div>
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button>
-                <UserPlus className="mr-2 h-4 w-4" />
-                Add Member
+              <Button size="sm" className="w-full sm:w-auto shrink-0">
+                <UserPlus className="h-4 w-4 mr-1.5 sm:mr-2" />
+                <span>Add Member</span>
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-[95vw] sm:max-w-md">
               <DialogHeader>
-                <DialogTitle>Create New Member Account</DialogTitle>
-                <DialogDescription>Add a new member to the SACCO</DialogDescription>
+                <DialogTitle className="text-base sm:text-lg">Create New Member</DialogTitle>
+                <DialogDescription className="text-xs sm:text-sm">Add a new member to the SACCO</DialogDescription>
               </DialogHeader>
-              <form onSubmit={handleCreateMember} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">Full Name</Label>
+              <form onSubmit={handleCreateMember} className="space-y-3 sm:space-y-4">
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label htmlFor="fullName" className="text-xs sm:text-sm">Full Name</Label>
                   <Input id="fullName" name="fullName" required />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email (optional for phone users)</Label>
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label htmlFor="email" className="text-xs sm:text-sm">Email (optional)</Label>
                   <Input id="email" name="email" type="email" />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="phoneNumber">Phone Number</Label>
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label htmlFor="phoneNumber" className="text-xs sm:text-sm">Phone Number</Label>
                   <Input id="phoneNumber" name="phoneNumber" type="tel" placeholder="+256 700 000000" />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="password">Temporary Password</Label>
+                <div className="space-y-1.5 sm:space-y-2">
+                  <Label htmlFor="password" className="text-xs sm:text-sm">Temporary Password</Label>
                   <Input id="password" name="password" type="password" required />
                 </div>
                 <Button type="submit" className="w-full" disabled={creating}>
@@ -305,76 +305,94 @@ const MembersManagement = () => {
           </Dialog>
         </div>
       </CardHeader>
-      <CardContent>
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Account Number</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead>Parent Account</TableHead>
-              <TableHead className="text-right">Balance</TableHead>
-              <TableHead className="text-right">Total Savings</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {accounts.map((account) => (
-              <TableRow key={account.id}>
-                <TableCell className="font-medium">{account.user.full_name}</TableCell>
-                <TableCell>{account.user.email || "—"}</TableCell>
-                <TableCell>{account.user.phone_number || "—"}</TableCell>
-                <TableCell>{account.account_number}</TableCell>
-                <TableCell>
-                  <Badge variant={account.account_type === "main" ? "default" : "secondary"}>
-                    {account.account_type}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  {getParentAccountName(account.parent_account_id) || "—"}
-                </TableCell>
-                <TableCell className="text-right">UGX {account.balance.toLocaleString()}</TableCell>
-                <TableCell className="text-right">UGX {account.total_savings.toLocaleString()}</TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    {account.account_type === "main" && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openSubAccountDialog(account)}
-                          title="Create sub-account"
-                        >
-                          <Plus className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => openMergeDialog(account)}
-                          title="Merge as sub-account of another"
-                        >
-                          <Link className="h-4 w-4" />
-                        </Button>
-                      </>
-                    )}
-                    {account.account_type === "sub" && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleUnmergeAccount(account.id)}
-                        title="Promote to independent account"
-                      >
-                        <ArrowUpRight className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                </TableCell>
+      <CardContent className="p-0 sm:p-4 md:p-6 pt-0">
+        <div className="overflow-x-auto -mx-4 sm:mx-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead className="whitespace-nowrap">Name</TableHead>
+                <TableHead className="hidden md:table-cell">Email</TableHead>
+                <TableHead className="hidden sm:table-cell">Phone</TableHead>
+                <TableHead className="whitespace-nowrap">Account #</TableHead>
+                <TableHead className="hidden sm:table-cell">Type</TableHead>
+                <TableHead className="hidden lg:table-cell">Parent</TableHead>
+                <TableHead className="text-right whitespace-nowrap">Balance</TableHead>
+                <TableHead className="hidden md:table-cell text-right">Savings</TableHead>
+                <TableHead className="text-center">Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {accounts.map((account) => (
+                <TableRow key={account.id}>
+                  <TableCell className="font-medium">
+                    <div className="flex flex-col">
+                      <span className="truncate max-w-[100px] sm:max-w-none">{account.user.full_name}</span>
+                      <span className="text-[10px] sm:hidden text-muted-foreground">{account.account_type}</span>
+                    </div>
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell">
+                    <span className="truncate max-w-[120px] block">{account.user.email || "—"}</span>
+                  </TableCell>
+                  <TableCell className="hidden sm:table-cell">{account.user.phone_number || "—"}</TableCell>
+                  <TableCell className="font-mono text-[10px] sm:text-xs">{account.account_number}</TableCell>
+                  <TableCell className="hidden sm:table-cell">
+                    <Badge variant={account.account_type === "main" ? "default" : "secondary"} className="text-[9px] sm:text-[10px]">
+                      {account.account_type}
+                    </Badge>
+                  </TableCell>
+                  <TableCell className="hidden lg:table-cell">
+                    <span className="truncate max-w-[100px] block text-xs">
+                      {getParentAccountName(account.parent_account_id) || "—"}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-right whitespace-nowrap">
+                    <span className="text-[10px] sm:text-xs">UGX {account.balance.toLocaleString()}</span>
+                  </TableCell>
+                  <TableCell className="hidden md:table-cell text-right whitespace-nowrap">
+                    <span className="text-xs">UGX {account.total_savings.toLocaleString()}</span>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1 justify-center">
+                      {account.account_type === "main" && (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openSubAccountDialog(account)}
+                            title="Create sub-account"
+                            className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                          >
+                            <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => openMergeDialog(account)}
+                            title="Merge as sub-account"
+                            className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                          >
+                            <Link className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                          </Button>
+                        </>
+                      )}
+                      {account.account_type === "sub" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleUnmergeAccount(account.id)}
+                          title="Promote to independent"
+                          className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                        >
+                          <ArrowUpRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
 
       {/* Merge Dialog */}
