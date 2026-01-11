@@ -11,6 +11,7 @@ import { ForgotPasswordDialog } from "@/components/auth/ForgotPasswordDialog";
 import { UpdatePasswordForm } from "@/components/auth/UpdatePasswordForm";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { PasswordInput } from "@/components/ui/password-input";
+import { PasswordStrengthIndicator } from "@/components/auth/PasswordStrengthIndicator";
 
 const Auth = () => {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ const Auth = () => {
   const [isResettingPassword, setIsResettingPassword] = useState(false);
   const [loginMethod, setLoginMethod] = useState<"email" | "phone">("phone");
   const [signupMethod, setSignupMethod] = useState<"email" | "phone">("phone");
+  const [signupPassword, setSignupPassword] = useState("");
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
@@ -321,7 +323,10 @@ const Auth = () => {
                       id="password"
                       name="password"
                       required
+                      value={signupPassword}
+                      onChange={(e) => setSignupPassword(e.target.value)}
                     />
+                    <PasswordStrengthIndicator password={signupPassword} />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -383,7 +388,10 @@ const Auth = () => {
                       id="signup-password"
                       name="password"
                       required
+                      value={signupPassword}
+                      onChange={(e) => setSignupPassword(e.target.value)}
                     />
+                    <PasswordStrengthIndicator password={signupPassword} />
                   </div>
                   <Button type="submit" className="w-full" disabled={loading}>
                     {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
