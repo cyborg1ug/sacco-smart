@@ -33,7 +33,7 @@ const EnhancedMobileNavCard = ({
       <Link to={to}>
         <Card
           className={cn(
-            "group relative overflow-hidden transition-all duration-300 hover:shadow-md active:scale-[0.98]",
+            "group relative overflow-hidden transition-all duration-300 hover:shadow-md active:scale-[0.98] touch-manipulation",
             variant === "primary" && "border-primary/30 bg-primary/5",
             variant === "accent" && "border-accent/30 bg-accent/5"
           )}
@@ -41,11 +41,11 @@ const EnhancedMobileNavCard = ({
           {/* Hover gradient */}
           <div className="absolute inset-0 bg-gradient-to-r from-primary/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none" />
           
-          <CardContent className="flex items-center justify-between p-4">
-            <div className="flex items-center gap-4 min-w-0">
+          <CardContent className="flex items-center justify-between p-3 sm:p-4">
+            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
               <div
                 className={cn(
-                  "shrink-0 w-11 h-11 rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110",
+                  "shrink-0 w-10 h-10 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl flex items-center justify-center transition-transform duration-300 group-hover:scale-110",
                   variant === "primary"
                     ? "bg-primary text-primary-foreground"
                     : variant === "accent"
@@ -53,27 +53,27 @@ const EnhancedMobileNavCard = ({
                     : "bg-primary/10 text-primary"
                 )}
               >
-                <Icon className="h-5 w-5" />
+                <Icon className="h-4 w-4 sm:h-5 sm:w-5" />
               </div>
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="font-semibold truncate group-hover:text-primary transition-colors">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <p className="text-sm sm:text-base font-semibold truncate group-hover:text-primary transition-colors">
                     {title}
                   </p>
                   {badge !== undefined && badge > 0 && (
-                    <span className="shrink-0 bg-destructive text-destructive-foreground rounded-full px-2 py-0.5 text-xs font-medium animate-pulse">
+                    <span className="shrink-0 bg-destructive text-destructive-foreground rounded-full px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs font-medium animate-pulse">
                       {badge}
                     </span>
                   )}
                 </div>
                 {description && (
-                  <p className="text-sm text-muted-foreground truncate mt-0.5">
+                  <p className="text-xs sm:text-sm text-muted-foreground truncate mt-0.5">
                     {description}
                   </p>
                 )}
               </div>
             </div>
-            <ChevronRight className="h-5 w-5 text-muted-foreground shrink-0 transition-transform duration-300 group-hover:translate-x-1 group-hover:text-primary" />
+            <ChevronRight className="h-4 w-4 sm:h-5 sm:w-5 text-muted-foreground shrink-0 transition-transform duration-300 group-hover:translate-x-1 group-hover:text-primary" />
           </CardContent>
         </Card>
       </Link>

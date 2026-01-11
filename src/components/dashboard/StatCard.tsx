@@ -59,7 +59,7 @@ const StatCard = ({
   return (
     <Card
       className={cn(
-        "relative overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5",
+        "relative overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 touch-manipulation",
         styles.border,
         highlighted && "ring-2 ring-primary/50",
         className
@@ -68,42 +68,42 @@ const StatCard = ({
       {/* Subtle gradient overlay */}
       <div className="absolute inset-0 bg-gradient-to-br from-transparent via-transparent to-muted/20 pointer-events-none" />
       
-      <CardContent className="p-4 sm:p-6">
-        <div className="flex items-start justify-between gap-3">
+      <CardContent className="p-3 sm:p-4 md:p-6">
+        <div className="flex items-start justify-between gap-2 sm:gap-3">
           <div className="min-w-0 flex-1">
-            <p className="text-xs sm:text-sm font-medium text-muted-foreground uppercase tracking-wide">
+            <p className="text-[10px] sm:text-xs md:text-sm font-medium text-muted-foreground uppercase tracking-wide leading-tight">
               {title}
             </p>
-            <p className="text-xl sm:text-2xl lg:text-3xl font-bold mt-1 truncate">
+            <p className="text-base sm:text-xl md:text-2xl lg:text-3xl font-bold mt-0.5 sm:mt-1 truncate leading-tight">
               {value}
             </p>
             {subtitle && (
-              <p className="text-xs sm:text-sm text-muted-foreground mt-1 truncate">
+              <p className="text-[10px] sm:text-xs md:text-sm text-muted-foreground mt-0.5 sm:mt-1 truncate">
                 {subtitle}
               </p>
             )}
             {trend && (
-              <div className="flex items-center gap-1 mt-2">
+              <div className="flex items-center gap-1 mt-1 sm:mt-2">
                 <span
                   className={cn(
-                    "text-xs font-medium",
+                    "text-[10px] sm:text-xs font-medium",
                     trend.value >= 0 ? "text-success" : "text-destructive"
                   )}
                 >
                   {trend.value >= 0 ? "↑" : "↓"} {Math.abs(trend.value)}%
                 </span>
-                <span className="text-xs text-muted-foreground">{trend.label}</span>
+                <span className="text-[10px] sm:text-xs text-muted-foreground">{trend.label}</span>
               </div>
             )}
           </div>
           
           <div
             className={cn(
-              "shrink-0 w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center",
+              "shrink-0 w-8 h-8 sm:w-10 sm:h-10 md:w-12 md:h-12 rounded-lg sm:rounded-xl flex items-center justify-center",
               styles.iconBg
             )}
           >
-            <Icon className={cn("h-5 w-5 sm:h-6 sm:w-6", styles.iconColor)} />
+            <Icon className={cn("h-4 w-4 sm:h-5 sm:w-5 md:h-6 md:w-6", styles.iconColor)} />
           </div>
         </div>
       </CardContent>

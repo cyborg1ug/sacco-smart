@@ -25,6 +25,39 @@
 All colors MUST be HSL.
 */
 
+/* Dynamic sizing system using clamp() for fluid responsive typography and spacing */
+:root {
+  /* Fluid typography - scales smoothly between mobile and desktop */
+  --text-xs: clamp(0.65rem, 0.6rem + 0.25vw, 0.75rem);
+  --text-sm: clamp(0.75rem, 0.7rem + 0.3vw, 0.875rem);
+  --text-base: clamp(0.875rem, 0.8rem + 0.4vw, 1rem);
+  --text-lg: clamp(1rem, 0.9rem + 0.5vw, 1.125rem);
+  --text-xl: clamp(1.125rem, 1rem + 0.6vw, 1.25rem);
+  --text-2xl: clamp(1.25rem, 1.1rem + 0.75vw, 1.5rem);
+  --text-3xl: clamp(1.5rem, 1.25rem + 1.25vw, 1.875rem);
+  --text-4xl: clamp(1.75rem, 1.4rem + 1.75vw, 2.25rem);
+  
+  /* Fluid spacing */
+  --space-xs: clamp(0.25rem, 0.2rem + 0.25vw, 0.375rem);
+  --space-sm: clamp(0.375rem, 0.3rem + 0.375vw, 0.5rem);
+  --space-md: clamp(0.5rem, 0.4rem + 0.5vw, 0.75rem);
+  --space-lg: clamp(0.75rem, 0.6rem + 0.75vw, 1rem);
+  --space-xl: clamp(1rem, 0.8rem + 1vw, 1.5rem);
+  --space-2xl: clamp(1.5rem, 1.2rem + 1.5vw, 2rem);
+  
+  /* Fluid icon sizes */
+  --icon-xs: clamp(0.75rem, 0.7rem + 0.25vw, 0.875rem);
+  --icon-sm: clamp(0.875rem, 0.8rem + 0.375vw, 1rem);
+  --icon-md: clamp(1rem, 0.9rem + 0.5vw, 1.25rem);
+  --icon-lg: clamp(1.25rem, 1.1rem + 0.75vw, 1.5rem);
+  --icon-xl: clamp(1.5rem, 1.3rem + 1vw, 2rem);
+  
+  /* Button heights */
+  --btn-height-sm: clamp(1.75rem, 1.6rem + 0.75vw, 2.25rem);
+  --btn-height-md: clamp(2.25rem, 2rem + 1.25vw, 2.75rem);
+  --btn-height-lg: clamp(2.75rem, 2.4rem + 1.75vw, 3.25rem);
+}
+
 @layer base {
   :root {
     --background: 240 4% 95%;
@@ -187,7 +220,103 @@ All colors MUST be HSL.
     @apply border-border;
   }
 
+  html {
+    /* Smooth scrolling */
+    scroll-behavior: smooth;
+    /* Prevent text size adjustment on orientation change */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
     @apply bg-background text-foreground;
+    /* Improve text rendering */
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Fluid base font size */
+    font-size: var(--text-base);
+    line-height: 1.5;
+  }
+
+  /* Touch-friendly tap targets */
+  button, 
+  a, 
+  [role="button"],
+  input[type="checkbox"],
+  input[type="radio"],
+  .interactive {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Exception for inline elements that don't need large tap targets */
+  a.inline-link,
+  button.inline-btn {
+    min-height: auto;
+    min-width: auto;
+  }
+}
+
+/* Utility classes for fluid typography */
+@layer utilities {
+  .text-fluid-xs { font-size: var(--text-xs); }
+  .text-fluid-sm { font-size: var(--text-sm); }
+  .text-fluid-base { font-size: var(--text-base); }
+  .text-fluid-lg { font-size: var(--text-lg); }
+  .text-fluid-xl { font-size: var(--text-xl); }
+  .text-fluid-2xl { font-size: var(--text-2xl); }
+  .text-fluid-3xl { font-size: var(--text-3xl); }
+  .text-fluid-4xl { font-size: var(--text-4xl); }
+  
+  /* Fluid spacing utilities */
+  .p-fluid-xs { padding: var(--space-xs); }
+  .p-fluid-sm { padding: var(--space-sm); }
+  .p-fluid-md { padding: var(--space-md); }
+  .p-fluid-lg { padding: var(--space-lg); }
+  .p-fluid-xl { padding: var(--space-xl); }
+  
+  .gap-fluid-xs { gap: var(--space-xs); }
+  .gap-fluid-sm { gap: var(--space-sm); }
+  .gap-fluid-md { gap: var(--space-md); }
+  .gap-fluid-lg { gap: var(--space-lg); }
+  .gap-fluid-xl { gap: var(--space-xl); }
+
+  /* Fluid icon sizing */
+  .icon-fluid-xs { width: var(--icon-xs); height: var(--icon-xs); }
+  .icon-fluid-sm { width: var(--icon-sm); height: var(--icon-sm); }
+  .icon-fluid-md { width: var(--icon-md); height: var(--icon-md); }
+  .icon-fluid-lg { width: var(--icon-lg); height: var(--icon-lg); }
+  .icon-fluid-xl { width: var(--icon-xl); height: var(--icon-xl); }
+
+  /* Mobile-optimized scrolling */
+  .scroll-smooth-mobile {
+    -webkit-overflow-scrolling: touch;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+  }
+
+  /* Safe area padding for notched devices */
+  .safe-area-inset {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-top: env(safe-area-inset-top);
+  }
+
+  /* Mobile card optimization */
+  .mobile-card {
+    @apply rounded-xl border bg-card shadow-sm;
+    padding: var(--space-md);
+  }
+
+  /* Responsive table wrapper for mobile */
+  .table-responsive {
+    @apply overflow-x-auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Better touch feedback */
+  .touch-feedback {
+    @apply transition-transform active:scale-[0.98];
   }
 }
