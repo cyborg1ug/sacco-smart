@@ -27,6 +27,7 @@ import MemberProfilePage from "./pages/member/MemberProfilePage";
 // Admin pages
 import AdminMembersPage from "./pages/admin/AdminMembersPage";
 import AdminTransactionsPage from "./pages/admin/AdminTransactionsPage";
+import AdminMemberTransactions from "./pages/admin/AdminMemberTransactions";
 import AdminLoansPage from "./pages/admin/AdminLoansPage";
 import AdminWelfarePage from "./pages/admin/AdminWelfarePage";
 import AdminRemindersPage from "./pages/admin/AdminRemindersPage";
@@ -64,6 +65,7 @@ const App = () => (
             {/* Admin routes */}
             <Route path="/admin/members" element={<ProtectedRoute><AdminMembersPage /></ProtectedRoute>} />
             <Route path="/admin/transactions" element={<ProtectedRoute><AdminTransactionsPage /></ProtectedRoute>} />
+            <Route path="/admin/transactions/:accountId" element={<ProtectedRoute><AdminMemberTransactions /></ProtectedRoute>} />
             <Route path="/admin/loans" element={<ProtectedRoute><AdminLoansPage /></ProtectedRoute>} />
             <Route path="/admin/welfare" element={<ProtectedRoute><AdminWelfarePage /></ProtectedRoute>} />
             <Route path="/admin/reminders" element={<ProtectedRoute><AdminRemindersPage /></ProtectedRoute>} />

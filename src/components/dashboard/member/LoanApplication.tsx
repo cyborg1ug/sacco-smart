@@ -45,6 +45,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
   const [members, setMembers] = useState<MemberOption[]>([]);
   const [selectedGuarantor, setSelectedGuarantor] = useState("");
   const [loanAmount, setLoanAmount] = useState("");
+  const [repaymentMonths, setRepaymentMonths] = useState("1");
   const [guarantorError, setGuarantorError] = useState("");
 
   useEffect(() => {
@@ -215,7 +216,10 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
     }
 
     const interestRate = 2.0;
-    const totalAmount = amount + (amount * interestRate / 100);
+    const months = parseInt(repaymentMonths) || 1;
+    // Fixed interest rate per month of loan activity
+    const totalInterest = amount * (interestRate / 100) * months;
+    const totalAmount = amount + totalInterest;
 
     const { error } = await supabase
       .from("loans")
@@ -229,6 +233,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
         guarantor_account_id: selectedGuarantor,
         guarantor_status: "pending",
         max_loan_amount: eligibility.max_loan_amount,
+        repayment_months: months,
       } as any);
 
     if (error) {
@@ -244,6 +249,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
       });
       onApplicationSubmitted();
       setLoanAmount("");
+      setRepaymentMonths("1");
       setSelectedGuarantor("");
     }
 
@@ -343,24 +349,47 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="amount">Loan Amount (UGX)</Label>
-                <Input
-                  id="amount"
-                  name="amount"
-                  type="number"
-                  step="1000"
-                  min="1000"
-                  max={eligibility.max_loan_amount}
+                  <Input
+                    id="amount"
+                    type="number"
+                    step="1000"
+                    min="1000"
+                    max={eligibility.max_loan_amount}
                   placeholder="Enter amount"
                   value={loanAmount}
                   onChange={(e) => setLoanAmount(e.target.value)}
                   required
-                />
-                <p className="text-sm text-muted-foreground">
-                  Interest Rate: 2% | Maximum: UGX {eligibility.max_loan_amount.toLocaleString()}
-                </p>
-              </div>
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Interest Rate: 2% per month | Maximum: UGX {eligibility.max_loan_amount.toLocaleString()}
+                  </p>
+                </div>
 
-              <div className="space-y-2">
+                <div className="space-y-2">
+                  <Label htmlFor="repaymentMonths">Repayment Plan (Months)</Label>
+                  <Select value={repaymentMonths} onValueChange={setRepaymentMonths}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select repayment period" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {[1, 2, 3, 4, 5, 6, 9, 12].map((month) => (
+                        <SelectItem key={month} value={month.toString()}>
+                          {month} month{month > 1 ? "s" : ""}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {loanAmount && repaymentMonths && (
+                    <div className="p-3 bg-muted rounded-md space-y-1 text-sm">
+                      <p><span className="font-medium">Loan Amount:</span> UGX {parseFloat(loanAmount).toLocaleString()}</p>
+                      <p><span className="font-medium">Interest ({repaymentMonths} months @ 2%/mo):</span> UGX {(parseFloat(loanAmount) * 0.02 * parseInt(repaymentMonths)).toLocaleString()}</p>
+                      <p className="font-semibold text-primary"><span className="font-medium">Total Repayment:</span> UGX {(parseFloat(loanAmount) + (parseFloat(loanAmount) * 0.02 * parseInt(repaymentMonths))).toLocaleString()}</p>
+                      <p><span className="font-medium">Monthly Payment:</span> UGX {((parseFloat(loanAmount) + (parseFloat(loanAmount) * 0.02 * parseInt(repaymentMonths))) / parseInt(repaymentMonths)).toLocaleString()}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-2">
                 <Label htmlFor="guarantor">Select Guarantor</Label>
                 <Select value={selectedGuarantor} onValueChange={setSelectedGuarantor}>
                   <SelectTrigger>

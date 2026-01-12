@@ -4,8 +4,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Send, Loader2, Users } from "lucide-react";
+import { Check, X, Send, Loader2, Users, UserPlus, CheckCircle } from "lucide-react";
 import { format } from "date-fns";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MobileCardList, MobileCard } from "@/components/ui/MobileCardList";
@@ -21,6 +24,7 @@ interface Loan {
   guarantor_account_id: string | null;
   guarantor_status: string | null;
   max_loan_amount: number | null;
+  repayment_months: number;
   account: {
     id: string;
     account_number: string;
@@ -44,6 +48,11 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   const { toast } = useToast();
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
+  const [guarantorDialogOpen, setGuarantorDialogOpen] = useState(false);
+  const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
+  const [selectedGuarantor, setSelectedGuarantor] = useState("");
+  const [guarantorCandidates, setGuarantorCandidates] = useState<any[]>([]);
+  const [loadingGuarantors, setLoadingGuarantors] = useState(false);
 
   useEffect(() => {
     loadLoans();
@@ -74,6 +83,114 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
       setLoans(data as any);
     }
     setLoading(false);
+  };
+
+  const loadGuarantorCandidates = async (loanAccountId: string) => {
+    setLoadingGuarantors(true);
+    // Get all accounts except the loan applicant's account
+    const { data: accountsData } = await supabase
+      .from("accounts")
+      .select("id, account_number, user_id, account_type, total_savings");
+
+    if (!accountsData) {
+      setLoadingGuarantors(false);
+      return;
+    }
+
+    // Get loan applicant's savings
+    const loanAccount = accountsData.find(a => a.id === loanAccountId);
+    const minSavings = loanAccount?.total_savings || 0;
+
+    // Filter candidates (must have savings >= applicant's savings, exclude applicant)
+    const eligibleAccounts = accountsData.filter(a => 
+      a.id !== loanAccountId && a.total_savings >= minSavings
+    );
+
+    // Get profiles for main accounts
+    const mainAccountUserIds = [...new Set(eligibleAccounts.filter(a => a.account_type === 'main').map(a => a.user_id))];
+    const subAccountIds = eligibleAccounts.filter(a => a.account_type === 'sub').map(a => a.id);
+
+    const { data: profilesData } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", mainAccountUserIds);
+
+    const { data: subAccountProfilesData } = await supabase
+      .from("sub_account_profiles")
+      .select("account_id, full_name")
+      .in("account_id", subAccountIds);
+
+    const profilesMap = new Map(profilesData?.map(p => [p.id, p.full_name]) || []);
+    const subProfilesMap = new Map(subAccountProfilesData?.map(p => [p.account_id, p.full_name]) || []);
+
+    const candidates = eligibleAccounts.map(a => ({
+      id: a.id,
+      account_number: a.account_number,
+      full_name: a.account_type === 'sub' ? subProfilesMap.get(a.id) : profilesMap.get(a.user_id),
+      total_savings: a.total_savings,
+    }));
+
+    setGuarantorCandidates(candidates);
+    setLoadingGuarantors(false);
+  };
+
+  const openGuarantorDialog = (loan: Loan) => {
+    setSelectedLoan(loan);
+    setSelectedGuarantor(loan.guarantor_account_id || "");
+    loadGuarantorCandidates(loan.account.id);
+    setGuarantorDialogOpen(true);
+  };
+
+  const handleSetGuarantor = async () => {
+    if (!selectedLoan || !selectedGuarantor) return;
+
+    const { error } = await supabase
+      .from("loans")
+      .update({
+        guarantor_account_id: selectedGuarantor,
+        guarantor_status: "pending",
+      })
+      .eq("id", selectedLoan.id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "Guarantor assigned successfully",
+      });
+      setGuarantorDialogOpen(false);
+      loadLoans();
+      onUpdate();
+    }
+  };
+
+  const handleApproveGuarantor = async (loanId: string) => {
+    const { error } = await supabase
+      .from("loans")
+      .update({
+        guarantor_status: "approved",
+      })
+      .eq("id", loanId);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: "Guarantor approved by admin",
+      });
+      loadLoans();
+      onUpdate();
+    }
   };
 
   const handleApprove = async (loan: Loan) => {
@@ -239,7 +356,43 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   const renderLoanActions = (loan: Loan) => {
     if (loan.status === "pending") {
       return (
-        <div className="flex gap-1">
+        <div className="flex gap-1 flex-wrap">
+          {/* Admin guarantor management */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => openGuarantorDialog(loan)}
+                  className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                >
+                  <UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Set/Change Guarantor</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+          
+          {/* Admin approve guarantor */}
+          {loan.guarantor_account_id && loan.guarantor_status === "pending" && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => handleApproveGuarantor(loan.id)}
+                    className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                  >
+                    <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-500" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Approve Guarantor (Admin)</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+          
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -288,8 +441,17 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     return null;
   };
 
+  const calculateMonthlyPayment = (loan: Loan) => {
+    const monthlyInterest = loan.amount * (loan.interest_rate / 100);
+    const totalInterest = monthlyInterest * (loan.repayment_months || 1);
+    const totalWithInterest = loan.amount + totalInterest;
+    const monthlyPayment = totalWithInterest / (loan.repayment_months || 1);
+    return { monthlyPayment, totalInterest, totalWithInterest };
+  };
+
   const renderMobileCard = (loan: Loan) => {
     const statusInfo = getLoanStatusBadge(loan);
+    const { monthlyPayment } = calculateMonthlyPayment(loan);
     
     return (
       <MobileCard
@@ -298,6 +460,7 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
           { label: "Member", value: loan.account.user.full_name },
           { label: "Amount", value: `UGX ${loan.amount.toLocaleString()}` },
           { label: "Outstanding", value: `UGX ${loan.outstanding_balance.toLocaleString()}` },
+          { label: "Repayment Plan", value: `${loan.repayment_months || 1} month(s) @ UGX ${monthlyPayment.toLocaleString()}/mo` },
           { 
             label: "Guarantor", 
             value: loan.guarantor_account ? (
@@ -327,7 +490,8 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
             <TableHead className="hidden lg:table-cell">Guarantor</TableHead>
             <TableHead className="hidden sm:table-cell">G. Status</TableHead>
             <TableHead className="text-right whitespace-nowrap">Amount</TableHead>
-            <TableHead className="hidden md:table-cell text-right">Interest</TableHead>
+            <TableHead className="hidden md:table-cell text-right">Rate/Mo</TableHead>
+            <TableHead className="hidden sm:table-cell text-center">Plan</TableHead>
             <TableHead className="hidden lg:table-cell text-right">Total</TableHead>
             <TableHead className="text-right whitespace-nowrap">Outstanding</TableHead>
             <TableHead>Status</TableHead>
@@ -337,6 +501,7 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
         <TableBody>
           {loans.map((loan) => {
             const statusInfo = getLoanStatusBadge(loan);
+            const { monthlyPayment } = calculateMonthlyPayment(loan);
             return (
               <TableRow key={loan.id}>
                 <TableCell className="text-xs whitespace-nowrap">
@@ -375,7 +540,21 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
                   UGX {loan.amount.toLocaleString()}
                 </TableCell>
                 <TableCell className="hidden md:table-cell text-right text-xs">
-                  {loan.interest_rate}%
+                  {loan.interest_rate}%/mo
+                </TableCell>
+                <TableCell className="hidden sm:table-cell text-center text-xs">
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <Badge variant="outline" className="text-[9px]">
+                          {loan.repayment_months || 1} mo
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        UGX {monthlyPayment.toLocaleString()}/month
+                      </TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
                 </TableCell>
                 <TableCell className="hidden lg:table-cell text-right text-xs">
                   UGX {loan.total_amount.toLocaleString()}
@@ -422,6 +601,54 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
         />
       </CardContent>
     </Card>
+
+    {/* Guarantor Management Dialog */}
+    <Dialog open={guarantorDialogOpen} onOpenChange={setGuarantorDialogOpen}>
+      <DialogContent className="max-w-[95vw] sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-base sm:text-lg">Manage Guarantor</DialogTitle>
+          <DialogDescription className="text-xs sm:text-sm">
+            Assign or change guarantor for {selectedLoan?.account.user.full_name}'s loan
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          {loadingGuarantors ? (
+            <div className="flex justify-center p-4">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label>Select Guarantor</Label>
+                <Select value={selectedGuarantor} onValueChange={setSelectedGuarantor}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Choose a guarantor" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {guarantorCandidates.map((candidate) => (
+                      <SelectItem key={candidate.id} value={candidate.id}>
+                        {candidate.full_name} ({candidate.account_number}) - UGX {candidate.total_savings.toLocaleString()}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {guarantorCandidates.length === 0 && (
+                  <p className="text-xs text-muted-foreground">No eligible guarantors found</p>
+                )}
+              </div>
+              <Button 
+                onClick={handleSetGuarantor} 
+                className="w-full"
+                disabled={!selectedGuarantor}
+              >
+                <Users className="mr-2 h-4 w-4" />
+                Assign Guarantor
+              </Button>
+            </>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 };
 

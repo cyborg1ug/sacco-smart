@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -11,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Plus, Loader2, FileText, Banknote, TrendingUp, TrendingDown, CreditCard, Wallet, CalendarIcon, Trash2 } from "lucide-react";
+import { Check, X, Plus, Loader2, FileText, Banknote, TrendingUp, TrendingDown, CreditCard, Wallet, CalendarIcon, Trash2, Users, Eye } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import { generateTransactionReceiptPDF } from "@/lib/pdfGenerator";
@@ -65,6 +66,7 @@ interface TransactionsManagementProps {
 
 const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const isMobile = useIsMobile();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -989,9 +991,13 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
                   </TableCell>
                   <TableCell className="hidden sm:table-cell text-xs">{format(new Date(transaction.created_at), "MMM dd, yyyy")}</TableCell>
                   <TableCell>
-                    <span className="truncate max-w-[80px] sm:max-w-[100px] block text-xs sm:text-sm">
+                    <Button 
+                      variant="link" 
+                      className="p-0 h-auto truncate max-w-[80px] sm:max-w-[100px] text-xs sm:text-sm"
+                      onClick={() => navigate(`/admin/transactions/${transaction.account.id}`)}
+                    >
                       {transaction.account.user.full_name}
-                    </span>
+                    </Button>
                   </TableCell>
                   <TableCell className="hidden md:table-cell font-mono text-[10px]">{transaction.account.account_number}</TableCell>
                   <TableCell className="hidden sm:table-cell">
