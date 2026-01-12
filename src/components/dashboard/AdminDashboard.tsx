@@ -11,8 +11,11 @@ import {
   BarChart3,
   CreditCard,
   Clock,
+  UserPlus,
+  Plus,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import DashboardHeader from "./DashboardHeader";
 import EnhancedMobileNavCard from "./EnhancedMobileNavCard";
@@ -24,9 +27,11 @@ import StatementsGeneration from "./admin/StatementsGeneration";
 import ReportsGeneration from "./admin/ReportsGeneration";
 import AlertsReminders from "./admin/AlertsReminders";
 import WelfareManagement from "./admin/WelfareManagement";
+import FloatingActionButton from "@/components/ui/FloatingActionButton";
 
 const AdminDashboard = () => {
   const isMobile = useIsMobile();
+  const navigate = useNavigate();
   const [stats, setStats] = useState({
     totalMembers: 0,
     totalSavings: 0,
@@ -275,6 +280,29 @@ const AdminDashboard = () => {
               </TabsContent>
             </Tabs>
           </motion.div>
+        )}
+
+        {/* Floating Action Button for Mobile */}
+        {isMobile && (
+          <FloatingActionButton
+            actions={[
+              {
+                icon: UserPlus,
+                label: "Add Member",
+                onClick: () => navigate("/admin/members"),
+              },
+              {
+                icon: Plus,
+                label: "New Transaction",
+                onClick: () => navigate("/admin/transactions"),
+              },
+              {
+                icon: TrendingUp,
+                label: "Manage Loans",
+                onClick: () => navigate("/admin/loans"),
+              },
+            ]}
+          />
         )}
       </div>
     </div>
