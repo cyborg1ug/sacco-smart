@@ -16,6 +16,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import { generateTransactionReceiptPDF } from "@/lib/pdfGenerator";
 import { cn } from "@/lib/utils";
+import { MobileCardList, MobileCard } from "@/components/ui/MobileCardList";
+import FloatingActionButton from "@/components/ui/FloatingActionButton";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface Transaction {
   id: string;
@@ -62,6 +65,7 @@ interface TransactionsManagementProps {
 
 const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -73,7 +77,6 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
   const [customDateTo, setCustomDateTo] = useState<Date | undefined>();
   const [selectedAccountForLoan, setSelectedAccountForLoan] = useState<string>("");
   const [selectedTransactionType, setSelectedTransactionType] = useState<string>("");
-
   useEffect(() => {
     loadTransactions();
     loadMembers();
@@ -191,11 +194,11 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
   };
 
   const loadActiveLoans = async () => {
-    // Load all active (approved or disbursed) loans with outstanding balance > 0
+    // Load all active (approved, disbursed, or active) loans with outstanding balance > 0
     const { data: loansData } = await supabase
       .from("loans")
       .select("id, account_id, amount, total_amount, outstanding_balance, interest_rate, status")
-      .in("status", ["approved", "disbursed"])
+      .in("status", ["approved", "disbursed", "active"])
       .gt("outstanding_balance", 0);
 
     if (!loansData) return;
@@ -251,7 +254,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
     return activeLoans.find(loan => loan.account_id === accountId);
   };
 
-  const handleApprove = async (transactionId: string, accountId: string, amount: number, type: string) => {
+  const handleApprove = async (transactionId: string, accountId: string, amount: number, type: string, loanId?: string | null) => {
     const { data: { user } } = await supabase.auth.getUser();
 
     const { data: account } = await supabase
@@ -302,6 +305,37 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
       return;
     }
 
+    // If this is a loan repayment, update the loan's outstanding balance
+    if (type === "loan_repayment" && loanId) {
+      const { data: loan } = await supabase
+        .from("loans")
+        .select("outstanding_balance")
+        .eq("id", loanId)
+        .single();
+
+      if (loan) {
+        const newOutstanding = Math.max(0, loan.outstanding_balance - amount);
+        const newStatus = newOutstanding <= 0 ? "completed" : undefined;
+
+        const updateData: any = { outstanding_balance: newOutstanding };
+        if (newStatus) {
+          updateData.status = newStatus;
+        }
+
+        await supabase
+          .from("loans")
+          .update(updateData)
+          .eq("id", loanId);
+
+        if (newOutstanding <= 0) {
+          toast({
+            title: "Loan Completed",
+            description: "This loan has been fully repaid",
+          });
+        }
+      }
+    }
+
     const { error } = await supabase
       .from("transactions")
       .update({
@@ -336,6 +370,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
       });
       
       loadTransactions();
+      loadActiveLoans();
       onUpdate();
     }
   };
@@ -992,7 +1027,8 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
                               transaction.id,
                               transaction.account.id,
                               transaction.amount,
-                              transaction.transaction_type
+                              transaction.transaction_type,
+                              transaction.loan_id
                             )}
                             title="Approve"
                             className="h-7 w-7 sm:h-8 sm:w-8 p-0"
@@ -1061,6 +1097,25 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
         </div>
       </CardContent>
     </Card>
+    
+    {/* Floating Action Button for Mobile */}
+    {isMobile && (
+      <FloatingActionButton
+        actions={[
+          {
+            icon: Banknote,
+            label: "Withdraw",
+            onClick: () => setWithdrawalDialogOpen(true),
+            variant: "warning",
+          },
+          {
+            icon: Plus,
+            label: "New Transaction",
+            onClick: () => setDialogOpen(true),
+          },
+        ]}
+      />
+    )}
     </div>
   );
 };
