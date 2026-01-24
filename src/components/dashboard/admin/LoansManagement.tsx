@@ -585,7 +585,8 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   }
 
   return (
-    <Card>
+    <>
+      <Card>
       <CardHeader className="pb-3 sm:pb-4">
         <CardTitle className="text-base sm:text-lg md:text-xl">Loans Management</CardTitle>
         <CardDescription className="text-xs sm:text-sm">
@@ -600,9 +601,9 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
           emptyMessage="No loan applications found"
         />
       </CardContent>
-    </Card>
+      </Card>
 
-    {/* Guarantor Management Dialog */}
+      {/* Guarantor Management Dialog */}
     <Dialog open={guarantorDialogOpen} onOpenChange={setGuarantorDialogOpen}>
       <DialogContent className="max-w-[95vw] sm:max-w-md">
         <DialogHeader>
@@ -647,8 +648,9 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
             </>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 };
 
