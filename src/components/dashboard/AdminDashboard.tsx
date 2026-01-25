@@ -28,6 +28,7 @@ import ReportsGeneration from "./admin/ReportsGeneration";
 import AlertsReminders from "./admin/AlertsReminders";
 import WelfareManagement from "./admin/WelfareManagement";
 import FloatingActionButton from "@/components/ui/FloatingActionButton";
+import LoanCompletionChart from "./charts/LoanCompletionChart";
 
 const AdminDashboard = () => {
   const isMobile = useIsMobile();
@@ -164,7 +165,14 @@ const AdminDashboard = () => {
           />
         </motion.div>
 
-        {/* Mobile: Navigation Cards / Desktop: Tabs */}
+        {/* Loan Completion Chart */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.15 }}
+        >
+          <LoanCompletionChart isAdmin />
+        </motion.div>
         {isMobile ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
