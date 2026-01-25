@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { UserPlus, Loader2, Link, Unlink, Plus, ArrowUpRight, Eye } from "lucide-react";
+import { UserPlus, Loader2, Link, Unlink, Plus, ArrowUpRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface Account {
@@ -318,8 +318,6 @@ const MembersManagement = () => {
                 <TableHead className="whitespace-nowrap">Account #</TableHead>
                 <TableHead className="hidden sm:table-cell">Type</TableHead>
                 <TableHead className="hidden lg:table-cell">Parent</TableHead>
-                <TableHead className="text-right whitespace-nowrap">Balance</TableHead>
-                <TableHead className="hidden md:table-cell text-right">Savings</TableHead>
                 <TableHead className="text-center">Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -327,10 +325,16 @@ const MembersManagement = () => {
               {accounts.map((account) => (
                 <TableRow key={account.id}>
                   <TableCell className="font-medium">
-                    <div className="flex flex-col">
-                      <span className="truncate max-w-[100px] sm:max-w-none">{account.user.full_name}</span>
-                      <span className="text-[10px] sm:hidden text-muted-foreground">{account.account_type}</span>
-                    </div>
+                    <Button 
+                      variant="link" 
+                      className="p-0 h-auto text-left"
+                      onClick={() => navigate(`/admin/members/${account.id}`)}
+                    >
+                      <div className="flex flex-col">
+                        <span className="truncate max-w-[100px] sm:max-w-none">{account.user.full_name}</span>
+                        <span className="text-[10px] sm:hidden text-muted-foreground">{account.account_type}</span>
+                      </div>
+                    </Button>
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
                     <span className="truncate max-w-[120px] block">{account.user.email || "—"}</span>
@@ -347,24 +351,8 @@ const MembersManagement = () => {
                       {getParentAccountName(account.parent_account_id) || "—"}
                     </span>
                   </TableCell>
-                  <TableCell className="text-right whitespace-nowrap">
-                    <span className="text-[10px] sm:text-xs">UGX {account.balance.toLocaleString()}</span>
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell text-right whitespace-nowrap">
-                    <span className="text-xs">UGX {account.total_savings.toLocaleString()}</span>
-                  </TableCell>
                   <TableCell>
                     <div className="flex gap-1 justify-center">
-                      {/* View Details Button */}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => navigate(`/admin/members/${account.id}`)}
-                        title="View details"
-                        className="h-7 w-7 sm:h-8 sm:w-8 p-0"
-                      >
-                        <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
-                      </Button>
                       {account.account_type === "main" && (
                         <>
                           <Button

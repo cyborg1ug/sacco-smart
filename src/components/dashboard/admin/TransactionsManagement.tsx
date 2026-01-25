@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Plus, Loader2, FileText, Banknote, TrendingUp, TrendingDown, CreditCard, Wallet, CalendarIcon, Trash2, Users, Eye } from "lucide-react";
+import { Check, X, Plus, Loader2, FileText, Banknote, TrendingUp, TrendingDown, CreditCard, Wallet, CalendarIcon, Trash2, Users, Edit } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import { generateTransactionReceiptPDF } from "@/lib/pdfGenerator";
@@ -32,6 +32,7 @@ interface Transaction {
   created_at: string;
   approved_at: string | null;
   loan_id: string | null;
+  receipt_number: string | null;
   account: {
     id: string;
     account_number: string;
@@ -72,6 +73,9 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [withdrawalDialogOpen, setWithdrawalDialogOpen] = useState(false);
+  const [receiptNumberDialogOpen, setReceiptNumberDialogOpen] = useState(false);
+  const [selectedTransactionForReceipt, setSelectedTransactionForReceipt] = useState<Transaction | null>(null);
+  const [receiptNumberInput, setReceiptNumberInput] = useState("");
   const [members, setMembers] = useState<any[]>([]);
   const [activeLoans, setActiveLoans] = useState<ActiveLoan[]>([]);
   const [dateFilter, setDateFilter] = useState<string>("all");
@@ -502,7 +506,6 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
     const amount = parseFloat(formData.get("amount") as string);
     const description = formData.get("description") as string;
     const loanId = formData.get("loanId") as string | null;
-    const receiptNumber = formData.get("receiptNumber") as string | null;
 
     const { data: account } = await supabase
       .from("accounts")
@@ -535,7 +538,6 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
         balance_after: account.balance,
         status: "pending",
         loan_id: type === "loan_repayment" && loanId ? loanId : null,
-        receipt_number: receiptNumber || null,
       } as any);
 
     if (error) {
@@ -641,6 +643,36 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
       title: "Receipt Generated",
       description: `Receipt for transaction ${transaction.tnx_id} has been downloaded.`,
     });
+  };
+
+  const openReceiptNumberDialog = (transaction: Transaction) => {
+    setSelectedTransactionForReceipt(transaction);
+    setReceiptNumberInput("");
+    setReceiptNumberDialogOpen(true);
+  };
+
+  const handleAddReceiptNumber = async () => {
+    if (!selectedTransactionForReceipt || !receiptNumberInput.trim()) return;
+
+    const { error } = await supabase
+      .from("transactions")
+      .update({ receipt_number: receiptNumberInput.trim() })
+      .eq("id", selectedTransactionForReceipt.id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: `Receipt number added to transaction ${selectedTransactionForReceipt.tnx_id}`,
+      });
+      setReceiptNumberDialogOpen(false);
+      loadTransactions();
+    }
   };
 
   // Filter transactions by date range
@@ -1016,10 +1048,6 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
                     <Label htmlFor="description" className="text-xs sm:text-sm">Description</Label>
                     <Input id="description" name="description" />
                   </div>
-                  <div className="space-y-1.5 sm:space-y-2">
-                    <Label htmlFor="receiptNumber" className="text-xs sm:text-sm">Receipt Number (Optional)</Label>
-                    <Input id="receiptNumber" name="receiptNumber" placeholder="Manual receipt book reference" />
-                  </div>
                   <Button 
                     type="submit" 
                     className="w-full"
@@ -1125,15 +1153,26 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
                         </>
                       )}
                       {transaction.status === "approved" && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => handleGenerateReceipt(transaction)}
-                          title="Receipt"
-                          className="h-7 w-7 sm:h-8 sm:w-8 p-0"
-                        >
-                          <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
-                        </Button>
+                        <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => handleGenerateReceipt(transaction)}
+                            title="Receipt"
+                            className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                          >
+                            <FileText className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => openReceiptNumberDialog(transaction)}
+                            title="Add Receipt #"
+                            className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                          >
+                            <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground" />
+                          </Button>
+                        </>
                       )}
                       
                       {/* Delete button for all transactions - admin only */}
@@ -1194,6 +1233,43 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
         ]}
       />
     )}
+
+    {/* Receipt Number Dialog */}
+    <Dialog open={receiptNumberDialogOpen} onOpenChange={setReceiptNumberDialogOpen}>
+      <DialogContent className="max-w-[95vw] sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-base sm:text-lg">Add Receipt Number</DialogTitle>
+          <DialogDescription className="text-xs sm:text-sm">
+            Add manual receipt book reference for transaction {selectedTransactionForReceipt?.tnx_id}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4">
+          {selectedTransactionForReceipt && (
+            <div className="p-3 bg-muted rounded-md space-y-1 text-sm">
+              <p><span className="font-medium">Member:</span> {selectedTransactionForReceipt.account.user.full_name}</p>
+              <p><span className="font-medium">Type:</span> {selectedTransactionForReceipt.transaction_type.replace("_", " ")}</p>
+              <p><span className="font-medium">Amount:</span> UGX {selectedTransactionForReceipt.amount.toLocaleString()}</p>
+            </div>
+          )}
+          <div className="space-y-2">
+            <Label>Receipt Number</Label>
+            <Input 
+              placeholder="e.g., RB-001234"
+              value={receiptNumberInput}
+              onChange={(e) => setReceiptNumberInput(e.target.value)}
+            />
+          </div>
+          <Button 
+            onClick={handleAddReceiptNumber} 
+            className="w-full"
+            disabled={!receiptNumberInput.trim()}
+          >
+            <Edit className="mr-2 h-4 w-4" />
+            Add Receipt Number
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
     </div>
   );
 };

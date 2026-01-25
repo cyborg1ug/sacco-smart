@@ -5,10 +5,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Send, Loader2, Users, UserPlus, CheckCircle } from "lucide-react";
+import { Check, X, Send, Loader2, Users, UserPlus, CheckCircle, Edit } from "lucide-react";
 import { format } from "date-fns";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MobileCardList, MobileCard } from "@/components/ui/MobileCardList";
@@ -49,10 +50,12 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
   const [guarantorDialogOpen, setGuarantorDialogOpen] = useState(false);
+  const [editTermsDialogOpen, setEditTermsDialogOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [selectedGuarantor, setSelectedGuarantor] = useState("");
   const [guarantorCandidates, setGuarantorCandidates] = useState<any[]>([]);
   const [loadingGuarantors, setLoadingGuarantors] = useState(false);
+  const [newRepaymentMonths, setNewRepaymentMonths] = useState<number>(1);
 
   useEffect(() => {
     loadLoans();
@@ -317,6 +320,50 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     }
   };
 
+  const openEditTermsDialog = (loan: Loan) => {
+    setSelectedLoan(loan);
+    setNewRepaymentMonths(loan.repayment_months || 1);
+    setEditTermsDialogOpen(true);
+  };
+
+  const handleUpdateRepaymentTerms = async () => {
+    if (!selectedLoan) return;
+
+    // Recalculate total amount with new repayment months
+    const monthlyInterest = selectedLoan.amount * (selectedLoan.interest_rate / 100);
+    const totalInterest = monthlyInterest * newRepaymentMonths;
+    const newTotalAmount = selectedLoan.amount + totalInterest;
+    
+    // Calculate new outstanding based on how much has been repaid
+    const alreadyRepaid = selectedLoan.total_amount - selectedLoan.outstanding_balance;
+    const newOutstanding = Math.max(0, newTotalAmount - alreadyRepaid);
+
+    const { error } = await supabase
+      .from("loans")
+      .update({
+        repayment_months: newRepaymentMonths,
+        total_amount: newTotalAmount,
+        outstanding_balance: newOutstanding,
+      })
+      .eq("id", selectedLoan.id);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive",
+      });
+    } else {
+      toast({
+        title: "Success",
+        description: `Repayment terms updated to ${newRepaymentMonths} month(s)`,
+      });
+      setEditTermsDialogOpen(false);
+      loadLoans();
+      onUpdate();
+    }
+  };
+
   const getGuarantorStatusBadge = (status: string | null) => {
     if (!status || status === "none") return null;
     return (
@@ -435,6 +482,27 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
           <Send className="mr-1 sm:mr-1.5 h-3 w-3 sm:h-3.5 sm:w-3.5" />
           Disburse
         </Button>
+      );
+    }
+    
+    // For active/disbursed loans, show edit terms button
+    if ((loan.status === "active" || loan.status === "disbursed") && loan.outstanding_balance > 0) {
+      return (
+        <TooltipProvider>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => openEditTermsDialog(loan)}
+                className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+              >
+                <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Edit Repayment Terms</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       );
     }
     
@@ -648,6 +716,53 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
             </>
           )}
         </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Repayment Terms Dialog */}
+      <Dialog open={editTermsDialogOpen} onOpenChange={setEditTermsDialogOpen}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg">Edit Repayment Terms</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              Update repayment duration for {selectedLoan?.account.user.full_name}'s loan
+            </DialogDescription>
+          </DialogHeader>
+          {selectedLoan && (
+            <div className="space-y-4">
+              <div className="p-3 bg-muted rounded-md space-y-1 text-sm">
+                <p><span className="font-medium">Loan Amount:</span> UGX {selectedLoan.amount.toLocaleString()}</p>
+                <p><span className="font-medium">Interest Rate:</span> {selectedLoan.interest_rate}% per month</p>
+                <p><span className="font-medium">Current Term:</span> {selectedLoan.repayment_months || 1} month(s)</p>
+                <p><span className="font-medium">Outstanding:</span> UGX {selectedLoan.outstanding_balance.toLocaleString()}</p>
+              </div>
+              <div className="space-y-2">
+                <Label>New Repayment Duration (Months)</Label>
+                <Input 
+                  type="number" 
+                  min="1" 
+                  max="36"
+                  value={newRepaymentMonths}
+                  onChange={(e) => setNewRepaymentMonths(parseInt(e.target.value) || 1)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  New monthly payment: UGX {(() => {
+                    const monthlyInterest = selectedLoan.amount * (selectedLoan.interest_rate / 100);
+                    const totalInterest = monthlyInterest * newRepaymentMonths;
+                    const newTotal = selectedLoan.amount + totalInterest;
+                    return (newTotal / newRepaymentMonths).toLocaleString();
+                  })()}
+                </p>
+              </div>
+              <Button 
+                onClick={handleUpdateRepaymentTerms} 
+                className="w-full"
+              >
+                <Edit className="mr-2 h-4 w-4" />
+                Update Terms
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </>
