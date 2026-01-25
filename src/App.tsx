@@ -26,6 +26,7 @@ import MemberProfilePage from "./pages/member/MemberProfilePage";
 
 // Admin pages
 import AdminMembersPage from "./pages/admin/AdminMembersPage";
+import AdminMemberDetails from "./pages/admin/AdminMemberDetails";
 import AdminTransactionsPage from "./pages/admin/AdminTransactionsPage";
 import AdminMemberTransactions from "./pages/admin/AdminMemberTransactions";
 import AdminLoansPage from "./pages/admin/AdminLoansPage";
@@ -64,6 +65,7 @@ const App = () => (
             
             {/* Admin routes */}
             <Route path="/admin/members" element={<ProtectedRoute><AdminMembersPage /></ProtectedRoute>} />
+            <Route path="/admin/members/:accountId" element={<ProtectedRoute><AdminMemberDetails /></ProtectedRoute>} />
             <Route path="/admin/transactions" element={<ProtectedRoute><AdminTransactionsPage /></ProtectedRoute>} />
             <Route path="/admin/transactions/:accountId" element={<ProtectedRoute><AdminMemberTransactions /></ProtectedRoute>} />
             <Route path="/admin/loans" element={<ProtectedRoute><AdminLoansPage /></ProtectedRoute>} />

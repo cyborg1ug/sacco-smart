@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -8,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { UserPlus, Loader2, Link, Unlink, Plus, ArrowUpRight } from "lucide-react";
+import { UserPlus, Loader2, Link, Unlink, Plus, ArrowUpRight, Eye } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface Account {
@@ -28,6 +29,7 @@ interface Account {
 
 const MembersManagement = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -353,6 +355,16 @@ const MembersManagement = () => {
                   </TableCell>
                   <TableCell>
                     <div className="flex gap-1 justify-center">
+                      {/* View Details Button */}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => navigate(`/admin/members/${account.id}`)}
+                        title="View details"
+                        className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                      >
+                        <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                      </Button>
                       {account.account_type === "main" && (
                         <>
                           <Button

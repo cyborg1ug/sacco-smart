@@ -406,6 +406,71 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
   };
 
   const handleDelete = async (transactionId: string) => {
+    // First get the transaction details to reverse the balance changes if it was approved
+    const { data: transaction } = await supabase
+      .from("transactions")
+      .select("*")
+      .eq("id", transactionId)
+      .single();
+
+    if (!transaction) {
+      toast({
+        title: "Error",
+        description: "Transaction not found",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // If transaction was approved, reverse the balance changes
+    if (transaction.status === "approved") {
+      const { data: account } = await supabase
+        .from("accounts")
+        .select("balance, total_savings")
+        .eq("id", transaction.account_id)
+        .single();
+
+      if (account) {
+        let newBalance = account.balance;
+        let newTotalSavings = account.total_savings;
+
+        // Reverse the transaction effect
+        if (transaction.transaction_type === "deposit") {
+          newBalance -= transaction.amount;
+          newTotalSavings -= transaction.amount;
+        } else if (transaction.transaction_type === "withdrawal") {
+          newBalance += transaction.amount;
+        } else if (transaction.transaction_type === "loan_disbursement") {
+          newBalance -= transaction.amount;
+        } else if (transaction.transaction_type === "loan_repayment") {
+          newBalance += transaction.amount;
+          // Also reverse the loan outstanding balance change
+          if (transaction.loan_id) {
+            const { data: loan } = await supabase
+              .from("loans")
+              .select("outstanding_balance, status")
+              .eq("id", transaction.loan_id)
+              .single();
+            
+            if (loan) {
+              await supabase
+                .from("loans")
+                .update({ 
+                  outstanding_balance: loan.outstanding_balance + transaction.amount,
+                  status: "active" // Revert to active if it was completed
+                })
+                .eq("id", transaction.loan_id);
+            }
+          }
+        }
+
+        await supabase
+          .from("accounts")
+          .update({ balance: newBalance, total_savings: newTotalSavings })
+          .eq("id", transaction.account_id);
+      }
+    }
+
     const { error } = await supabase
       .from("transactions")
       .delete()
@@ -420,9 +485,10 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
     } else {
       toast({
         title: "Success",
-        description: "Transaction deleted successfully",
+        description: "Transaction deleted and balances updated",
       });
       loadTransactions();
+      loadActiveLoans();
       onUpdate();
     }
   };
@@ -436,6 +502,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
     const amount = parseFloat(formData.get("amount") as string);
     const description = formData.get("description") as string;
     const loanId = formData.get("loanId") as string | null;
+    const receiptNumber = formData.get("receiptNumber") as string | null;
 
     const { data: account } = await supabase
       .from("accounts")
@@ -468,6 +535,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
         balance_after: account.balance,
         status: "pending",
         loan_id: type === "loan_repayment" && loanId ? loanId : null,
+        receipt_number: receiptNumber || null,
       } as any);
 
     if (error) {
@@ -947,6 +1015,10 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
                   <div className="space-y-1.5 sm:space-y-2">
                     <Label htmlFor="description" className="text-xs sm:text-sm">Description</Label>
                     <Input id="description" name="description" />
+                  </div>
+                  <div className="space-y-1.5 sm:space-y-2">
+                    <Label htmlFor="receiptNumber" className="text-xs sm:text-sm">Receipt Number (Optional)</Label>
+                    <Input id="receiptNumber" name="receiptNumber" placeholder="Manual receipt book reference" />
                   </div>
                   <Button 
                     type="submit" 
