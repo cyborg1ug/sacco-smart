@@ -303,6 +303,7 @@ export type Database = {
           description: string | null
           id: string
           loan_id: string | null
+          receipt_number: string | null
           status: string
           tnx_id: string
           transaction_type: string
@@ -317,6 +318,7 @@ export type Database = {
           description?: string | null
           id?: string
           loan_id?: string | null
+          receipt_number?: string | null
           status?: string
           tnx_id: string
           transaction_type: string
@@ -331,6 +333,7 @@ export type Database = {
           description?: string | null
           id?: string
           loan_id?: string | null
+          receipt_number?: string | null
           status?: string
           tnx_id?: string
           transaction_type?: string

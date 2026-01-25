@@ -21,26 +21,31 @@ const variantStyles = {
     iconBg: "bg-muted",
     iconColor: "text-muted-foreground",
     border: "",
+    cardBg: "",
   },
   primary: {
     iconBg: "bg-primary/10",
     iconColor: "text-primary",
-    border: "border-primary/20",
+    border: "border-l-4 border-l-primary",
+    cardBg: "bg-gradient-to-br from-primary/5 to-transparent",
   },
   success: {
     iconBg: "bg-success/10",
     iconColor: "text-success",
-    border: "border-success/20",
+    border: "border-l-4 border-l-success",
+    cardBg: "bg-gradient-to-br from-success/5 to-transparent",
   },
   warning: {
     iconBg: "bg-warning/10",
     iconColor: "text-warning",
-    border: "border-warning/20",
+    border: "border-l-4 border-l-warning",
+    cardBg: "bg-gradient-to-br from-warning/5 to-transparent",
   },
   info: {
     iconBg: "bg-blue-500/10",
     iconColor: "text-blue-500",
-    border: "border-blue-500/20",
+    border: "border-l-4 border-l-blue-500",
+    cardBg: "bg-gradient-to-br from-blue-500/5 to-transparent",
   },
 };
 
@@ -61,6 +66,7 @@ const StatCard = ({
       className={cn(
         "relative overflow-hidden transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 touch-manipulation",
         styles.border,
+        styles.cardBg,
         highlighted && "ring-2 ring-primary/50",
         className
       )}

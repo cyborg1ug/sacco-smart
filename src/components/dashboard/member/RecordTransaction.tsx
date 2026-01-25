@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Info, CreditCard } from "lucide-react";
+import { Loader2, Info, CreditCard, Wallet } from "lucide-react";
 
 interface RecordTransactionProps {
   onTransactionRecorded: () => void;
@@ -23,10 +23,20 @@ interface ActiveLoan {
   status: string;
 }
 
+interface AccountOption {
+  id: string;
+  account_number: string;
+  balance: number;
+  total_savings: number;
+  account_type: string;
+  full_name: string;
+}
+
 const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [accountId, setAccountId] = useState("");
+  const [myAccounts, setMyAccounts] = useState<AccountOption[]>([]);
+  const [selectedAccountId, setSelectedAccountId] = useState("");
   const [currentBalance, setCurrentBalance] = useState(0);
   const [transactionType, setTransactionType] = useState("");
   const [activeLoan, setActiveLoan] = useState<ActiveLoan | null>(null);
@@ -37,38 +47,83 @@ const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) =>
   }, []);
 
   useEffect(() => {
-    if (accountId) {
+    if (selectedAccountId) {
+      const account = myAccounts.find(a => a.id === selectedAccountId);
+      if (account) {
+        setCurrentBalance(account.balance);
+      }
       loadActiveLoan();
     }
-  }, [accountId]);
+  }, [selectedAccountId, myAccounts]);
 
   const loadAccountData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     
-    if (user) {
-      // Use maybeSingle to avoid errors if no account exists
-      const { data: account } = await supabase
-        .from("accounts")
-        .select("id, balance, total_savings")
-        .eq("user_id", user.id)
-        .eq("account_type", "main")
-        .maybeSingle();
+    if (!user) return;
 
-      if (account) {
-        setAccountId(account.id);
-        setCurrentBalance(account.balance);
-      }
+    // Get main account
+    const { data: mainAccount } = await supabase
+      .from("accounts")
+      .select("id, account_number, balance, total_savings, account_type")
+      .eq("user_id", user.id)
+      .eq("account_type", "main")
+      .maybeSingle();
+
+    if (!mainAccount) return;
+
+    // Get user profile name
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", user.id)
+      .single();
+
+    const accounts: AccountOption[] = [{
+      ...mainAccount,
+      full_name: profile?.full_name || "Main Account"
+    }];
+
+    // Get sub-accounts
+    const { data: subAccounts } = await supabase
+      .from("accounts")
+      .select("id, account_number, balance, total_savings, account_type")
+      .eq("parent_account_id", mainAccount.id)
+      .eq("account_type", "sub");
+
+    if (subAccounts && subAccounts.length > 0) {
+      const subAccountIds = subAccounts.map(a => a.id);
+      const { data: subProfiles } = await supabase
+        .from("sub_account_profiles")
+        .select("account_id, full_name")
+        .in("account_id", subAccountIds);
+
+      const profilesMap = new Map(subProfiles?.map(p => [p.account_id, p.full_name]) || []);
+
+      subAccounts.forEach(sa => {
+        accounts.push({
+          ...sa,
+          full_name: profilesMap.get(sa.id) || sa.account_number
+        });
+      });
+    }
+
+    setMyAccounts(accounts);
+    
+    // Default to main account
+    if (accounts.length > 0) {
+      setSelectedAccountId(accounts[0].id);
+      setCurrentBalance(accounts[0].balance);
     }
   };
 
   const loadActiveLoan = async () => {
-    if (!accountId) return;
+    if (!selectedAccountId) return;
 
     const { data: loan } = await supabase
       .from("loans")
       .select("id, amount, total_amount, outstanding_balance, interest_rate, status")
-      .eq("account_id", accountId)
-      .in("status", ["approved", "disbursed"])
+      .eq("account_id", selectedAccountId)
+      .in("status", ["approved", "disbursed", "active"])
       .gt("outstanding_balance", 0)
       .maybeSingle();
 
@@ -135,7 +190,7 @@ const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) =>
     const { error } = await supabase
       .from("transactions")
       .insert({
-        account_id: accountId,
+        account_id: selectedAccountId,
         transaction_type: transactionType,
         amount,
         description,
@@ -182,6 +237,40 @@ const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) =>
         </Alert>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Account Selection for users with multiple accounts */}
+          {myAccounts.length > 1 && (
+            <div className="space-y-2">
+              <Label htmlFor="account">Select Account</Label>
+              <Select value={selectedAccountId} onValueChange={(value) => {
+                setSelectedAccountId(value);
+                setTransactionType(""); // Reset transaction type when account changes
+                setRepaymentAmount("");
+              }}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select account" />
+                </SelectTrigger>
+                <SelectContent>
+                  {myAccounts.map((account) => (
+                    <SelectItem key={account.id} value={account.id}>
+                      <div className="flex items-center gap-2">
+                        <Wallet className="h-4 w-4" />
+                        {account.full_name} ({account.account_number})
+                        {account.account_type === 'sub' && (
+                          <span className="text-xs text-muted-foreground">• Sub</span>
+                        )}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {selectedAccountId && (
+                <p className="text-sm text-muted-foreground">
+                  Balance: UGX {currentBalance.toLocaleString()}
+                </p>
+              )}
+            </div>
+          )}
+
           <div className="space-y-2">
             <Label htmlFor="type">Transaction Type</Label>
             <Select value={transactionType} onValueChange={setTransactionType}>

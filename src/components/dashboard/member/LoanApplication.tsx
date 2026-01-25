@@ -264,6 +264,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
   const selectedMember = members.find(m => m.id === selectedGuarantor);
   
   // Filter guarantors: must have savings >= applying account's savings AND not be the applying account
+  // Sub-accounts CAN guarantee main accounts and vice versa (within same owner)
   const eligibleGuarantors = members.filter(m => 
     m.total_savings >= mySavings && m.id !== selectedAccountId
   );
