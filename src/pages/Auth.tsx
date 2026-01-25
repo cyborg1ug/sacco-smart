@@ -26,21 +26,20 @@ const Auth = () => {
   const [signupPassword, setSignupPassword] = useState("");
 
   useEffect(() => {
+    // Only redirect on explicit sign-in events, not on page load with existing session
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY") {
         setIsResettingPassword(true);
-      } else if (session && !isResettingPassword) {
+      } else if (event === "SIGNED_IN" && session && !isResettingPassword) {
+        // Only redirect when user explicitly signs in
         navigate("/dashboard");
       }
     });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (searchParams.get("reset") === "true") {
-        setIsResettingPassword(true);
-      } else if (session) {
-        navigate("/dashboard");
-      }
-    });
+    // Check for password reset mode
+    if (searchParams.get("reset") === "true") {
+      setIsResettingPassword(true);
+    }
 
     return () => subscription.unsubscribe();
   }, [navigate, searchParams, isResettingPassword]);
