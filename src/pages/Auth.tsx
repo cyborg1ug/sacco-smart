@@ -24,25 +24,51 @@ const Auth = () => {
   const [loginMethod, setLoginMethod] = useState<"email" | "phone">("phone");
   const [signupMethod, setSignupMethod] = useState<"email" | "phone">("phone");
   const [signupPassword, setSignupPassword] = useState("");
+  const [existingSession, setExistingSession] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
 
   useEffect(() => {
+    // Check for password reset mode
+    if (searchParams.get("reset") === "true") {
+      setIsResettingPassword(true);
+      setCheckingSession(false);
+      return;
+    }
+
     // Only redirect on explicit sign-in events, not on page load with existing session
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY") {
         setIsResettingPassword(true);
+        setCheckingSession(false);
       } else if (event === "SIGNED_IN" && session && !isResettingPassword) {
-        // Only redirect when user explicitly signs in
+        // Only redirect when user explicitly signs in (not on page load)
         navigate("/dashboard");
       }
     });
 
-    // Check for password reset mode
-    if (searchParams.get("reset") === "true") {
-      setIsResettingPassword(true);
-    }
+    // Check if user is already signed in - show option to continue or sign out
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (session) {
+        setExistingSession(true);
+      }
+      setCheckingSession(false);
+    });
 
     return () => subscription.unsubscribe();
   }, [navigate, searchParams, isResettingPassword]);
+
+  const handleContinueToDashboard = () => {
+    navigate("/dashboard");
+  };
+
+  const handleSignOut = async () => {
+    await supabase.auth.signOut();
+    setExistingSession(false);
+    toast({
+      title: "Signed out",
+      description: "You have been signed out successfully.",
+    });
+  };
 
   const handleEmailLogin = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -210,6 +236,15 @@ const Auth = () => {
     setLoading(false);
   };
 
+  // Show loading while checking session
+  if (checkingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
+
   if (isResettingPassword) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
@@ -217,6 +252,41 @@ const Auth = () => {
           <ThemeToggle />
         </div>
         <UpdatePasswordForm />
+      </div>
+    );
+  }
+
+  // Show options for already signed-in users
+  if (existingSession) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
+        <div className="absolute top-4 right-4">
+          <ThemeToggle />
+        </div>
+        <Card className="w-full max-w-md">
+          <CardHeader className="space-y-1">
+            <CardTitle className="text-2xl font-bold text-center">KINONI SACCO</CardTitle>
+            <CardDescription className="text-center">
+              You are already signed in
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <Button 
+              onClick={handleContinueToDashboard} 
+              className="w-full"
+              size="lg"
+            >
+              Continue to Dashboard
+            </Button>
+            <Button 
+              onClick={handleSignOut} 
+              variant="outline" 
+              className="w-full"
+            >
+              Sign out & Switch Account
+            </Button>
+          </CardContent>
+        </Card>
       </div>
     );
   }
