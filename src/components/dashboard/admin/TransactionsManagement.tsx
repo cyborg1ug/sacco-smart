@@ -457,7 +457,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
                 .from("loans")
                 .update({ 
                   outstanding_balance: loan.outstanding_balance + transaction.amount,
-                  status: "active" // Revert to active if it was completed
+                  status: "disbursed" // Revert to disbursed if it was completed
                 })
                 .eq("id", transaction.loan_id);
             }
