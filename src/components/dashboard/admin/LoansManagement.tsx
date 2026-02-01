@@ -196,6 +196,39 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     }
   };
 
+  const sendLoanNotification = async (loan: Loan, newStatus: string) => {
+    try {
+      // Get account user_id first
+      const { data: accountData } = await supabase
+        .from("accounts")
+        .select("user_id")
+        .eq("id", loan.account.id)
+        .single();
+
+      if (accountData) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("email")
+          .eq("id", accountData.user_id)
+          .single();
+
+        await supabase.functions.invoke("loan-status-notification", {
+          body: {
+            loanId: loan.id,
+            newStatus,
+            memberName: loan.account.user?.full_name || "Member",
+            memberEmail: profile?.email,
+            loanAmount: loan.amount,
+            outstandingBalance: loan.outstanding_balance,
+            accountId: loan.account.id,
+          },
+        });
+      }
+    } catch (error) {
+      console.error("Error sending loan notification:", error);
+    }
+  };
+
   const handleApprove = async (loan: Loan) => {
     // Check if guarantor approval is required and pending
     if (loan.guarantor_account_id && loan.guarantor_status !== "approved") {
@@ -229,6 +262,8 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
         title: "Success",
         description: "Loan approved successfully",
       });
+      // Send notification
+      sendLoanNotification({ ...loan, outstanding_balance: loan.total_amount }, "approved");
       loadLoans();
       onUpdate();
     }
@@ -236,6 +271,7 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
 
   const handleReject = async (loanId: string) => {
     const { data: { user } } = await supabase.auth.getUser();
+    const loan = loans.find(l => l.id === loanId);
 
     const { error } = await supabase
       .from("loans")
@@ -257,17 +293,21 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
         title: "Success",
         description: "Loan rejected",
       });
+      if (loan) sendLoanNotification(loan, "rejected");
       loadLoans();
       onUpdate();
     }
   };
 
-  const handleDisburse = async (loanId: string, accountId: string, amount: number) => {
-    // Update loan status to active (was disbursed, now active until repaid)
+  const handleDisburse = async (loan: Loan) => {
+    const { id: loanId, account, amount, total_amount } = loan;
+    const accountId = account.id;
+    
+    // Update loan status to disbursed (active until fully repaid)
     const { error: loanError } = await supabase
       .from("loans")
       .update({
-        status: "active",
+        status: "disbursed",
         disbursed_at: new Date().toISOString(),
       })
       .eq("id", loanId);
@@ -282,15 +322,15 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     }
 
     // Create transaction for loan disbursement
-    const { data: account } = await supabase
+    const { data: accountData } = await supabase
       .from("accounts")
       .select("balance")
       .eq("id", accountId)
       .single();
 
-    if (!account) return;
+    if (!accountData) return;
 
-    const newBalance = account.balance + amount;
+    const newBalance = accountData.balance + amount;
 
     const { error: transactionError } = await supabase
       .from("transactions")
@@ -313,8 +353,10 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     } else {
       toast({
         title: "Success",
-        description: "Loan disbursed and marked as active",
+        description: "Loan disbursed - awaiting transaction approval",
       });
+      // Send notification
+      sendLoanNotification({ ...loan, outstanding_balance: total_amount }, "disbursed");
       loadLoans();
       onUpdate();
     }
@@ -476,8 +518,8 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
       return (
         <Button
           size="sm"
-          onClick={() => handleDisburse(loan.id, loan.account.id, loan.amount)}
-          className="h-7 sm:h-8 text-[10px] sm:text-xs"
+          onClick={() => handleDisburse(loan)}
+          className="h-7 sm:h-8 text-[10px] sm:text-xs bg-gradient-to-r from-success to-success/80 hover:from-success/90 hover:to-success/70"
         >
           <Send className="mr-1 sm:mr-1.5 h-3 w-3 sm:h-3.5 sm:w-3.5" />
           Disburse
