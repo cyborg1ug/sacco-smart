@@ -315,7 +315,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
     if (type === "loan_repayment" && loanId) {
       const { data: loan } = await supabase
         .from("loans")
-        .select("outstanding_balance")
+        .select("outstanding_balance, amount, total_amount, account_id")
         .eq("id", loanId)
         .single();
 
@@ -333,11 +333,46 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
           .update(updateData)
           .eq("id", loanId);
 
+        // Send notification when loan is completed
         if (newOutstanding <= 0) {
           toast({
-            title: "Loan Completed",
+            title: "🎉 Loan Completed",
             description: "This loan has been fully repaid",
           });
+
+          // Get member details for notification
+          const transaction = transactions.find(t => t.id === transactionId);
+          if (transaction) {
+            try {
+              const { data: accountData } = await supabase
+                .from("accounts")
+                .select("user_id")
+                .eq("id", loan.account_id)
+                .single();
+
+              if (accountData) {
+                const { data: profile } = await supabase
+                  .from("profiles")
+                  .select("full_name, email")
+                  .eq("id", accountData.user_id)
+                  .single();
+
+                await supabase.functions.invoke("loan-status-notification", {
+                  body: {
+                    loanId,
+                    newStatus: "completed",
+                    memberName: profile?.full_name || "Member",
+                    memberEmail: profile?.email,
+                    loanAmount: loan.amount,
+                    outstandingBalance: 0,
+                    accountId: loan.account_id,
+                  },
+                });
+              }
+            } catch (notifError) {
+              console.error("Error sending completion notification:", notifError);
+            }
+          }
         }
       }
     }

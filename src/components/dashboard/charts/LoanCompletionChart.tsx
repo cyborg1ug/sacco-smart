@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Tooltip, Legend, Cell } from "recharts";
-import { Loader2 } from "lucide-react";
+import { Loader2, TrendingUp } from "lucide-react";
 
 interface ActiveLoan {
   id: string;
@@ -19,6 +19,23 @@ interface LoanCompletionChartProps {
   accountIds?: string[];
   isAdmin?: boolean;
 }
+
+// Vibrant color palette for charts
+const CHART_COLORS = {
+  disbursed: "hsl(220, 90%, 56%)",
+  repaid: "hsl(142, 76%, 36%)",
+  outstanding: "hsl(38, 92%, 50%)",
+  bars: [
+    "hsl(328, 85%, 70%)",
+    "hsl(220, 90%, 56%)",
+    "hsl(142, 76%, 36%)",
+    "hsl(38, 92%, 50%)",
+    "hsl(351, 94%, 71%)",
+    "hsl(280, 80%, 60%)",
+    "hsl(190, 90%, 50%)",
+    "hsl(45, 100%, 60%)",
+  ],
+};
 
 const LoanCompletionChart = ({ accountIds, isAdmin = false }: LoanCompletionChartProps) => {
   const [activeLoans, setActiveLoans] = useState<ActiveLoan[]>([]);
@@ -108,9 +125,12 @@ const LoanCompletionChart = ({ accountIds, isAdmin = false }: LoanCompletionChar
 
   if (loading) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Active Loans Tracking</CardTitle>
+      <Card className="overflow-hidden border-l-4 border-l-primary">
+        <CardHeader className="bg-gradient-to-r from-primary/10 via-chart-1/5 to-transparent">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            Active Loans Tracking
+          </CardTitle>
           <CardDescription>Disbursed vs Repaid amounts</CardDescription>
         </CardHeader>
         <CardContent className="flex items-center justify-center h-[250px]">
@@ -126,20 +146,25 @@ const LoanCompletionChart = ({ accountIds, isAdmin = false }: LoanCompletionChar
   }
 
   // Prepare chart data: disbursed vs repaid for each loan
-  const chartData = activeLoans.map((loan) => {
+  const chartData = activeLoans.map((loan, index) => {
     const repaidAmount = loan.total_amount - loan.outstanding_balance;
     return {
-      name: isAdmin ? loan.member_name : `Loan`,
+      name: isAdmin ? loan.member_name?.split(' ')[0] || 'Member' : `Loan ${index + 1}`,
+      fullName: isAdmin ? loan.member_name : `Loan ${index + 1}`,
       disbursed: loan.amount,
       repaid: repaidAmount,
       outstanding: loan.outstanding_balance,
+      colorIndex: index % CHART_COLORS.bars.length,
     };
   });
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-base">Active Loans Tracking</CardTitle>
+    <Card className="overflow-hidden border-l-4 border-l-primary">
+      <CardHeader className="bg-gradient-to-r from-primary/10 via-chart-1/5 to-chart-2/5">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <TrendingUp className="h-5 w-5 text-primary" />
+          Active Loans Tracking
+        </CardTitle>
         <CardDescription>
           {isAdmin 
             ? `${activeLoans.length} active loan(s) - Disbursed vs Repaid amounts`
@@ -147,48 +172,97 @@ const LoanCompletionChart = ({ accountIds, isAdmin = false }: LoanCompletionChar
           }
         </CardDescription>
       </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={250}>
-          <BarChart data={chartData} layout="vertical" margin={{ left: 20, right: 20 }}>
-            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+      <CardContent className="pt-4">
+        <ResponsiveContainer width="100%" height={280}>
+          <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 20, top: 10, bottom: 10 }}>
+            <defs>
+              <linearGradient id="disbursedGradient" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="hsl(220, 90%, 56%)" />
+                <stop offset="100%" stopColor="hsl(220, 90%, 66%)" />
+              </linearGradient>
+              <linearGradient id="repaidGradient" x1="0" y1="0" x2="1" y2="0">
+                <stop offset="0%" stopColor="hsl(142, 76%, 36%)" />
+                <stop offset="100%" stopColor="hsl(142, 76%, 46%)" />
+              </linearGradient>
+            </defs>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" opacity={0.5} />
             <XAxis
               type="number"
               className="text-xs"
-              tickFormatter={(value) => `${(value / 1000000).toFixed(1)}M`}
+              tickFormatter={(value) => value >= 1000000 ? `${(value / 1000000).toFixed(1)}M` : `${(value / 1000).toFixed(0)}K`}
+              stroke="hsl(var(--muted-foreground))"
             />
             <YAxis 
               type="category" 
               dataKey="name" 
               className="text-xs" 
-              width={isAdmin ? 100 : 60}
-              tick={{ fontSize: 10 }}
+              width={isAdmin ? 80 : 60}
+              tick={{ fontSize: 11, fill: "hsl(var(--foreground))" }}
+              stroke="hsl(var(--muted-foreground))"
             />
             <Tooltip
               formatter={(value: number, name: string) => [
                 `UGX ${value.toLocaleString()}`,
-                name === "disbursed" ? "Disbursed" : name === "repaid" ? "Repaid" : "Outstanding"
+                name === "disbursed" ? "💰 Disbursed" : name === "repaid" ? "✅ Repaid" : "⏳ Outstanding"
               ]}
+              labelFormatter={(label, payload) => {
+                const item = payload?.[0]?.payload;
+                return item?.fullName || label;
+              }}
               contentStyle={{
                 backgroundColor: "hsl(var(--popover))",
                 border: "1px solid hsl(var(--border))",
-                borderRadius: "8px",
+                borderRadius: "12px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
               }}
+              cursor={{ fill: "hsl(var(--muted) / 0.3)" }}
             />
-            <Legend />
+            <Legend 
+              wrapperStyle={{ paddingTop: 10 }}
+              formatter={(value) => (
+                <span style={{ color: "hsl(var(--foreground))", fontSize: 12 }}>
+                  {value === "disbursed" ? "💰 Disbursed" : "✅ Repaid"}
+                </span>
+              )}
+            />
             <Bar
               dataKey="disbursed"
-              name="Disbursed"
-              fill="hsl(var(--primary))"
-              radius={[0, 4, 4, 0]}
+              name="disbursed"
+              fill="url(#disbursedGradient)"
+              radius={[0, 6, 6, 0]}
+              barSize={20}
             />
             <Bar
               dataKey="repaid"
-              name="Repaid"
-              fill="hsl(142, 76%, 36%)"
-              radius={[0, 4, 4, 0]}
+              name="repaid"
+              fill="url(#repaidGradient)"
+              radius={[0, 6, 6, 0]}
+              barSize={20}
             />
           </BarChart>
         </ResponsiveContainer>
+        
+        {/* Summary Stats */}
+        <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t">
+          <div className="text-center p-2 rounded-lg bg-blue-500/10">
+            <p className="text-xs text-muted-foreground">Total Disbursed</p>
+            <p className="text-sm font-bold text-blue-600">
+              UGX {activeLoans.reduce((sum, l) => sum + l.amount, 0).toLocaleString()}
+            </p>
+          </div>
+          <div className="text-center p-2 rounded-lg bg-green-500/10">
+            <p className="text-xs text-muted-foreground">Total Repaid</p>
+            <p className="text-sm font-bold text-green-600">
+              UGX {activeLoans.reduce((sum, l) => sum + (l.total_amount - l.outstanding_balance), 0).toLocaleString()}
+            </p>
+          </div>
+          <div className="text-center p-2 rounded-lg bg-orange-500/10">
+            <p className="text-xs text-muted-foreground">Outstanding</p>
+            <p className="text-sm font-bold text-orange-600">
+              UGX {activeLoans.reduce((sum, l) => sum + l.outstanding_balance, 0).toLocaleString()}
+            </p>
+          </div>
+        </div>
       </CardContent>
     </Card>
   );

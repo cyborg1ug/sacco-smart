@@ -37,6 +37,7 @@ import GuarantorRequests from "./member/GuarantorRequests";
 import ProfileManagement from "./member/ProfileManagement";
 import SubAccountsManager from "./member/SubAccountsManager";
 import LoanCompletionChart from "./charts/LoanCompletionChart";
+import LoanRepaymentSchedule from "./member/LoanRepaymentSchedule";
 
 interface AccountData {
   id: string;
@@ -389,6 +390,19 @@ const MemberDashboard = () => {
             transition={{ duration: 0.4, delay: 0.18 }}
           >
             <LoanCompletionChart
+              accountIds={[account.id, ...subAccounts.map((sa) => sa.id)]}
+            />
+          </motion.div>
+        )}
+
+        {/* Loan Repayment Schedule */}
+        {account && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4, delay: 0.2 }}
+          >
+            <LoanRepaymentSchedule
               accountIds={[account.id, ...subAccounts.map((sa) => sa.id)]}
             />
           </motion.div>
