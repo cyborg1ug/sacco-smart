@@ -9,7 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { UserPlus, Loader2, Link, Unlink, Plus, ArrowUpRight } from "lucide-react";
+import { UserPlus, Loader2, Link, Unlink, Plus, ArrowUpRight, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 
 interface Account {
@@ -39,6 +39,7 @@ const MembersManagement = () => {
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
   const [parentAccountId, setParentAccountId] = useState<string>("");
   const [selectedParentForSubAccount, setSelectedParentForSubAccount] = useState<Account | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     loadAccounts();
@@ -257,6 +258,17 @@ const MembersManagement = () => {
 
   const mainAccounts = accounts.filter(a => a.account_type === "main");
 
+  // Filter accounts based on search query
+  const filteredAccounts = accounts.filter(account => {
+    const query = searchQuery.toLowerCase();
+    return (
+      account.user.full_name.toLowerCase().includes(query) ||
+      account.account_number.toLowerCase().includes(query) ||
+      account.user.email?.toLowerCase().includes(query) ||
+      account.user.phone_number?.toLowerCase().includes(query)
+    );
+  });
+
   if (loading) {
     return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin" /></div>;
   }
@@ -308,6 +320,18 @@ const MembersManagement = () => {
         </div>
       </CardHeader>
       <CardContent className="p-0 sm:p-4 md:p-6 pt-0">
+        {/* Search Bar */}
+        <div className="px-4 pb-4 sm:px-0 sm:pb-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by name, account number, email or phone..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </div>
         <div className="overflow-x-auto -mx-4 sm:mx-0">
           <Table>
             <TableHeader>
@@ -322,7 +346,7 @@ const MembersManagement = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {accounts.map((account) => (
+              {filteredAccounts.map((account) => (
                 <TableRow key={account.id}>
                   <TableCell className="font-medium">
                     <Button 
