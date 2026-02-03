@@ -1,16 +1,16 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Send, Loader2, Users, UserPlus, CheckCircle, Edit, Clock, CheckCircle2, TrendingUp, Search } from "lucide-react";
+import { Check, X, Send, Loader2, Users, UserPlus, CheckCircle, Edit, Clock, CheckCircle2, TrendingUp, Search, Calendar } from "lucide-react";
 import { format } from "date-fns";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MobileCardList, MobileCard } from "@/components/ui/MobileCardList";
@@ -23,6 +23,7 @@ interface Loan {
   outstanding_balance: number;
   status: string;
   created_at: string;
+  disbursed_at: string | null;
   guarantor_account_id: string | null;
   guarantor_status: string | null;
   max_loan_amount: number | null;
@@ -51,14 +52,18 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   const [loans, setLoans] = useState<Loan[]>([]);
   const [loading, setLoading] = useState(true);
   const [guarantorDialogOpen, setGuarantorDialogOpen] = useState(false);
-  const [editTermsDialogOpen, setEditTermsDialogOpen] = useState(false);
+  const [editLoanDialogOpen, setEditLoanDialogOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [selectedGuarantor, setSelectedGuarantor] = useState("");
   const [guarantorCandidates, setGuarantorCandidates] = useState<any[]>([]);
   const [loadingGuarantors, setLoadingGuarantors] = useState(false);
-  const [newRepaymentMonths, setNewRepaymentMonths] = useState<number>(1);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
+  
+  // Edit form state
+  const [editRepaymentMonths, setEditRepaymentMonths] = useState<number>(1);
+  const [editDisbursedAt, setEditDisbursedAt] = useState<string>("");
+  const [editGuarantor, setEditGuarantor] = useState<string>("");
 
   // Filter loans by status and search
   const filteredLoans = useMemo(() => {
@@ -85,8 +90,44 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     });
   }, [loans, statusFilter, searchQuery]);
 
+  // Setup real-time subscription for loans and transactions
   useEffect(() => {
     loadLoans();
+    
+    // Subscribe to real-time loan updates
+    const loansChannel = supabase
+      .channel('loans-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'loans' },
+        () => {
+          loadLoans();
+        }
+      )
+      .subscribe();
+
+    // Subscribe to real-time transaction updates (for loan repayments)
+    const transactionsChannel = supabase
+      .channel('transactions-realtime-loans')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions' },
+        (payload: any) => {
+          // Reload loans when a loan-related transaction changes
+          if (payload.new?.transaction_type === 'loan_repayment' || 
+              payload.new?.transaction_type === 'loan_disbursement' ||
+              payload.old?.transaction_type === 'loan_repayment' ||
+              payload.old?.transaction_type === 'loan_disbursement') {
+            loadLoans();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(loansChannel);
+      supabase.removeChannel(transactionsChannel);
+    };
   }, []);
 
   const loadLoans = async () => {
@@ -334,10 +375,11 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
 
     const { data: { user } } = await supabase.auth.getUser();
 
+    // Approved loans become active immediately
     const { error } = await supabase
       .from("loans")
       .update({
-        status: "approved",
+        status: "active",
         approved_by: user?.id,
         approved_at: new Date().toISOString(),
       })
@@ -352,7 +394,7 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     } else {
       toast({
         title: "Success",
-        description: "Loan approved successfully",
+        description: "Loan approved and is now active",
       });
       // Send notification
       sendLoanNotification({ ...loan, outstanding_balance: loan.total_amount }, "approved");
@@ -454,31 +496,50 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     }
   };
 
-  const openEditTermsDialog = (loan: Loan) => {
+  const openEditLoanDialog = async (loan: Loan) => {
     setSelectedLoan(loan);
-    setNewRepaymentMonths(loan.repayment_months || 1);
-    setEditTermsDialogOpen(true);
+    setEditRepaymentMonths(loan.repayment_months || 1);
+    setEditDisbursedAt(loan.disbursed_at ? format(new Date(loan.disbursed_at), "yyyy-MM-dd") : "");
+    setEditGuarantor(loan.guarantor_account_id || "");
+    await loadGuarantorCandidates(loan.account.id);
+    setEditLoanDialogOpen(true);
   };
 
-  const handleUpdateRepaymentTerms = async () => {
+  const handleUpdateLoanDetails = async () => {
     if (!selectedLoan) return;
 
     // Recalculate total amount with new repayment months
     const monthlyInterest = selectedLoan.amount * (selectedLoan.interest_rate / 100);
-    const totalInterest = monthlyInterest * newRepaymentMonths;
+    const totalInterest = monthlyInterest * editRepaymentMonths;
     const newTotalAmount = selectedLoan.amount + totalInterest;
     
     // Calculate new outstanding based on how much has been repaid
     const alreadyRepaid = selectedLoan.total_amount - selectedLoan.outstanding_balance;
     const newOutstanding = Math.max(0, newTotalAmount - alreadyRepaid);
 
+    const updateData: any = {
+      repayment_months: editRepaymentMonths,
+      total_amount: newTotalAmount,
+      outstanding_balance: newOutstanding,
+    };
+
+    // Update disbursed date if provided
+    if (editDisbursedAt) {
+      updateData.disbursed_at = new Date(editDisbursedAt).toISOString();
+    }
+
+    // Update guarantor if changed
+    if (editGuarantor && editGuarantor !== selectedLoan.guarantor_account_id) {
+      updateData.guarantor_account_id = editGuarantor;
+      updateData.guarantor_status = "approved"; // Admin-assigned guarantors are auto-approved
+    } else if (!editGuarantor && selectedLoan.guarantor_account_id) {
+      updateData.guarantor_account_id = null;
+      updateData.guarantor_status = null;
+    }
+
     const { error } = await supabase
       .from("loans")
-      .update({
-        repayment_months: newRepaymentMonths,
-        total_amount: newTotalAmount,
-        outstanding_balance: newOutstanding,
-      })
+      .update(updateData)
       .eq("id", selectedLoan.id);
 
     if (error) {
@@ -490,9 +551,9 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     } else {
       toast({
         title: "Success",
-        description: `Repayment terms updated to ${newRepaymentMonths} month(s)`,
+        description: "Loan details updated successfully",
       });
-      setEditTermsDialogOpen(false);
+      setEditLoanDialogOpen(false);
       loadLoans();
       onUpdate();
     }
@@ -606,37 +667,41 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
       );
     }
     
-    if (loan.status === "approved") {
+    // For active/disbursed loans, show edit and disburse buttons
+    if (loan.status === "active" || loan.status === "disbursed" || loan.status === "approved") {
       return (
-        <Button
-          size="sm"
-          onClick={() => handleDisburse(loan)}
-          className="h-7 sm:h-8 text-[10px] sm:text-xs bg-gradient-to-r from-success to-success/80 hover:from-success/90 hover:to-success/70"
-        >
-          <Send className="mr-1 sm:mr-1.5 h-3 w-3 sm:h-3.5 sm:w-3.5" />
-          Disburse
-        </Button>
-      );
-    }
-    
-    // For active/disbursed loans, show edit terms button
-    if ((loan.status === "active" || loan.status === "disbursed") && loan.outstanding_balance > 0) {
-      return (
-        <TooltipProvider>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={() => openEditTermsDialog(loan)}
-                className="h-7 w-7 sm:h-8 sm:w-8 p-0"
-              >
-                <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>Edit Repayment Terms</TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
+        <div className="flex gap-1">
+          {/* Disburse button for approved/active loans without disbursement yet */}
+          {(loan.status === "approved" || (loan.status === "active" && !loan.disbursed_at)) && (
+            <Button
+              size="sm"
+              onClick={() => handleDisburse(loan)}
+              className="h-7 sm:h-8 text-[10px] sm:text-xs bg-gradient-to-r from-success to-success/80 hover:from-success/90 hover:to-success/70"
+            >
+              <Send className="mr-1 sm:mr-1.5 h-3 w-3 sm:h-3.5 sm:w-3.5" />
+              Disburse
+            </Button>
+          )}
+          
+          {/* Edit button for active loans with outstanding balance */}
+          {loan.outstanding_balance > 0 && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => openEditLoanDialog(loan)}
+                    className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                  >
+                    <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Edit Loan Details</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
+        </div>
       );
     }
     
@@ -891,13 +956,13 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Repayment Terms Dialog */}
-      <Dialog open={editTermsDialogOpen} onOpenChange={setEditTermsDialogOpen}>
-        <DialogContent className="max-w-[95vw] sm:max-w-md">
+      {/* Edit Loan Details Dialog */}
+      <Dialog open={editLoanDialogOpen} onOpenChange={setEditLoanDialogOpen}>
+        <DialogContent className="max-w-[95vw] sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle className="text-base sm:text-lg">Edit Repayment Terms</DialogTitle>
+            <DialogTitle className="text-base sm:text-lg">Edit Loan Details</DialogTitle>
             <DialogDescription className="text-xs sm:text-sm">
-              Update repayment duration for {selectedLoan?.account.user.full_name}'s loan
+              Update loan details for {selectedLoan?.account.user.full_name}
             </DialogDescription>
           </DialogHeader>
           {selectedLoan && (
@@ -905,33 +970,77 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
               <div className="p-3 bg-muted rounded-md space-y-1 text-sm">
                 <p><span className="font-medium">Loan Amount:</span> UGX {selectedLoan.amount.toLocaleString()}</p>
                 <p><span className="font-medium">Interest Rate:</span> {selectedLoan.interest_rate}% per month</p>
-                <p><span className="font-medium">Current Term:</span> {selectedLoan.repayment_months || 1} month(s)</p>
+                <p><span className="font-medium">Total Repayable:</span> UGX {selectedLoan.total_amount.toLocaleString()}</p>
                 <p><span className="font-medium">Outstanding:</span> UGX {selectedLoan.outstanding_balance.toLocaleString()}</p>
+                <p><span className="font-medium">Repaid:</span> UGX {(selectedLoan.total_amount - selectedLoan.outstanding_balance).toLocaleString()}</p>
               </div>
+              
+              {/* Repayment Duration */}
               <div className="space-y-2">
-                <Label>New Repayment Duration (Months)</Label>
+                <Label>Repayment Duration (Months)</Label>
                 <Input 
-                  type="number" 
-                  min="1" 
-                  max="36"
-                  value={newRepaymentMonths}
-                  onChange={(e) => setNewRepaymentMonths(parseInt(e.target.value) || 1)}
+                  type="number"
+                  min={1}
+                  value={editRepaymentMonths}
+                  onChange={(e) => setEditRepaymentMonths(parseInt(e.target.value) || 1)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  New monthly payment: UGX {(() => {
-                    const monthlyInterest = selectedLoan.amount * (selectedLoan.interest_rate / 100);
-                    const totalInterest = monthlyInterest * newRepaymentMonths;
-                    const newTotal = selectedLoan.amount + totalInterest;
-                    return (newTotal / newRepaymentMonths).toLocaleString();
-                  })()}
+                  Monthly payment: UGX {((selectedLoan.amount + (selectedLoan.amount * selectedLoan.interest_rate / 100 * editRepaymentMonths)) / editRepaymentMonths).toLocaleString()}
                 </p>
               </div>
+              
+              {/* Disbursement Date */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4" />
+                  Disbursement Date
+                </Label>
+                <Input 
+                  type="date"
+                  value={editDisbursedAt}
+                  onChange={(e) => setEditDisbursedAt(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Interest calculation starts from this date
+                </p>
+              </div>
+              
+              {/* Guarantor Assignment */}
+              <div className="space-y-2">
+                <Label className="flex items-center gap-2">
+                  <Users className="h-4 w-4" />
+                  Guarantor
+                </Label>
+                {loadingGuarantors ? (
+                  <div className="flex justify-center p-2">
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  </div>
+                ) : (
+                  <Select value={editGuarantor} onValueChange={setEditGuarantor}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select guarantor (optional)" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">No guarantor</SelectItem>
+                      {guarantorCandidates.map((candidate) => (
+                        <SelectItem key={candidate.id} value={candidate.id}>
+                          {candidate.full_name} ({candidate.account_number}) - UGX {candidate.total_savings.toLocaleString()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                )}
+                {guarantorCandidates.length === 0 && !loadingGuarantors && (
+                  <p className="text-xs text-muted-foreground">No eligible guarantors available</p>
+                )}
+              </div>
+              
               <Button 
-                onClick={handleUpdateRepaymentTerms} 
+                onClick={handleUpdateLoanDetails} 
                 className="w-full"
               >
                 <Edit className="mr-2 h-4 w-4" />
-                Update Terms
+                Update Loan Details
               </Button>
             </div>
           )}
