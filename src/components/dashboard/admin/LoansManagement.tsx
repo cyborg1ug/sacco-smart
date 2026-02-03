@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -8,8 +8,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Send, Loader2, Users, UserPlus, CheckCircle, Edit } from "lucide-react";
+import { Check, X, Send, Loader2, Users, UserPlus, CheckCircle, Edit, Clock, CheckCircle2, TrendingUp, Search } from "lucide-react";
 import { format } from "date-fns";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MobileCardList, MobileCard } from "@/components/ui/MobileCardList";
@@ -56,35 +57,109 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   const [guarantorCandidates, setGuarantorCandidates] = useState<any[]>([]);
   const [loadingGuarantors, setLoadingGuarantors] = useState(false);
   const [newRepaymentMonths, setNewRepaymentMonths] = useState<number>(1);
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Filter loans by status and search
+  const filteredLoans = useMemo(() => {
+    return loans.filter(loan => {
+      // Status filter
+      if (statusFilter !== "all") {
+        if (statusFilter === "pending" && loan.status !== "pending") return false;
+        if (statusFilter === "approved" && loan.status !== "approved") return false;
+        if (statusFilter === "active" && !["disbursed", "active"].includes(loan.status)) return false;
+        if (statusFilter === "completed" && loan.status !== "completed" && loan.status !== "fully_paid") return false;
+      }
+      
+      // Search filter
+      if (searchQuery.trim()) {
+        const query = searchQuery.toLowerCase();
+        return (
+          loan.account.user.full_name.toLowerCase().includes(query) ||
+          loan.account.account_number.toLowerCase().includes(query) ||
+          loan.guarantor_account?.user?.full_name?.toLowerCase().includes(query)
+        );
+      }
+      
+      return true;
+    });
+  }, [loans, statusFilter, searchQuery]);
 
   useEffect(() => {
     loadLoans();
   }, []);
 
   const loadLoans = async () => {
-    const { data } = await supabase
+    // Fetch all loans
+    const { data: loansData } = await supabase
       .from("loans")
-      .select(`
-        *,
-        account:accounts!loans_account_id_fkey (
-          id,
-          account_number,
-          user:profiles!accounts_user_id_fkey (
-            full_name
-          )
-        ),
-        guarantor_account:accounts!loans_guarantor_account_id_fkey (
-          account_number,
-          user:profiles!accounts_user_id_fkey (
-            full_name
-          )
-        )
-      `)
+      .select("*")
       .order("created_at", { ascending: false });
 
-    if (data) {
-      setLoans(data as any);
+    if (!loansData) {
+      setLoading(false);
+      return;
     }
+
+    // Get unique account IDs (both loan accounts and guarantor accounts)
+    const accountIds = [...new Set([
+      ...loansData.map(l => l.account_id),
+      ...loansData.filter(l => l.guarantor_account_id).map(l => l.guarantor_account_id as string)
+    ])];
+
+    // Fetch accounts
+    const { data: accountsData } = await supabase
+      .from("accounts")
+      .select("id, account_number, user_id, account_type")
+      .in("id", accountIds);
+
+    if (!accountsData) {
+      setLoading(false);
+      return;
+    }
+
+    // Separate main accounts and sub-accounts
+    const mainAccountUserIds = [...new Set(accountsData.filter(a => a.account_type === 'main').map(a => a.user_id))];
+    const subAccountIds = accountsData.filter(a => a.account_type === 'sub').map(a => a.id);
+
+    // Fetch profiles for main accounts
+    const { data: profilesData } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", mainAccountUserIds);
+
+    // Fetch sub_account_profiles for sub-accounts
+    const { data: subAccountProfilesData } = await supabase
+      .from("sub_account_profiles")
+      .select("account_id, full_name")
+      .in("account_id", subAccountIds);
+
+    const profilesMap = new Map(profilesData?.map(p => [p.id, p.full_name]) || []);
+    const subProfilesMap = new Map(subAccountProfilesData?.map(p => [p.account_id, p.full_name]) || []);
+
+    // Build accounts map with proper names
+    const accountsMap = new Map(accountsData.map(a => {
+      let fullName = "Unknown";
+      if (a.account_type === 'sub') {
+        fullName = subProfilesMap.get(a.id) || "Unknown";
+      } else {
+        fullName = profilesMap.get(a.user_id) || "Unknown";
+      }
+      return [a.id, {
+        id: a.id,
+        account_number: a.account_number,
+        user: { full_name: fullName }
+      }];
+    }));
+
+    // Map loans with account info
+    const loansWithAccounts = loansData.map(loan => ({
+      ...loan,
+      account: accountsMap.get(loan.account_id) || { id: loan.account_id, account_number: "Unknown", user: { full_name: "Unknown" } },
+      guarantor_account: loan.guarantor_account_id ? accountsMap.get(loan.guarantor_account_id) : null
+    }));
+
+    setLoans(loansWithAccounts as any);
     setLoading(false);
   };
 
@@ -626,7 +701,7 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
           </TableRow>
         </TableHeader>
         <TableBody>
-          {loans.map((loan) => {
+          {filteredLoans.map((loan) => {
             const statusInfo = getLoanStatusBadge(loan);
             const { monthlyPayment } = calculateMonthlyPayment(loan);
             return (
@@ -721,8 +796,46 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
         </CardDescription>
       </CardHeader>
       <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+        {/* Loan Status Tabs */}
+        <div className="pb-3 sm:pb-4">
+          <Tabs value={statusFilter} onValueChange={setStatusFilter}>
+            <TabsList className="flex flex-wrap h-auto gap-1 p-1 bg-muted/50 rounded-lg w-full justify-start">
+              <TabsTrigger value="all" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                All ({loans.length})
+              </TabsTrigger>
+              <TabsTrigger value="pending" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                <Clock className="h-3 w-3 mr-1" />
+                Pending ({loans.filter(l => l.status === "pending").length})
+              </TabsTrigger>
+              <TabsTrigger value="approved" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                <Check className="h-3 w-3 mr-1 text-blue-500" />
+                Approved ({loans.filter(l => l.status === "approved").length})
+              </TabsTrigger>
+              <TabsTrigger value="active" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                <TrendingUp className="h-3 w-3 mr-1 text-green-500" />
+                Active ({loans.filter(l => ["disbursed", "active"].includes(l.status)).length})
+              </TabsTrigger>
+              <TabsTrigger value="completed" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                <CheckCircle2 className="h-3 w-3 mr-1 text-purple-500" />
+                Completed ({loans.filter(l => l.status === "completed" || l.status === "fully_paid").length})
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
+        {/* Search Bar */}
+        <div className="pb-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by member name or account..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </div>
         <MobileCardList
-          items={loans}
+          items={filteredLoans}
           renderCard={renderMobileCard}
           renderTable={renderTable}
           emptyMessage="No loan applications found"
