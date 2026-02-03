@@ -11,8 +11,9 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Plus, Loader2, FileText, Banknote, TrendingUp, TrendingDown, CreditCard, Wallet, CalendarIcon, Trash2, Users, Edit, Search } from "lucide-react";
+import { Check, X, Plus, Loader2, FileText, Banknote, TrendingUp, TrendingDown, CreditCard, Wallet, CalendarIcon, Trash2, Users, Edit, Search, RefreshCw } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import { generateTransactionReceiptPDF } from "@/lib/pdfGenerator";
@@ -84,6 +85,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
   const [selectedAccountForLoan, setSelectedAccountForLoan] = useState<string>("");
   const [selectedTransactionType, setSelectedTransactionType] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
   useEffect(() => {
     loadTransactions();
     loadMembers();
@@ -711,12 +713,21 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
     }
   };
 
-  // Filter transactions by date range and search query
+  // Filter transactions by date range, type, and search query
   const filteredTransactions = useMemo(() => {
     const now = new Date();
     
     return transactions.filter(t => {
       const txDate = new Date(t.created_at);
+      
+      // Type filter
+      if (typeFilter !== "all") {
+        if (typeFilter === "repayment" && t.transaction_type !== "loan_repayment") return false;
+        if (typeFilter === "disbursement" && t.transaction_type !== "loan_disbursement") return false;
+        if (typeFilter === "deposit" && t.transaction_type !== "deposit") return false;
+        if (typeFilter === "withdrawal" && t.transaction_type !== "withdrawal") return false;
+        if (typeFilter === "pending" && t.status !== "pending") return false;
+      }
       
       // Date filter
       let passesDateFilter = true;
@@ -750,7 +761,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
         t.description?.toLowerCase().includes(query)
       );
     });
-  }, [transactions, dateFilter, customDateFrom, customDateTo, searchQuery]);
+  }, [transactions, dateFilter, customDateFrom, customDateTo, searchQuery, typeFilter]);
 
   // Calculate transaction statistics from filtered transactions
   const stats = useMemo(() => ({
@@ -1115,6 +1126,36 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
         </div>
       </CardHeader>
       <CardContent className="p-0 sm:p-4 md:p-6 pt-0">
+        {/* Transaction Type Tabs */}
+        <div className="px-4 pb-3 sm:px-0 sm:pb-4">
+          <Tabs value={typeFilter} onValueChange={setTypeFilter}>
+            <TabsList className="flex flex-wrap h-auto gap-1 p-1 bg-muted/50 rounded-lg w-full justify-start">
+              <TabsTrigger value="all" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                All
+              </TabsTrigger>
+              <TabsTrigger value="pending" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                <Loader2 className="h-3 w-3 mr-1" />
+                Pending ({transactions.filter(t => t.status === "pending").length})
+              </TabsTrigger>
+              <TabsTrigger value="deposit" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                <TrendingUp className="h-3 w-3 mr-1 text-success" />
+                Deposits
+              </TabsTrigger>
+              <TabsTrigger value="withdrawal" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                <TrendingDown className="h-3 w-3 mr-1 text-destructive" />
+                Withdrawals
+              </TabsTrigger>
+              <TabsTrigger value="disbursement" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                <CreditCard className="h-3 w-3 mr-1 text-blue-500" />
+                Disbursements
+              </TabsTrigger>
+              <TabsTrigger value="repayment" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                <RefreshCw className="h-3 w-3 mr-1 text-purple-500" />
+                Repayments
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+        </div>
         {/* Search Bar */}
         <div className="px-4 pb-4 sm:px-0 sm:pb-4">
           <div className="relative">
