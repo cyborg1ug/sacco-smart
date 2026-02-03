@@ -70,7 +70,7 @@ const DashboardHeader = ({
           <Button
             variant="ghost"
             size="icon"
-            onClick={() => navigate("/dashboard")}
+            onClick={() => navigate(-1)}
             className="shrink-0 hover:bg-primary/10 h-8 w-8 sm:h-10 sm:w-10"
           >
             <ChevronLeft className="h-4 w-4 sm:h-5 sm:w-5" />

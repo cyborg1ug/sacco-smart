@@ -100,13 +100,30 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
       return;
     }
 
+    // Get all accounts that are currently guarantors on active/outstanding loans
+    const { data: activeGuarantorLoans } = await supabase
+      .from("loans")
+      .select("guarantor_account_id")
+      .in("status", ["pending", "approved", "disbursed", "active"])
+      .gt("outstanding_balance", 0)
+      .not("guarantor_account_id", "is", null);
+
+    const alreadyGuaranteeing = new Set(
+      activeGuarantorLoans?.map(l => l.guarantor_account_id).filter(Boolean) || []
+    );
+
     // Get loan applicant's savings
     const loanAccount = accountsData.find(a => a.id === loanAccountId);
     const minSavings = loanAccount?.total_savings || 0;
 
-    // Filter candidates (must have savings >= applicant's savings, exclude applicant)
+    // Filter candidates:
+    // 1. Must have savings >= applicant's savings
+    // 2. Exclude the loan applicant
+    // 3. Exclude accounts already guaranteeing outstanding loans
     const eligibleAccounts = accountsData.filter(a => 
-      a.id !== loanAccountId && a.total_savings >= minSavings
+      a.id !== loanAccountId && 
+      a.total_savings >= minSavings &&
+      !alreadyGuaranteeing.has(a.id)
     );
 
     // Get profiles for main accounts

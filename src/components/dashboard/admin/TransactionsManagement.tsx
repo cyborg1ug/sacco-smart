@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Plus, Loader2, FileText, Banknote, TrendingUp, TrendingDown, CreditCard, Wallet, CalendarIcon, Trash2, Users, Edit } from "lucide-react";
+import { Check, X, Plus, Loader2, FileText, Banknote, TrendingUp, TrendingDown, CreditCard, Wallet, CalendarIcon, Trash2, Users, Edit, Search } from "lucide-react";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import { generateTransactionReceiptPDF } from "@/lib/pdfGenerator";
@@ -83,6 +83,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
   const [customDateTo, setCustomDateTo] = useState<Date | undefined>();
   const [selectedAccountForLoan, setSelectedAccountForLoan] = useState<string>("");
   const [selectedTransactionType, setSelectedTransactionType] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
   useEffect(() => {
     loadTransactions();
     loadMembers();
@@ -710,30 +711,46 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
     }
   };
 
-  // Filter transactions by date range
+  // Filter transactions by date range and search query
   const filteredTransactions = useMemo(() => {
     const now = new Date();
     
     return transactions.filter(t => {
       const txDate = new Date(t.created_at);
       
+      // Date filter
+      let passesDateFilter = true;
       switch (dateFilter) {
         case "today":
-          return isWithinInterval(txDate, { start: startOfDay(now), end: endOfDay(now) });
+          passesDateFilter = isWithinInterval(txDate, { start: startOfDay(now), end: endOfDay(now) });
+          break;
         case "week":
-          return isWithinInterval(txDate, { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) });
+          passesDateFilter = isWithinInterval(txDate, { start: startOfWeek(now, { weekStartsOn: 1 }), end: endOfWeek(now, { weekStartsOn: 1 }) });
+          break;
         case "month":
-          return isWithinInterval(txDate, { start: startOfMonth(now), end: endOfMonth(now) });
+          passesDateFilter = isWithinInterval(txDate, { start: startOfMonth(now), end: endOfMonth(now) });
+          break;
         case "custom":
           if (customDateFrom && customDateTo) {
-            return isWithinInterval(txDate, { start: startOfDay(customDateFrom), end: endOfDay(customDateTo) });
+            passesDateFilter = isWithinInterval(txDate, { start: startOfDay(customDateFrom), end: endOfDay(customDateTo) });
           }
-          return true;
-        default:
-          return true;
+          break;
       }
+
+      // Search filter
+      if (!passesDateFilter) return false;
+      if (!searchQuery.trim()) return true;
+
+      const query = searchQuery.toLowerCase();
+      return (
+        t.account.user.full_name.toLowerCase().includes(query) ||
+        t.account.account_number.toLowerCase().includes(query) ||
+        t.tnx_id.toLowerCase().includes(query) ||
+        t.transaction_type.toLowerCase().includes(query) ||
+        t.description?.toLowerCase().includes(query)
+      );
     });
-  }, [transactions, dateFilter, customDateFrom, customDateTo]);
+  }, [transactions, dateFilter, customDateFrom, customDateTo, searchQuery]);
 
   // Calculate transaction statistics from filtered transactions
   const stats = useMemo(() => ({
@@ -1098,6 +1115,18 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
         </div>
       </CardHeader>
       <CardContent className="p-0 sm:p-4 md:p-6 pt-0">
+        {/* Search Bar */}
+        <div className="px-4 pb-4 sm:px-0 sm:pb-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search by member name, account number, TXN ID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </div>
         <div className="overflow-x-auto -mx-4 sm:mx-0">
           <Table>
             <TableHeader>

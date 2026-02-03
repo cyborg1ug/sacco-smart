@@ -18,13 +18,10 @@ const Index = () => {
           
           <div className="flex gap-4 justify-center flex-wrap">
             <Button size="lg" onClick={() => navigate("/auth?mode=signup")}>
-              Get Started <ArrowRight className="ml-2 h-5 w-5" />
+              Sign Up <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
             <Button size="lg" variant="outline" onClick={() => navigate("/auth?mode=login")}>
               Sign In
-            </Button>
-            <Button size="lg" variant="secondary" onClick={() => navigate("/document")}>
-              User Guide
             </Button>
           </div>
 

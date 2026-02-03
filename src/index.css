@@ -97,10 +97,10 @@ All colors MUST be HSL.
     --warning-foreground: 0 0% 100%;
 
     --chart-1: 328 85% 70%;
-    --chart-2: 351 94% 71%;
-    --chart-3: 327 87% 81%;
-    --chart-4: 352 95% 81%;
-    --chart-5: 240 3% 46%;
+    --chart-2: 160 84% 45%;
+    --chart-3: 38 92% 55%;
+    --chart-4: 210 100% 50%;
+    --chart-5: 280 75% 60%;
 
     --sidebar-background: 0 0% 98%;
 
@@ -197,11 +197,11 @@ All colors MUST be HSL.
     --warning: 38 92% 50%;
     --warning-foreground: 0 0% 100%;
 
-    --chart-1: 327 87% 81%;
-    --chart-2: 352 95% 81%;
-    --chart-3: 328 85% 70%;
-    --chart-4: 351 94% 71%;
-    --chart-5: 240 5% 33%;
+    --chart-1: 328 85% 70%;
+    --chart-2: 160 84% 50%;
+    --chart-3: 38 92% 60%;
+    --chart-4: 210 100% 55%;
+    --chart-5: 280 75% 65%;
     --sidebar-background: 240 5.9% 10%;
     --sidebar-foreground: 0 0% 98%;
     --sidebar-primary: 328 85% 70%;
