@@ -43,6 +43,38 @@ const LoanCompletionChart = ({ accountIds, isAdmin = false }: LoanCompletionChar
 
   useEffect(() => {
     loadActiveLoans();
+    
+    // Subscribe to real-time loan updates
+    const loansChannel = supabase
+      .channel('loans-chart-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'loans' },
+        () => {
+          loadActiveLoans();
+        }
+      )
+      .subscribe();
+
+    // Subscribe to real-time transaction updates
+    const transactionsChannel = supabase
+      .channel('transactions-chart-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions' },
+        (payload: any) => {
+          if (payload.new?.transaction_type === 'loan_repayment' || 
+              payload.new?.transaction_type === 'loan_disbursement') {
+            loadActiveLoans();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(loansChannel);
+      supabase.removeChannel(transactionsChannel);
+    };
   }, [accountIds, isAdmin]);
 
   const loadActiveLoans = async () => {
