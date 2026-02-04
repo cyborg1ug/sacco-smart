@@ -508,19 +508,37 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   const handleUpdateLoanDetails = async () => {
     if (!selectedLoan) return;
 
+    // First fetch actual repaid amount from transactions
+    const { data: repaymentData } = await supabase
+      .from("transactions")
+      .select("amount")
+      .eq("loan_id", selectedLoan.id)
+      .eq("transaction_type", "loan_repayment")
+      .eq("status", "approved");
+
+    const totalRepaid = repaymentData?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+
     // Recalculate total amount with new repayment months
     const monthlyInterest = selectedLoan.amount * (selectedLoan.interest_rate / 100);
     const totalInterest = monthlyInterest * editRepaymentMonths;
     const newTotalAmount = selectedLoan.amount + totalInterest;
     
-    // Calculate new outstanding based on how much has been repaid
-    const alreadyRepaid = selectedLoan.total_amount - selectedLoan.outstanding_balance;
-    const newOutstanding = Math.max(0, newTotalAmount - alreadyRepaid);
+    // Calculate new outstanding based on actual repayments
+    const newOutstanding = Math.max(0, newTotalAmount - totalRepaid);
+    
+    // Determine correct status based on outstanding balance
+    let newStatus = selectedLoan.status;
+    if (newOutstanding <= 0) {
+      newStatus = "fully_paid";
+    } else if (selectedLoan.disbursed_at || editDisbursedAt) {
+      newStatus = "disbursed";
+    }
 
     const updateData: any = {
       repayment_months: editRepaymentMonths,
       total_amount: newTotalAmount,
       outstanding_balance: newOutstanding,
+      status: newStatus,
     };
 
     // Update disbursed date if provided
@@ -667,8 +685,8 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
       );
     }
     
-    // For active/disbursed loans, show edit and disburse buttons
-    if (loan.status === "active" || loan.status === "disbursed" || loan.status === "approved") {
+    // For active/disbursed/approved/fully_paid loans, show edit and disburse buttons
+    if (["active", "disbursed", "approved", "fully_paid", "completed"].includes(loan.status)) {
       return (
         <div className="flex gap-1">
           {/* Disburse button for approved/active loans without disbursement yet */}
@@ -683,24 +701,22 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
             </Button>
           )}
           
-          {/* Edit button for active loans with outstanding balance */}
-          {loan.outstanding_balance > 0 && (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => openEditLoanDialog(loan)}
-                    className="h-7 w-7 sm:h-8 sm:w-8 p-0"
-                  >
-                    <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Edit Loan Details</TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          )}
+          {/* Edit button for all active/disbursed/completed loans */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => openEditLoanDialog(loan)}
+                  className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                >
+                  <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Edit Loan Details</TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
         </div>
       );
     }

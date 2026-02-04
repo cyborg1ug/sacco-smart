@@ -484,22 +484,42 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
           newBalance += transaction.amount;
         } else if (transaction.transaction_type === "loan_disbursement") {
           newBalance -= transaction.amount;
+          // Also revert the loan status when disbursement is deleted
+          if (transaction.loan_id) {
+            const { data: loan } = await supabase
+              .from("loans")
+              .select("id, status")
+              .eq("id", transaction.loan_id)
+              .single();
+            
+            if (loan) {
+              // Revert loan to approved status (before disbursement)
+              await supabase
+                .from("loans")
+                .update({ 
+                  status: "active",
+                  disbursed_at: null
+                })
+                .eq("id", transaction.loan_id);
+            }
+          }
         } else if (transaction.transaction_type === "loan_repayment") {
           newBalance += transaction.amount;
           // Also reverse the loan outstanding balance change
           if (transaction.loan_id) {
             const { data: loan } = await supabase
               .from("loans")
-              .select("outstanding_balance, status")
+              .select("outstanding_balance, status, total_amount")
               .eq("id", transaction.loan_id)
               .single();
             
             if (loan) {
+              const newOutstanding = Math.min(loan.total_amount, loan.outstanding_balance + transaction.amount);
               await supabase
                 .from("loans")
                 .update({ 
-                  outstanding_balance: loan.outstanding_balance + transaction.amount,
-                  status: "disbursed" // Revert to disbursed if it was completed
+                  outstanding_balance: newOutstanding,
+                  status: newOutstanding > 0 ? "disbursed" : loan.status // Revert to disbursed if there's balance
                 })
                 .eq("id", transaction.loan_id);
             }
