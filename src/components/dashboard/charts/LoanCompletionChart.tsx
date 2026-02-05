@@ -13,6 +13,8 @@ interface ActiveLoan {
   account_id: string;
   account_number?: string;
   member_name?: string;
+  interest_rate?: number;
+  repayment_months?: number;
 }
 
 interface LoanCompletionChartProps {
@@ -82,7 +84,7 @@ const LoanCompletionChart = ({ accountIds, isAdmin = false }: LoanCompletionChar
     try {
       let query = supabase
         .from("loans")
-        .select("id, amount, total_amount, outstanding_balance, status, account_id")
+        .select("id, amount, total_amount, outstanding_balance, status, account_id, interest_rate, repayment_months")
         .in("status", ["disbursed", "active"])
         .gt("outstanding_balance", 0);
 
@@ -177,15 +179,20 @@ const LoanCompletionChart = ({ accountIds, isAdmin = false }: LoanCompletionChar
     return null;
   }
 
+  // Calculate total interest for summary
+  const totalInterest = activeLoans.reduce((sum, l) => sum + (l.total_amount - l.amount), 0);
+
   // Prepare chart data: disbursed vs repaid for each loan
   const chartData = activeLoans.map((loan, index) => {
     const repaidAmount = loan.total_amount - loan.outstanding_balance;
+    const loanInterest = loan.total_amount - loan.amount;
     return {
       name: isAdmin ? loan.member_name?.split(' ')[0] || 'Member' : `Loan ${index + 1}`,
       fullName: isAdmin ? loan.member_name : `Loan ${index + 1}`,
       disbursed: loan.amount,
       repaid: repaidAmount,
       outstanding: loan.outstanding_balance,
+      interest: loanInterest,
       colorIndex: index % CHART_COLORS.bars.length,
     };
   });
@@ -275,22 +282,28 @@ const LoanCompletionChart = ({ accountIds, isAdmin = false }: LoanCompletionChar
         </ResponsiveContainer>
         
         {/* Summary Stats */}
-        <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t">
-          <div className="text-center p-2 rounded-lg bg-blue-500/10">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4 pt-4 border-t border-border">
+          <div className="text-center p-2 rounded-lg bg-primary/10">
             <p className="text-xs text-muted-foreground">Total Disbursed</p>
-            <p className="text-sm font-bold text-blue-600">
+            <p className="text-sm font-bold text-primary">
               UGX {activeLoans.reduce((sum, l) => sum + l.amount, 0).toLocaleString()}
             </p>
           </div>
-          <div className="text-center p-2 rounded-lg bg-green-500/10">
+          <div className="text-center p-2 rounded-lg bg-chart-3/10">
+            <p className="text-xs text-muted-foreground">Total Interest</p>
+            <p className="text-sm font-bold text-chart-3">
+              UGX {totalInterest.toLocaleString()}
+            </p>
+          </div>
+          <div className="text-center p-2 rounded-lg bg-success/10">
             <p className="text-xs text-muted-foreground">Total Repaid</p>
-            <p className="text-sm font-bold text-green-600">
+            <p className="text-sm font-bold text-success">
               UGX {activeLoans.reduce((sum, l) => sum + (l.total_amount - l.outstanding_balance), 0).toLocaleString()}
             </p>
           </div>
-          <div className="text-center p-2 rounded-lg bg-orange-500/10">
+          <div className="text-center p-2 rounded-lg bg-warning/10">
             <p className="text-xs text-muted-foreground">Outstanding</p>
-            <p className="text-sm font-bold text-orange-600">
+            <p className="text-sm font-bold text-warning">
               UGX {activeLoans.reduce((sum, l) => sum + l.outstanding_balance, 0).toLocaleString()}
             </p>
           </div>

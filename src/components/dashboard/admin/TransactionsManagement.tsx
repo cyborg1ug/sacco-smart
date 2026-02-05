@@ -684,6 +684,43 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
       .eq("id", transaction.account.id)
       .single();
 
+    // For loan repayments, fetch loan info for interest breakdown
+    let loanInfo: {
+      principal: number;
+      interestRate: number;
+      totalInterest: number;
+      principalPortion: number;
+      interestPortion: number;
+      outstandingBalance: number;
+    } | undefined;
+
+    if (transaction.transaction_type === "loan_repayment" && transaction.loan_id) {
+      const { data: loan } = await supabase
+        .from("loans")
+        .select("amount, interest_rate, total_amount, outstanding_balance, repayment_months")
+        .eq("id", transaction.loan_id)
+        .single();
+
+      if (loan) {
+        const monthlyInterestRate = loan.interest_rate / 100;
+        const monthlyInterest = loan.amount * monthlyInterestRate;
+        const monthlyPrincipal = loan.amount / (loan.repayment_months || 1);
+        
+        // Calculate portions based on payment amount
+        const monthlyPayment = monthlyPrincipal + monthlyInterest;
+        const paymentRatio = transaction.amount / monthlyPayment;
+        
+        loanInfo = {
+          principal: loan.amount,
+          interestRate: loan.interest_rate,
+          totalInterest: loan.total_amount - loan.amount,
+          principalPortion: Math.round(monthlyPrincipal * paymentRatio),
+          interestPortion: Math.round(monthlyInterest * paymentRatio),
+          outstandingBalance: loan.outstanding_balance,
+        };
+      }
+    }
+
     generateTransactionReceiptPDF({
       tnxId: transaction.tnx_id,
       memberName: transaction.account.user.full_name,
@@ -696,6 +733,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
       description: transaction.description,
       createdAt: transaction.created_at,
       approvedAt: transaction.approved_at || undefined,
+      loanInfo,
     });
     toast({
       title: "Receipt Generated",
