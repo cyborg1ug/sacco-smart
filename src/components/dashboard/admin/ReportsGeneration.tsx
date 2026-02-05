@@ -269,8 +269,10 @@ const ReportsGeneration = () => {
       report += `${"─".repeat(70)}\n`;
       if (loans && loans.length > 0) {
         loans.forEach(l => {
-          report += `Loan Amount: UGX ${Number(l.amount).toLocaleString()}\n`;
-          report += `Interest Rate: ${l.interest_rate}%\n`;
+          const totalInterest = Number(l.total_amount) - Number(l.amount);
+          report += `Principal Amount: UGX ${Number(l.amount).toLocaleString()}\n`;
+          report += `Interest Rate: ${l.interest_rate}% per month\n`;
+          report += `Total Interest: UGX ${totalInterest.toLocaleString()}\n`;
           report += `Total Payable: UGX ${Number(l.total_amount).toLocaleString()}\n`;
           report += `Outstanding: UGX ${Number(l.outstanding_balance).toLocaleString()}\n`;
           report += `Status: ${l.status.toUpperCase()}\n\n`;

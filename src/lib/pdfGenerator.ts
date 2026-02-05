@@ -24,6 +24,15 @@ interface TransactionReceiptData {
   createdAt: string;
   approvedAt?: string;
   approvedBy?: string;
+  // Loan repayment specific
+  loanInfo?: {
+    principal: number;
+    interestRate: number;
+    totalInterest: number;
+    principalPortion: number;
+    interestPortion: number;
+    outstandingBalance: number;
+  };
 }
 
 interface Loan {
@@ -32,6 +41,7 @@ interface Loan {
   total_amount: number;
   outstanding_balance: number;
   status: string;
+  repayment_months?: number;
 }
 
 interface SavingsRecord {
@@ -170,17 +180,18 @@ export const generateMemberStatementPDF = (data: MemberStatementData): void => {
   if (data.loans.length > 0) {
     autoTable(doc, {
       startY: (loansY > 250 ? 20 : loansY) + 5,
-      head: [["Amount (UGX)", "Interest", "Total Payable", "Outstanding", "Status"]],
+      head: [["Principal", "Interest Rate", "Total Interest", "Total Payable", "Outstanding", "Status"]],
       body: data.loans.map((l) => [
         l.amount.toLocaleString(),
         `${l.interest_rate}%`,
+        (l.total_amount - l.amount).toLocaleString(),
         l.total_amount.toLocaleString(),
         l.outstanding_balance.toLocaleString(),
         l.status.toUpperCase(),
       ]),
       theme: "grid",
       headStyles: { fillColor: [0, 100, 0] },
-      styles: { fontSize: 9 },
+      styles: { fontSize: 8 },
     });
   } else {
     doc.setFontSize(10);
@@ -385,7 +396,7 @@ export const generateTransactionReceiptPDF = (data: TransactionReceiptData): voi
   yPos += 5;
   doc.setDrawColor(0, 100, 0);
   doc.setFillColor(240, 255, 240);
-  doc.rect(10, yPos - 5, pageWidth - 20, 20, "FD");
+  doc.rect(10, yPos - 5, pageWidth - 20, data.loanInfo ? 45 : 20, "FD");
   
   doc.setFontSize(10);
   doc.setFont("helvetica", "bold");
@@ -402,15 +413,40 @@ export const generateTransactionReceiptPDF = (data: TransactionReceiptData): voi
   doc.text("Balance After Transaction:", 15, yPos + 12);
   doc.text(`UGX ${data.balanceAfter.toLocaleString()}`, pageWidth - 15, yPos + 12, { align: "right" });
   
+  // Loan repayment interest breakdown
+  if (data.loanInfo && data.transactionType === "loan_repayment") {
+    doc.setDrawColor(100, 100, 100);
+    doc.line(15, yPos + 17, pageWidth - 15, yPos + 17);
+    
+    doc.setFont("helvetica", "bold");
+    doc.text("Interest Breakdown:", 15, yPos + 23);
+    doc.setFont("helvetica", "normal");
+    
+    doc.text("Principal Portion:", 15, yPos + 29);
+    doc.text(`UGX ${data.loanInfo.principalPortion.toLocaleString()}`, pageWidth - 15, yPos + 29, { align: "right" });
+    
+    doc.text("Interest Portion:", 15, yPos + 35);
+    doc.setTextColor(0, 100, 0);
+    doc.text(`UGX ${data.loanInfo.interestPortion.toLocaleString()}`, pageWidth - 15, yPos + 35, { align: "right" });
+    
+    doc.setTextColor(0, 0, 0);
+    doc.text("Loan Outstanding:", 15, yPos + 41);
+    doc.setTextColor(200, 100, 0);
+    doc.text(`UGX ${data.loanInfo.outstandingBalance.toLocaleString()}`, pageWidth - 15, yPos + 41, { align: "right" });
+    
+    yPos += 30;
+  }
+  
   // Show current balance and savings if available
+  doc.setTextColor(0, 0, 0);
   if (data.currentBalance !== undefined) {
-    doc.text("Current Account Balance:", 15, yPos + 18);
-    doc.text(`UGX ${data.currentBalance.toLocaleString()}`, pageWidth - 15, yPos + 18, { align: "right" });
+    doc.text("Current Account Balance:", 15, yPos + (data.loanInfo ? 18 : 18));
+    doc.text(`UGX ${data.currentBalance.toLocaleString()}`, pageWidth - 15, yPos + (data.loanInfo ? 18 : 18), { align: "right" });
   }
   
   if (data.totalSavings !== undefined) {
-    doc.text("Total Savings:", 15, yPos + 24);
-    doc.text(`UGX ${data.totalSavings.toLocaleString()}`, pageWidth - 15, yPos + 24, { align: "right" });
+    doc.text("Total Savings:", 15, yPos + (data.loanInfo ? 24 : 24));
+    doc.text(`UGX ${data.totalSavings.toLocaleString()}`, pageWidth - 15, yPos + (data.loanInfo ? 24 : 24), { align: "right" });
   }
   
   yPos += data.currentBalance !== undefined && data.totalSavings !== undefined ? 42 : 30;

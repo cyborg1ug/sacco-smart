@@ -299,10 +299,12 @@ const MemberStatement = () => {
       statement += `${"─".repeat(80)}\n`;
       if (loans && loans.length > 0) {
         loans.forEach((l) => {
+          const totalInterest = Number(l.total_amount) - Number(l.amount);
           statement += `Loan ID: ${l.id.substring(0, 8)}...\n`;
           statement += `  Principal Amount:    UGX ${Number(l.amount).toLocaleString()}\n`;
-          statement += `  Interest Rate:       ${l.interest_rate}%\n`;
-          statement += `  Total Amount:        UGX ${Number(l.total_amount).toLocaleString()}\n`;
+          statement += `  Interest Rate:       ${l.interest_rate}% per month\n`;
+          statement += `  Total Interest:      UGX ${totalInterest.toLocaleString()}\n`;
+          statement += `  Total Payable:       UGX ${Number(l.total_amount).toLocaleString()}\n`;
           statement += `  Outstanding Balance: UGX ${Number(l.outstanding_balance).toLocaleString()}\n`;
           statement += `  Status:              ${l.status.toUpperCase()}\n`;
           statement += `  Applied On:          ${format(new Date(l.created_at), "MMM dd, yyyy HH:mm")}\n`;
