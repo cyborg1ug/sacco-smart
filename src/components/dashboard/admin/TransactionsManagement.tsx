@@ -352,9 +352,24 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
           principalReduction = amount - interestDeducted;
           
           if (interestDeducted > 0) {
+            // Create interest_received transaction to track the interest
+            await supabase
+              .from("transactions")
+              .insert({
+                account_id: accountId,
+                transaction_type: "interest_received",
+                amount: interestDeducted,
+                balance_after: newBalance,
+                description: `Monthly interest (2%) on loan ${loanId.substring(0, 8)}`,
+                status: "approved",
+                approved_by: user?.id,
+                approved_at: new Date().toISOString(),
+                loan_id: loanId,
+              } as any);
+
             toast({
               title: "Monthly Interest Applied",
-              description: `UGX ${interestDeducted.toLocaleString()} deducted as this month's interest. UGX ${principalReduction.toLocaleString()} applied to principal.`,
+              description: `UGX ${interestDeducted.toLocaleString()} recorded as interest. UGX ${principalReduction.toLocaleString()} applied to principal.`,
             });
           }
         }
@@ -821,6 +836,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
         if (typeFilter === "disbursement" && t.transaction_type !== "loan_disbursement") return false;
         if (typeFilter === "deposit" && t.transaction_type !== "deposit") return false;
         if (typeFilter === "withdrawal" && t.transaction_type !== "withdrawal") return false;
+        if (typeFilter === "interest" && t.transaction_type !== "interest_received") return false;
         if (typeFilter === "pending" && t.status !== "pending") return false;
       }
       
@@ -871,6 +887,9 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
       .reduce((sum, t) => sum + t.amount, 0),
     totalLoanRepayments: filteredTransactions
       .filter(t => t.transaction_type === "loan_repayment" && t.status === "approved")
+      .reduce((sum, t) => sum + t.amount, 0),
+    totalInterestReceived: filteredTransactions
+      .filter(t => t.transaction_type === "interest_received" && t.status === "approved")
       .reduce((sum, t) => sum + t.amount, 0),
     pendingCount: filteredTransactions.filter(t => t.status === "pending").length,
   }), [filteredTransactions]);
@@ -1241,12 +1260,16 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
                 Withdrawals
               </TabsTrigger>
               <TabsTrigger value="disbursement" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
-                <CreditCard className="h-3 w-3 mr-1 text-blue-500" />
+                <CreditCard className="h-3 w-3 mr-1 text-primary" />
                 Disbursements
               </TabsTrigger>
               <TabsTrigger value="repayment" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
-                <RefreshCw className="h-3 w-3 mr-1 text-purple-500" />
+                <RefreshCw className="h-3 w-3 mr-1 text-chart-1" />
                 Repayments
+              </TabsTrigger>
+              <TabsTrigger value="interest" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                <Banknote className="h-3 w-3 mr-1 text-warning" />
+                Interest
               </TabsTrigger>
             </TabsList>
           </Tabs>
