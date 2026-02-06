@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, AlertCircle, CheckCircle, Users, Wallet, Ban } from "lucide-react";
+import { Loader2, AlertCircle, CheckCircle, Users, Wallet } from "lucide-react";
 
 interface LoanApplicationProps {
   onApplicationSubmitted: () => void;
@@ -35,13 +35,6 @@ interface AccountOption {
   full_name: string;
 }
 
-interface ExistingLoan {
-  id: string;
-  amount: number;
-  outstanding_balance: number;
-  status: string;
-}
-
 const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
@@ -54,8 +47,6 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
   const [loanAmount, setLoanAmount] = useState("");
   const [repaymentMonths, setRepaymentMonths] = useState("1");
   const [guarantorError, setGuarantorError] = useState("");
-  const [existingLoan, setExistingLoan] = useState<ExistingLoan | null>(null);
-  const [hasExistingLoan, setHasExistingLoan] = useState(false);
 
   useEffect(() => {
     loadMyAccounts();
@@ -65,27 +56,8 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
   useEffect(() => {
     if (selectedAccountId) {
       checkEligibility(selectedAccountId);
-      checkExistingLoans(selectedAccountId);
     }
   }, [selectedAccountId]);
-
-  const checkExistingLoans = async (accountId: string) => {
-    // Check if account has any active/pending loans
-    const { data: loans } = await supabase
-      .from("loans")
-      .select("id, amount, outstanding_balance, status")
-      .eq("account_id", accountId)
-      .in("status", ["pending", "approved", "active", "disbursed"])
-      .gt("outstanding_balance", 0);
-
-    if (loans && loans.length > 0) {
-      setExistingLoan(loans[0]);
-      setHasExistingLoan(true);
-    } else {
-      setExistingLoan(null);
-      setHasExistingLoan(false);
-    }
-  };
 
   const loadMyAccounts = async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -352,20 +324,6 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
                 : "You are not currently eligible for a loan. To qualify, you must have savings in your account."}
             </AlertDescription>
           </Alert>
-        ) : hasExistingLoan ? (
-          <Alert variant="destructive">
-            <Ban className="h-4 w-4" />
-            <AlertDescription>
-              <div className="space-y-2">
-                <p className="font-medium">You cannot apply for a new loan</p>
-                <p>
-                  This account has an existing loan of UGX {existingLoan?.amount.toLocaleString()} with 
-                  UGX {existingLoan?.outstanding_balance.toLocaleString()} outstanding balance.
-                </p>
-                <p className="text-xs">Clear the existing loan before applying for a new one.</p>
-              </div>
-            </AlertDescription>
-          </Alert>
         ) : (
           <>
             <Alert>
@@ -478,11 +436,9 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
           <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
             <li>The applying account must have savings</li>
             <li>Maximum loan: 3× the account's total savings</li>
-            <li><strong>No existing active loan</strong> on the account</li>
             <li>Guarantor's savings must be ≥ applying account's savings</li>
-            <li>Guarantor must not be guaranteeing another active loan</li>
             <li>Guarantor must approve your request</li>
-            <li>Interest rate: 2% per month from disbursement date</li>
+            <li>Interest rate: 2%</li>
           </ul>
         </div>
       </CardContent>

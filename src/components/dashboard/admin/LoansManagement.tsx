@@ -10,11 +10,10 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Send, Loader2, Users, UserPlus, CheckCircle, Edit, Clock, CheckCircle2, TrendingUp, Search, Calendar, RefreshCw } from "lucide-react";
-import { format, differenceInDays } from "date-fns";
+import { Check, X, Send, Loader2, Users, UserPlus, CheckCircle, Edit, Clock, CheckCircle2, TrendingUp, Search, Calendar } from "lucide-react";
+import { format } from "date-fns";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MobileCardList, MobileCard } from "@/components/ui/MobileCardList";
-import { calculateCurrentOutstanding } from "@/lib/loanUtils";
 
 interface Loan {
   id: string;
@@ -519,21 +518,12 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
 
     const totalRepaid = repaymentData?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
 
-    // Calculate months elapsed from disbursement date (dynamic interest)
-    const disbursementDate = editDisbursedAt ? new Date(editDisbursedAt) : 
-                            selectedLoan.disbursed_at ? new Date(selectedLoan.disbursed_at) : null;
+    // Recalculate total amount with new repayment months
+    const monthlyInterest = selectedLoan.amount * (selectedLoan.interest_rate / 100);
+    const totalInterest = monthlyInterest * editRepaymentMonths;
+    const newTotalAmount = selectedLoan.amount + totalInterest;
     
-    let monthsElapsed = editRepaymentMonths; // Default to planned months if not disbursed
-    if (disbursementDate) {
-      const daysElapsed = differenceInDays(new Date(), disbursementDate);
-      monthsElapsed = Math.max(1, Math.ceil(daysElapsed / 30));
-    }
-    
-    // Interest = Principal × 2% × Months Elapsed from disbursement
-    const dynamicInterest = selectedLoan.amount * (selectedLoan.interest_rate / 100) * monthsElapsed;
-    const newTotalAmount = selectedLoan.amount + dynamicInterest;
-    
-    // Calculate new outstanding based on actual repayments and dynamic interest
+    // Calculate new outstanding based on actual repayments
     const newOutstanding = Math.max(0, newTotalAmount - totalRepaid);
     
     // Determine correct status based on outstanding balance
@@ -546,8 +536,8 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
 
     const updateData: any = {
       repayment_months: editRepaymentMonths,
-      total_amount: Math.round(newTotalAmount),
-      outstanding_balance: Math.round(newOutstanding),
+      total_amount: newTotalAmount,
+      outstanding_balance: newOutstanding,
       status: newStatus,
     };
 
@@ -579,40 +569,12 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     } else {
       toast({
         title: "Success",
-        description: `Loan updated. Interest calculated for ${monthsElapsed} month(s) from disbursement.`,
+        description: "Loan details updated successfully",
       });
       setEditLoanDialogOpen(false);
       loadLoans();
       onUpdate();
     }
-  };
-
-  // Calculate dynamic interest for display
-  const calculateDynamicLoanInfo = (loan: Loan) => {
-    if (!loan.disbursed_at) {
-      // Not disbursed yet - show planned amounts
-      const plannedInterest = loan.amount * (loan.interest_rate / 100) * (loan.repayment_months || 1);
-      return {
-        monthsElapsed: 0,
-        currentInterest: 0,
-        currentTotalAmount: loan.amount,
-        displayTotalAmount: loan.amount + plannedInterest,
-        isProjected: true,
-      };
-    }
-    
-    const daysElapsed = differenceInDays(new Date(), new Date(loan.disbursed_at));
-    const monthsElapsed = Math.max(1, Math.ceil(daysElapsed / 30));
-    const currentInterest = loan.amount * (loan.interest_rate / 100) * monthsElapsed;
-    const currentTotalAmount = loan.amount + currentInterest;
-    
-    return {
-      monthsElapsed,
-      currentInterest: Math.round(currentInterest),
-      currentTotalAmount: Math.round(currentTotalAmount),
-      displayTotalAmount: Math.round(currentTotalAmount),
-      isProjected: false,
-    };
   };
 
   const getGuarantorStatusBadge = (status: string | null) => {
@@ -763,16 +725,11 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   };
 
   const calculateMonthlyPayment = (loan: Loan) => {
-    const loanInfo = calculateDynamicLoanInfo(loan);
-    const monthlyPayment = loanInfo.displayTotalAmount / (loan.repayment_months || 1);
-    const plannedInterest = loan.amount * (loan.interest_rate / 100) * (loan.repayment_months || 1);
-    return { 
-      monthlyPayment: Math.round(monthlyPayment), 
-      totalInterest: loanInfo.isProjected ? Math.round(plannedInterest) : loanInfo.currentInterest, 
-      totalWithInterest: Math.round(loanInfo.displayTotalAmount),
-      monthsElapsed: loanInfo.monthsElapsed,
-      isProjected: loanInfo.isProjected,
-    };
+    const monthlyInterest = loan.amount * (loan.interest_rate / 100);
+    const totalInterest = monthlyInterest * (loan.repayment_months || 1);
+    const totalWithInterest = loan.amount + totalInterest;
+    const monthlyPayment = totalWithInterest / (loan.repayment_months || 1);
+    return { monthlyPayment, totalInterest, totalWithInterest };
   };
 
   const renderMobileCard = (loan: Loan) => {
@@ -1024,39 +981,19 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
               Update loan details for {selectedLoan?.account.user.full_name}
             </DialogDescription>
           </DialogHeader>
-          {selectedLoan && (() => {
-            const loanInfo = calculateDynamicLoanInfo(selectedLoan);
-            const disbursementDate = editDisbursedAt ? new Date(editDisbursedAt) : 
-                                    selectedLoan.disbursed_at ? new Date(selectedLoan.disbursed_at) : null;
-            let previewMonths = editRepaymentMonths;
-            if (disbursementDate) {
-              const daysElapsed = differenceInDays(new Date(), disbursementDate);
-              previewMonths = Math.max(1, Math.ceil(daysElapsed / 30));
-            }
-            const previewInterest = selectedLoan.amount * (selectedLoan.interest_rate / 100) * previewMonths;
-            const previewTotal = selectedLoan.amount + previewInterest;
-            
-            return (
+          {selectedLoan && (
             <div className="space-y-4">
               <div className="p-3 bg-muted rounded-md space-y-1 text-sm">
-                <p><span className="font-medium">Loan Principal:</span> UGX {selectedLoan.amount.toLocaleString()}</p>
+                <p><span className="font-medium">Loan Amount:</span> UGX {selectedLoan.amount.toLocaleString()}</p>
                 <p><span className="font-medium">Interest Rate:</span> {selectedLoan.interest_rate}% per month</p>
-                {selectedLoan.disbursed_at && (
-                  <p><span className="font-medium">Disbursed:</span> {format(new Date(selectedLoan.disbursed_at), "MMM dd, yyyy")}</p>
-                )}
-                <div className="pt-2 border-t mt-2">
-                  <p className="font-medium text-primary">Current Interest Calculation:</p>
-                  <p><span className="font-medium">Months Elapsed:</span> {loanInfo.monthsElapsed} month(s)</p>
-                  <p><span className="font-medium">Interest Accrued:</span> UGX {loanInfo.currentInterest.toLocaleString()}</p>
-                  <p><span className="font-medium">Current Total Due:</span> UGX {loanInfo.currentTotalAmount.toLocaleString()}</p>
-                  <p><span className="font-medium">Outstanding:</span> UGX {selectedLoan.outstanding_balance.toLocaleString()}</p>
-                  <p><span className="font-medium">Repaid:</span> UGX {(loanInfo.currentTotalAmount - selectedLoan.outstanding_balance).toLocaleString()}</p>
-                </div>
+                <p><span className="font-medium">Total Repayable:</span> UGX {selectedLoan.total_amount.toLocaleString()}</p>
+                <p><span className="font-medium">Outstanding:</span> UGX {selectedLoan.outstanding_balance.toLocaleString()}</p>
+                <p><span className="font-medium">Repaid:</span> UGX {(selectedLoan.total_amount - selectedLoan.outstanding_balance).toLocaleString()}</p>
               </div>
               
               {/* Repayment Duration */}
               <div className="space-y-2">
-                <Label>Planned Repayment Duration (Months)</Label>
+                <Label>Repayment Duration (Months)</Label>
                 <Input 
                   type="number"
                   min={1}
@@ -1064,7 +1001,7 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
                   onChange={(e) => setEditRepaymentMonths(parseInt(e.target.value) || 1)}
                 />
                 <p className="text-xs text-muted-foreground">
-                  This is the planned duration. Interest accumulates monthly from disbursement.
+                  Monthly payment: UGX {((selectedLoan.amount + (selectedLoan.amount * selectedLoan.interest_rate / 100 * editRepaymentMonths)) / editRepaymentMonths).toLocaleString()}
                 </p>
               </div>
               
@@ -1079,14 +1016,9 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
                   value={editDisbursedAt}
                   onChange={(e) => setEditDisbursedAt(e.target.value)}
                 />
-                {disbursementDate && (
-                  <div className="p-2 bg-primary/10 rounded text-xs space-y-1">
-                    <p className="font-medium">Preview with new date:</p>
-                    <p>Months elapsed: {previewMonths}</p>
-                    <p>Interest: UGX {Math.round(previewInterest).toLocaleString()}</p>
-                    <p>Total: UGX {Math.round(previewTotal).toLocaleString()}</p>
-                  </div>
-                )}
+                <p className="text-xs text-muted-foreground">
+                  Interest calculation starts from this date
+                </p>
               </div>
               
               {/* Guarantor Assignment */}
@@ -1123,12 +1055,11 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
                 onClick={handleUpdateLoanDetails} 
                 className="w-full"
               >
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Recalculate & Update Loan
+                <Edit className="mr-2 h-4 w-4" />
+                Update Loan Details
               </Button>
             </div>
-          );
-          })()}
+          )}
         </DialogContent>
       </Dialog>
     </>
