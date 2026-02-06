@@ -45,23 +45,34 @@ const AdminDashboard = () => {
   }, []);
 
   const loadStats = async () => {
-    const [accountsCountResult, accountsResult, loansResult, transactionsResult] =
-      await Promise.all([
-        supabase.from("accounts").select("id", { count: "exact" }),
-        supabase.from("accounts").select("total_savings"),
-        supabase
-          .from("loans")
-          .select("id", { count: "exact" })
-          .in("status", ["approved", "disbursed"]),
-        supabase
-          .from("transactions")
-          .select("id", { count: "exact" })
-          .eq("status", "pending"),
-      ]);
+    const [
+      accountsCountResult, 
+      depositsResult, 
+      loansResult, 
+      transactionsResult
+    ] = await Promise.all([
+      supabase.from("accounts").select("id", { count: "exact" }),
+      // Get total savings from approved deposits (more accurate than account totals)
+      supabase
+        .from("transactions")
+        .select("amount")
+        .eq("transaction_type", "deposit")
+        .eq("status", "approved"),
+      supabase
+        .from("loans")
+        .select("id", { count: "exact" })
+        .in("status", ["approved", "disbursed", "active"])
+        .gt("outstanding_balance", 0),
+      supabase
+        .from("transactions")
+        .select("id", { count: "exact" })
+        .eq("status", "pending"),
+    ]);
 
+    // Calculate total savings from approved deposits
     const totalSavings =
-      accountsResult.data?.reduce(
-        (sum, acc) => sum + Number(acc.total_savings),
+      depositsResult.data?.reduce(
+        (sum, t) => sum + Number(t.amount),
         0
       ) || 0;
 

@@ -1,16 +1,19 @@
 project_id = "npgbotlrokivbuqqzbwm"
 
 [functions.weekly-welfare-deduction]
-verify_jwt = true
+verify_jwt = false
 
 [functions.create-member]
 verify_jwt = false
 
 [functions.send-reminder-email]
-verify_jwt = true
+verify_jwt = false
 
 [functions.generate-receipt]
 verify_jwt = false
 
 [functions.loan-status-notification]
+verify_jwt = false
+
+[functions.apply-overdue-interest]
 verify_jwt = false
