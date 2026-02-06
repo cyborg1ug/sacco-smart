@@ -64,6 +64,7 @@ const LoanRepaymentSchedule = ({ accountIds }: LoanRepaymentScheduleProps) => {
   const generateSchedule = (loan: ActiveLoan): ScheduleEntry[] => {
     const schedule: ScheduleEntry[] = [];
     const startDate = loan.disbursed_at ? new Date(loan.disbursed_at) : new Date(loan.created_at);
+    // Interest is 2% per month × repayment months
     const monthlyInterestRate = loan.interest_rate / 100;
     const monthlyInterest = loan.amount * monthlyInterestRate;
     const monthlyPrincipal = loan.amount / loan.repayment_months;
