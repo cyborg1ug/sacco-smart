@@ -518,7 +518,7 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
 
     const totalRepaid = repaymentData?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
 
-    // Recalculate total amount with new repayment months
+    // Interest is 2% per month × repayment months
     const monthlyInterest = selectedLoan.amount * (selectedLoan.interest_rate / 100);
     const totalInterest = monthlyInterest * editRepaymentMonths;
     const newTotalAmount = selectedLoan.amount + totalInterest;
@@ -546,11 +546,12 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
       updateData.disbursed_at = new Date(editDisbursedAt).toISOString();
     }
 
-    // Update guarantor if changed
-    if (editGuarantor && editGuarantor !== selectedLoan.guarantor_account_id) {
-      updateData.guarantor_account_id = editGuarantor;
+    // Update guarantor if changed (handle "none" as null)
+    const normalizedGuarantor = editGuarantor === "none" || editGuarantor === "" ? null : editGuarantor;
+    if (normalizedGuarantor && normalizedGuarantor !== selectedLoan.guarantor_account_id) {
+      updateData.guarantor_account_id = normalizedGuarantor;
       updateData.guarantor_status = "approved"; // Admin-assigned guarantors are auto-approved
-    } else if (!editGuarantor && selectedLoan.guarantor_account_id) {
+    } else if (!normalizedGuarantor && selectedLoan.guarantor_account_id) {
       updateData.guarantor_account_id = null;
       updateData.guarantor_status = null;
     }
@@ -725,6 +726,7 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   };
 
   const calculateMonthlyPayment = (loan: Loan) => {
+    // Interest is 2% per month × repayment months
     const monthlyInterest = loan.amount * (loan.interest_rate / 100);
     const totalInterest = monthlyInterest * (loan.repayment_months || 1);
     const totalWithInterest = loan.amount + totalInterest;
@@ -1032,12 +1034,12 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
                     <Loader2 className="h-5 w-5 animate-spin" />
                   </div>
                 ) : (
-                  <Select value={editGuarantor} onValueChange={setEditGuarantor}>
+                  <Select value={editGuarantor || "none"} onValueChange={setEditGuarantor}>
                     <SelectTrigger>
                       <SelectValue placeholder="Select guarantor (optional)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="">No guarantor</SelectItem>
+                      <SelectItem value="none">No guarantor</SelectItem>
                       {guarantorCandidates.map((candidate) => (
                         <SelectItem key={candidate.id} value={candidate.id}>
                           {candidate.full_name} ({candidate.account_number}) - UGX {candidate.total_savings.toLocaleString()}

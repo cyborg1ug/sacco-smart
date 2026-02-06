@@ -217,7 +217,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
 
     const interestRate = 2.0;
     const months = parseInt(repaymentMonths) || 1;
-    // Fixed interest rate per month of loan activity
+    // Interest rate is 2% per month multiplied by repayment months
     const totalInterest = amount * (interestRate / 100) * months;
     const totalAmount = amount + totalInterest;
 
@@ -383,7 +383,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
                   {loanAmount && repaymentMonths && (
                     <div className="p-3 bg-muted rounded-md space-y-1 text-sm">
                       <p><span className="font-medium">Loan Amount:</span> UGX {parseFloat(loanAmount).toLocaleString()}</p>
-                      <p><span className="font-medium">Interest ({repaymentMonths} months @ 2%/mo):</span> UGX {(parseFloat(loanAmount) * 0.02 * parseInt(repaymentMonths)).toLocaleString()}</p>
+                      <p><span className="font-medium">Interest ({repaymentMonths} month{parseInt(repaymentMonths) > 1 ? 's' : ''} @ 2%/mo):</span> UGX {(parseFloat(loanAmount) * 0.02 * parseInt(repaymentMonths)).toLocaleString()}</p>
                       <p className="font-semibold text-primary"><span className="font-medium">Total Repayment:</span> UGX {(parseFloat(loanAmount) + (parseFloat(loanAmount) * 0.02 * parseInt(repaymentMonths))).toLocaleString()}</p>
                       <p><span className="font-medium">Monthly Payment:</span> UGX {((parseFloat(loanAmount) + (parseFloat(loanAmount) * 0.02 * parseInt(repaymentMonths))) / parseInt(repaymentMonths)).toLocaleString()}</p>
                     </div>
@@ -438,7 +438,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
             <li>Maximum loan: 3× the account's total savings</li>
             <li>Guarantor's savings must be ≥ applying account's savings</li>
             <li>Guarantor must approve your request</li>
-            <li>Interest rate: 2%</li>
+            <li>Interest rate: 2% per month</li>
           </ul>
         </div>
       </CardContent>
