@@ -314,16 +314,53 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
       return;
     }
 
-    // If this is a loan repayment, update the loan's outstanding balance
+    // If this is a loan repayment, handle interest deduction for first payment of month
     if (type === "loan_repayment" && loanId) {
       const { data: loan } = await supabase
         .from("loans")
-        .select("outstanding_balance, amount, total_amount, account_id")
+        .select("outstanding_balance, amount, total_amount, account_id, interest_rate, repayment_months, disbursed_at")
         .eq("id", loanId)
         .single();
 
       if (loan) {
-        const newOutstanding = Math.max(0, loan.outstanding_balance - amount);
+        // Calculate monthly interest (2% of principal)
+        const monthlyInterest = loan.amount * (loan.interest_rate / 100);
+        
+        // Check if this is the first repayment of the current month
+        const currentMonth = new Date().getMonth();
+        const currentYear = new Date().getFullYear();
+        
+        const { data: monthRepayments } = await supabase
+          .from("transactions")
+          .select("id, created_at")
+          .eq("loan_id", loanId)
+          .eq("transaction_type", "loan_repayment")
+          .eq("status", "approved");
+        
+        // Filter to find repayments in the current month
+        const thisMonthRepayments = (monthRepayments || []).filter(t => {
+          const txDate = new Date(t.created_at);
+          return txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear;
+        });
+
+        let principalReduction = amount;
+        let interestDeducted = 0;
+
+        // If this is the first repayment of the month, deduct interest first
+        if (thisMonthRepayments.length === 0) {
+          interestDeducted = Math.min(monthlyInterest, amount);
+          principalReduction = amount - interestDeducted;
+          
+          if (interestDeducted > 0) {
+            toast({
+              title: "Monthly Interest Applied",
+              description: `UGX ${interestDeducted.toLocaleString()} deducted as this month's interest. UGX ${principalReduction.toLocaleString()} applied to principal.`,
+            });
+          }
+        }
+
+        // Only reduce outstanding balance by the principal portion
+        const newOutstanding = Math.max(0, loan.outstanding_balance - principalReduction);
         const newStatus = newOutstanding <= 0 ? "completed" : undefined;
 
         const updateData: any = { outstanding_balance: newOutstanding };

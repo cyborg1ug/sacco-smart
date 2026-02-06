@@ -111,7 +111,20 @@ const WelfareManagement = () => {
     const description = formData.get("description") as string;
     const weekDate = formData.get("weekDate") as string;
 
-    const { error } = await supabase
+    // Get current account balance
+    const account = accounts.find(a => a.id === accountId);
+    if (!account) {
+      toast({
+        title: "Error",
+        description: "Account not found",
+        variant: "destructive",
+      });
+      setProcessing(false);
+      return;
+    }
+
+    // Insert welfare entry
+    const { error: welfareError } = await supabase
       .from("welfare")
       .insert({
         account_id: accountId,
@@ -120,21 +133,56 @@ const WelfareManagement = () => {
         week_date: weekDate,
       });
 
-    if (error) {
+    if (welfareError) {
       toast({
         title: "Error",
-        description: error.message,
+        description: welfareError.message,
+        variant: "destructive",
+      });
+      setProcessing(false);
+      return;
+    }
+
+    // Deduct from account balance and total_savings immediately
+    const newBalance = Math.max(0, account.balance - amount);
+    const newTotalSavings = Math.max(0, account.total_savings - amount);
+
+    const { error: updateError } = await supabase
+      .from("accounts")
+      .update({
+        balance: newBalance,
+        total_savings: newTotalSavings,
+      })
+      .eq("id", accountId);
+
+    if (updateError) {
+      toast({
+        title: "Warning",
+        description: "Welfare recorded but balance update failed: " + updateError.message,
         variant: "destructive",
       });
     } else {
+      // Create transaction record for tracking
+      await supabase
+        .from("transactions")
+        .insert({
+          account_id: accountId,
+          transaction_type: "withdrawal",
+          amount: amount,
+          description: description || "Welfare fee deduction",
+          balance_after: newBalance,
+          status: "approved",
+          approved_at: new Date().toISOString(),
+        } as any);
+
       toast({
         title: "Success",
-        description: "Welfare fee recorded successfully",
+        description: `Welfare fee of UGX ${amount.toLocaleString()} recorded and deducted from account`,
       });
-      setDialogOpen(false);
-      loadData();
     }
 
+    setDialogOpen(false);
+    loadData();
     setProcessing(false);
   };
 
@@ -148,10 +196,18 @@ const WelfareManagement = () => {
 
     const today = new Date();
     const welfareEntries: any[] = [];
+    const accountUpdates: { id: string; totalDeduction: number; currentBalance: number; currentSavings: number }[] = [];
 
     // For each account, create welfare entries for the past weeks
     for (const account of accounts) {
       const totalDeduction = weeksCount * weeklyAmount;
+      
+      accountUpdates.push({
+        id: account.id,
+        totalDeduction,
+        currentBalance: account.balance,
+        currentSavings: account.total_savings,
+      });
       
       // Create one entry per week for each account
       for (let i = weeksCount; i >= 1; i--) {
@@ -166,25 +222,62 @@ const WelfareManagement = () => {
       }
     }
 
-    const { error } = await supabase
+    // Insert all welfare entries
+    const { error: welfareError } = await supabase
       .from("welfare")
       .insert(welfareEntries);
 
-    if (error) {
+    if (welfareError) {
       toast({
         title: "Error",
-        description: error.message,
+        description: welfareError.message,
         variant: "destructive",
       });
-    } else {
-      toast({
-        title: "Success",
-        description: `Recorded ${weeksCount} weeks of welfare fees for ${accounts.length} accounts (UGX ${weeklyAmount.toLocaleString()} per week)`,
-      });
-      setBulkDialogOpen(false);
-      loadData();
+      setProcessing(false);
+      return;
     }
 
+    // Update all account balances
+    let successCount = 0;
+    let errorCount = 0;
+
+    for (const update of accountUpdates) {
+      const newBalance = Math.max(0, update.currentBalance - update.totalDeduction);
+      const newTotalSavings = Math.max(0, update.currentSavings - update.totalDeduction);
+
+      const { error: updateError } = await supabase
+        .from("accounts")
+        .update({
+          balance: newBalance,
+          total_savings: newTotalSavings,
+        })
+        .eq("id", update.id);
+
+      if (updateError) {
+        errorCount++;
+      } else {
+        // Create transaction record
+        await supabase
+          .from("transactions")
+          .insert({
+            account_id: update.id,
+            transaction_type: "withdrawal",
+            amount: update.totalDeduction,
+            description: `Bulk welfare fee deduction (${weeksCount} weeks)`,
+            balance_after: newBalance,
+            status: "approved",
+            approved_at: new Date().toISOString(),
+          } as any);
+        successCount++;
+      }
+    }
+
+    toast({
+      title: "Success",
+      description: `Recorded ${weeksCount} weeks of welfare fees for ${successCount} accounts. UGX ${(weeklyAmount * weeksCount).toLocaleString()} deducted from each. ${errorCount > 0 ? `${errorCount} failed.` : ""}`,
+    });
+    setBulkDialogOpen(false);
+    loadData();
     setProcessing(false);
   };
 
@@ -386,19 +479,12 @@ const WelfareManagement = () => {
         </CardHeader>
         <CardContent>
           <div className="mb-4 p-4 bg-muted rounded-lg">
-            <div className="flex justify-between items-center">
-              <div>
-                <p className="text-sm text-muted-foreground">Total Welfare Collected</p>
-                <p className="text-2xl font-bold">UGX {totalWelfare.toLocaleString()}</p>
-              </div>
-              <Button
-                variant="destructive"
-                onClick={handleDeductFromSavings}
-                disabled={processing || totalWelfare === 0}
-              >
-                {processing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Deduct from Savings
-              </Button>
+            <div>
+              <p className="text-sm text-muted-foreground">Total Welfare Collected</p>
+              <p className="text-2xl font-bold">UGX {totalWelfare.toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Welfare fees are automatically deducted from member accounts when recorded
+              </p>
             </div>
           </div>
 
