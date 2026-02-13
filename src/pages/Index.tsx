@@ -16,7 +16,7 @@ const Index = () => {
             Your trusted savings and credit cooperative for secure financial growth
           </p>
           
-          <div className="flex gap-4 justify-center flex-wrap">
+          <div className="flex gap-4 justify-center flex-wrap border-dashed">
             <Button size="lg" onClick={() => navigate("/auth?mode=signup")}>
               Sign Up <ArrowRight className="ml-2 h-5 w-5" />
             </Button>
@@ -46,8 +46,8 @@ const Index = () => {
           </div>
         </div>
       </div>
-    </div>
-  );
+    </div>);
+
 };
 
 export default Index;
