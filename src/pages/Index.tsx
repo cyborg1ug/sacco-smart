@@ -8,7 +8,7 @@ const Index = () => {
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary/10 via-background to-secondary/10">
       <div className="container mx-auto px-4 py-16">
-        <div className="max-w-4xl mx-auto text-center space-y-8">
+        <div className="max-w-4xl mx-auto text-center space-y-8 shadow-sm text-secondary-foreground">
           <h1 className="text-5xl md:text-6xl font-bold text-foreground">
             KINONI SACCO
           </h1>
