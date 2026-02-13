@@ -352,8 +352,12 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
           principalReduction = amount - interestDeducted;
           
           if (interestDeducted > 0) {
+            // Generate a unique transaction ID for interest record
+            const { data: tnxIdData } = await supabase.rpc("generate_tnx_id");
+            const interestTnxId = tnxIdData || `INT${Date.now()}`;
+            
             // Create interest_received transaction to track the interest
-            await supabase
+            const { error: interestError } = await supabase
               .from("transactions")
               .insert({
                 account_id: accountId,
@@ -365,7 +369,12 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
                 approved_by: user?.id,
                 approved_at: new Date().toISOString(),
                 loan_id: loanId,
+                tnx_id: interestTnxId,
               } as any);
+
+            if (interestError) {
+              console.error("Error creating interest transaction:", interestError);
+            }
 
             toast({
               title: "Monthly Interest Applied",
