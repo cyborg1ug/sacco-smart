@@ -296,6 +296,28 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
       newBalance -= amount;
     } else if (type === "loan_disbursement") {
       newBalance += amount;
+      // When disbursement is approved, ensure the loan is marked as disbursed
+      if (loanId) {
+        const { data: loanForDisb } = await supabase
+          .from("loans")
+          .select("status, outstanding_balance, amount, interest_rate, repayment_months")
+          .eq("id", loanId)
+          .single();
+        if (loanForDisb && loanForDisb.status !== "disbursed") {
+          const monthlyInterest = loanForDisb.amount * (loanForDisb.interest_rate / 100);
+          const totalInterest = monthlyInterest * (loanForDisb.repayment_months || 1);
+          const totalAmount = loanForDisb.amount + totalInterest;
+          await supabase
+            .from("loans")
+            .update({
+              status: "disbursed",
+              disbursed_at: new Date().toISOString(),
+              total_amount: totalAmount,
+              outstanding_balance: totalAmount,
+            })
+            .eq("id", loanId);
+        }
+      }
     } else if (type === "loan_repayment") {
       newBalance -= amount;
     }
@@ -549,17 +571,18 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
           if (transaction.loan_id) {
             const { data: loan } = await supabase
               .from("loans")
-              .select("id, status")
+              .select("id, status, outstanding_balance")
               .eq("id", transaction.loan_id)
               .single();
             
             if (loan) {
-              // Revert loan to approved status (before disbursement)
+              // Revert loan to active status (awaiting new disbursement)
               await supabase
                 .from("loans")
                 .update({ 
                   status: "active",
-                  disbursed_at: null
+                  disbursed_at: null,
+                  outstanding_balance: loan.outstanding_balance // keep balance as-is
                 })
                 .eq("id", transaction.loan_id);
             }
@@ -575,16 +598,29 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
               .single();
             
             if (loan) {
-              const newOutstanding = Math.min(loan.total_amount, loan.outstanding_balance + transaction.amount);
+              const restoredOutstanding = Math.min(loan.total_amount, loan.outstanding_balance + transaction.amount);
               await supabase
                 .from("loans")
                 .update({ 
-                  outstanding_balance: newOutstanding,
-                  status: newOutstanding > 0 ? "disbursed" : loan.status // Revert to disbursed if there's balance
+                  outstanding_balance: restoredOutstanding,
+                  status: restoredOutstanding > 0 ? "disbursed" : loan.status
                 })
                 .eq("id", transaction.loan_id);
             }
           }
+          // Also delete any associated interest_received transaction for the same approval
+          await supabase
+            .from("transactions")
+            .delete()
+            .eq("loan_id", transaction.loan_id)
+            .eq("transaction_type", "interest_received")
+            .gte("created_at", new Date(new Date(transaction.approved_at || transaction.created_at).getTime() - 60000).toISOString())
+            .lte("created_at", new Date(new Date(transaction.approved_at || transaction.created_at).getTime() + 60000).toISOString());
+        } else if (transaction.transaction_type === "interest_received") {
+          // Interest received doesn't affect balance directly (it's tracked separately)
+          // Just delete it without balance change
+          newBalance = account.balance; // no change
+          newTotalSavings = account.total_savings;
         }
 
         await supabase
