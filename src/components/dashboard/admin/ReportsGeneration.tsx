@@ -118,18 +118,27 @@ const ReportsGeneration = () => {
     setLoading(true);
     const dateRange = getDateRange();
 
+    // Fetch profile and account separately to avoid join issues
     const { data: profile } = await supabase
       .from("profiles")
-      .select(`full_name, email, phone_number, occupation, accounts!inner (id, account_number, balance, total_savings)`)
-      .eq("id", selectedMember).single() as { data: any };
+      .select("full_name, email, phone_number, occupation")
+      .eq("id", selectedMember)
+      .single();
 
-    if (!profile) {
+    const { data: memberAccount } = await supabase
+      .from("accounts")
+      .select("id, account_number, balance, total_savings")
+      .eq("user_id", selectedMember)
+      .eq("account_type", "main")
+      .maybeSingle();
+
+    if (!profile || !memberAccount) {
       toast({ title: "Error", description: "Member not found", variant: "destructive" });
       setLoading(false);
       return;
     }
 
-    const accountId = profile.accounts[0].id;
+    const accountId = memberAccount.id;
     const { data: transactions } = await supabase.from("transactions").select("*")
       .eq("account_id", accountId)
       .gte("created_at", dateRange.start.toISOString())
@@ -144,31 +153,52 @@ const ReportsGeneration = () => {
     // Get ALL loans for this member (not just period)
     const { data: loans } = await supabase.from("loans").select("*").eq("account_id", accountId);
 
+    // Fetch all transactions (not just period) for complete balance picture
+    const { data: allTransactions } = await supabase.from("transactions").select("*")
+      .eq("account_id", accountId).eq("status", "approved").order("created_at", { ascending: false });
+
     if (asPdf) {
       generateMemberStatementPDF({
         memberName: profile.full_name,
         email: profile.email,
         phoneNumber: profile.phone_number,
-        accountNumber: profile.accounts[0].account_number,
-        balance: Number(profile.accounts[0].balance),
-        totalSavings: Number(profile.accounts[0].total_savings),
+        accountNumber: memberAccount.account_number,
+        balance: Number(memberAccount.balance),
+        totalSavings: Number(memberAccount.total_savings),
         transactions: transactions || [],
         loans: loans || [],
         savings: savings || [],
       });
       toast({ title: "Success", description: "PDF report generated successfully" });
     } else {
-      const totalDeposits = transactions?.filter(t => t.transaction_type === "deposit" && t.status === "approved")
+      // Period totals
+      const periodDeposits = transactions?.filter(t => t.transaction_type === "deposit" && t.status === "approved")
         .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
-      const totalWithdrawals = transactions?.filter(t => t.transaction_type === "withdrawal" && t.status === "approved")
+      const periodWithdrawals = transactions?.filter(t => t.transaction_type === "withdrawal" && t.status === "approved")
         .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
-      const totalRepayments = transactions?.filter(t => t.transaction_type === "loan_repayment" && t.status === "approved")
+      const periodRepayments = transactions?.filter(t => t.transaction_type === "loan_repayment" && t.status === "approved")
         .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
-      const totalSavings = savings?.reduce((sum, s) => sum + Number(s.amount), 0) || 0;
+      const periodDisbursements = transactions?.filter(t => t.transaction_type === "loan_disbursement" && t.status === "approved")
+        .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+      const periodInterest = transactions?.filter(t => t.transaction_type === "interest_received" && t.status === "approved")
+        .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+      const periodSavings = savings?.reduce((sum, s) => sum + Number(s.amount), 0) || 0;
 
-      const activeLoans = loans?.filter(l => ["disbursed", "active"].includes(l.status) && l.outstanding_balance > 0) || [];
+      // All-time totals
+      const allDeposits = allTransactions?.filter(t => t.transaction_type === "deposit")
+        .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+      const allWithdrawals = allTransactions?.filter(t => t.transaction_type === "withdrawal")
+        .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+      const allRepayments = allTransactions?.filter(t => t.transaction_type === "loan_repayment")
+        .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+      const allDisbursements = allTransactions?.filter(t => t.transaction_type === "loan_disbursement")
+        .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+      const allInterest = allTransactions?.filter(t => t.transaction_type === "interest_received")
+        .reduce((sum, t) => sum + Number(t.amount), 0) || 0;
+
+      const activeLoansData = loans?.filter(l => ["disbursed", "active"].includes(l.status) && l.outstanding_balance > 0) || [];
       const completedLoans = loans?.filter(l => ["completed", "fully_paid"].includes(l.status)) || [];
-      const overdueLoans = activeLoans.filter(l => isLoanOverdue(l));
+      const overdueLoans = activeLoansData.filter(l => isLoanOverdue(l));
 
       let report = `KINONI SACCO - MEMBER REPORT\n`;
       report += `${"═".repeat(70)}\n`;
@@ -178,72 +208,94 @@ const ReportsGeneration = () => {
       report += `MEMBER INFORMATION\n${"─".repeat(70)}\n`;
       report += `Name: ${profile.full_name}\nEmail: ${profile.email}\n`;
       report += `Phone: ${profile.phone_number || "N/A"}\nOccupation: ${profile.occupation || "N/A"}\n`;
-      report += `Account Number: ${profile.accounts[0].account_number}\n\n`;
+      report += `Account Number: ${memberAccount.account_number}\n\n`;
 
-      report += `FINANCIAL SUMMARY\n${"─".repeat(70)}\n`;
-      report += `Current Balance:        UGX ${Number(profile.accounts[0].balance).toLocaleString()}\n`;
-      report += `Total Savings:          UGX ${Number(profile.accounts[0].total_savings).toLocaleString()}\n`;
-      report += `Period Deposits:        UGX ${totalDeposits.toLocaleString()}\n`;
-      report += `Period Withdrawals:     UGX ${totalWithdrawals.toLocaleString()}\n`;
-      report += `Period Savings:         UGX ${totalSavings.toLocaleString()}\n`;
-      report += `Period Loan Repayments: UGX ${totalRepayments.toLocaleString()}\n\n`;
+      report += `CURRENT BALANCES\n${"─".repeat(70)}\n`;
+      report += `Account Balance:        UGX ${Number(memberAccount.balance).toLocaleString()}\n`;
+      report += `Total Savings:          UGX ${Number(memberAccount.total_savings).toLocaleString()}\n`;
+      report += `Total Disbursed (All):  UGX ${allDisbursements.toLocaleString()}\n`;
+      report += `Total Repaid (All):     UGX ${allRepayments.toLocaleString()}\n`;
+      report += `Interest Paid (All):    UGX ${allInterest.toLocaleString()}\n\n`;
+
+      report += `PERIOD ACTIVITY (${format(dateRange.start, "MMM dd")} - ${format(dateRange.end, "MMM dd, yyyy")})\n${"─".repeat(70)}\n`;
+      report += `Deposits:               UGX ${periodDeposits.toLocaleString()}\n`;
+      report += `Withdrawals:            UGX ${periodWithdrawals.toLocaleString()}\n`;
+      report += `Net Deposits:           UGX ${(periodDeposits - periodWithdrawals).toLocaleString()}\n`;
+      report += `Loan Disbursements:     UGX ${periodDisbursements.toLocaleString()}\n`;
+      report += `Loan Repayments:        UGX ${periodRepayments.toLocaleString()}\n`;
+      report += `Interest Paid:          UGX ${periodInterest.toLocaleString()}\n`;
+      report += `Weekly Savings:         UGX ${periodSavings.toLocaleString()}\n\n`;
 
       // Active Loans Section
-      if (activeLoans.length > 0) {
+      if (activeLoansData.length > 0) {
         report += `ACTIVE LOANS\n${"─".repeat(70)}\n`;
-        activeLoans.forEach((l, i) => {
+        activeLoansData.forEach((l, i) => {
           const disbDate = l.disbursed_at ? format(new Date(l.disbursed_at), "MMM dd, yyyy") : "N/A";
+          const dueDate = l.disbursed_at && l.repayment_months
+            ? format(new Date(new Date(l.disbursed_at).setMonth(new Date(l.disbursed_at).getMonth() + l.repayment_months)), "MMM dd, yyyy")
+            : "N/A";
           const monthsElapsed = l.disbursed_at ? differenceInMonths(new Date(), new Date(l.disbursed_at)) : 0;
           const isOverdue = isLoanOverdue(l);
+          const amountRepaid = Number(l.total_amount) - Number(l.outstanding_balance);
+          const totalInterestOnLoan = Number(l.amount) * (Number(l.interest_rate) / 100) * (l.repayment_months || 1);
           report += `Loan ${i + 1}:\n`;
-          report += `  Principal:           UGX ${Number(l.amount).toLocaleString()}\n`;
-          report += `  Interest Rate:       ${l.interest_rate}% per month\n`;
-          report += `  Repayment Months:    ${l.repayment_months}\n`;
-          report += `  Total Payable:       UGX ${Number(l.total_amount).toLocaleString()}\n`;
-          report += `  Outstanding Balance: UGX ${Number(l.outstanding_balance).toLocaleString()}\n`;
-          report += `  Amount Repaid:       UGX ${(Number(l.total_amount) - Number(l.outstanding_balance)).toLocaleString()}\n`;
-          report += `  Disbursed On:        ${disbDate}\n`;
-          report += `  Status:              ${isOverdue ? "⚠ OVERDUE" : "Active"}\n`;
+          report += `  Principal:            UGX ${Number(l.amount).toLocaleString()}\n`;
+          report += `  Interest Rate:        ${l.interest_rate}% per month x ${l.repayment_months} months\n`;
+          report += `  Total Interest:       UGX ${totalInterestOnLoan.toLocaleString()}\n`;
+          report += `  Total Payable:        UGX ${Number(l.total_amount).toLocaleString()}\n`;
+          report += `  Amount Repaid:        UGX ${amountRepaid.toLocaleString()}\n`;
+          report += `  Outstanding Balance:  UGX ${Number(l.outstanding_balance).toLocaleString()}\n`;
+          report += `  Disbursed On:         ${disbDate}\n`;
+          report += `  Due Date:             ${dueDate}\n`;
+          report += `  Status:               ${isOverdue ? "⚠ OVERDUE" : "Active"}\n`;
           if (isOverdue) {
-            report += `  Months Overdue:      ${monthsElapsed - l.repayment_months}\n`;
+            const overdueMonths = monthsElapsed - (l.repayment_months || 0);
+            const penalty = Number(l.amount) * 0.02 * overdueMonths;
+            report += `  Months Overdue:       ${overdueMonths}\n`;
+            report += `  Penalty (2%/month):   UGX ${penalty.toLocaleString()}\n`;
           }
           report += `\n`;
         });
       }
 
-      // Overdue loans
+      // Overdue loans detail
       if (overdueLoans.length > 0) {
         report += `OVERDUE LOAN DETAILS\n${"─".repeat(70)}\n`;
         report += `WARNING: The following loans are past their repayment period:\n\n`;
         overdueLoans.forEach(l => {
           const monthsElapsed = differenceInMonths(new Date(), new Date(l.disbursed_at));
-          const overdueMonths = monthsElapsed - l.repayment_months;
+          const overdueMonths = monthsElapsed - (l.repayment_months || 0);
           const penaltyAmount = Number(l.amount) * 0.02 * overdueMonths;
-          report += `  Outstanding Balance: UGX ${Number(l.outstanding_balance).toLocaleString()}\n`;
-          report += `  Months Overdue: ${overdueMonths}\n`;
-          report += `  Estimated Penalty (2%/month): UGX ${penaltyAmount.toLocaleString()}\n\n`;
+          const dueDate = format(new Date(new Date(l.disbursed_at).setMonth(new Date(l.disbursed_at).getMonth() + l.repayment_months)), "MMM dd, yyyy");
+          report += `  Due Date:             ${dueDate}\n`;
+          report += `  Outstanding Balance:  UGX ${Number(l.outstanding_balance).toLocaleString()}\n`;
+          report += `  Months Overdue:       ${overdueMonths}\n`;
+          report += `  Penalty (2%/month):   UGX ${penaltyAmount.toLocaleString()}\n\n`;
         });
       }
 
       // Completed loans
       if (completedLoans.length > 0) {
         report += `COMPLETED LOANS\n${"─".repeat(70)}\n`;
-        completedLoans.forEach(l => {
-          report += `  Principal: UGX ${Number(l.amount).toLocaleString()} | Status: ${l.status.toUpperCase()}\n`;
+        completedLoans.forEach((l, i) => {
+          const totalInterestOnLoan = Number(l.amount) * (Number(l.interest_rate) / 100) * (l.repayment_months || 1);
+          report += `Loan ${i + 1}: Principal UGX ${Number(l.amount).toLocaleString()} | Total Paid: UGX ${Number(l.total_amount).toLocaleString()} | Interest: UGX ${totalInterestOnLoan.toLocaleString()} | ${l.status.toUpperCase()}\n`;
         });
         report += `\n`;
       }
 
-      report += `TRANSACTION HISTORY (Period)\n${"─".repeat(70)}\n`;
-      if (transactions && transactions.length > 0) {
-        transactions.filter(t => t.status === "approved").forEach(t => {
-          report += `${format(new Date(t.created_at), "MMM dd, yyyy HH:mm")} | `;
-          report += `${t.transaction_type.toUpperCase().padEnd(18)} | `;
-          report += `UGX ${Number(t.amount).toLocaleString().padStart(12)} | `;
-          report += `${t.status.toUpperCase()}\n`;
+      report += `ALL-TIME TRANSACTION HISTORY\n${"─".repeat(70)}\n`;
+      report += `${"Date".padEnd(20)} ${"Type".padEnd(22)} ${"Amount (UGX)".padStart(14)} ${"Bal After".padStart(14)}\n`;
+      report += `${"─".repeat(70)}\n`;
+      if (allTransactions && allTransactions.length > 0) {
+        allTransactions.forEach(t => {
+          report += `${format(new Date(t.created_at), "MMM dd, yyyy HH:mm").padEnd(20)} `;
+          report += `${t.transaction_type.replace(/_/g," ").toUpperCase().padEnd(22)} `;
+          report += `${Number(t.amount).toLocaleString().padStart(14)} `;
+          report += `${Number(t.balance_after).toLocaleString().padStart(14)}\n`;
         });
       } else {
-        report += `No transactions in this period.\n`;
+        report += `No transactions found.\n`;
       }
 
       report += `\n${"═".repeat(70)}\nEnd of Report - KINONI SACCO Management System\n`;
@@ -252,7 +304,7 @@ const ReportsGeneration = () => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `kinoni_member_report_${profile.accounts[0].account_number}_${format(new Date(), "yyyyMMdd")}.txt`;
+      a.download = `kinoni_member_report_${memberAccount.account_number}_${format(new Date(), "yyyyMMdd")}.txt`;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       URL.revokeObjectURL(url);
       toast({ title: "Success", description: "Member report generated successfully" });

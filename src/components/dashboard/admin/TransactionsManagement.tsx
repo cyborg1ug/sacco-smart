@@ -266,241 +266,96 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
   const handleApprove = async (transactionId: string, accountId: string, amount: number, type: string, loanId?: string | null) => {
     const { data: { user } } = await supabase.auth.getUser();
 
-    const { data: account } = await supabase
-      .from("accounts")
-      .select("balance, total_savings")
-      .eq("id", accountId)
-      .single();
+    // For loan disbursement: update loan status first
+    if (type === "loan_disbursement" && loanId) {
+      const { data: loanForDisb } = await supabase
+        .from("loans").select("status, amount, interest_rate, repayment_months").eq("id", loanId).single();
+      if (loanForDisb && loanForDisb.status !== "disbursed") {
+        const totalInterest = loanForDisb.amount * (loanForDisb.interest_rate / 100) * (loanForDisb.repayment_months || 1);
+        const totalAmount = loanForDisb.amount + totalInterest;
+        await supabase.from("loans").update({
+          status: "disbursed", disbursed_at: new Date().toISOString(),
+          total_amount: totalAmount, outstanding_balance: totalAmount,
+        }).eq("id", loanId);
+      }
+    }
 
-    if (!account) return;
+    // If this is a loan repayment, handle interest split + update outstanding
+    if (type === "loan_repayment" && loanId) {
+      const { data: loan } = await supabase
+        .from("loans").select("outstanding_balance, amount, total_amount, interest_rate, repayment_months").eq("id", loanId).single();
 
-    // Validate sufficient balance for withdrawals and loan repayments
-    if (type === "withdrawal" || type === "loan_repayment") {
-      if (account.balance < amount) {
-        toast({
-          title: "Insufficient Balance",
-          description: `Cannot process ${type.replace("_", " ")}. Available balance: UGX ${account.balance.toLocaleString()}, Requested: UGX ${amount.toLocaleString()}`,
-          variant: "destructive",
+      if (loan) {
+        const monthlyInterest = loan.amount * (loan.interest_rate / 100);
+        const now = new Date();
+        const { data: monthInterest } = await supabase
+          .from("transactions").select("id, created_at")
+          .eq("loan_id", loanId).eq("transaction_type", "interest_received").eq("status", "approved");
+
+        const hasInterestThisMonth = (monthInterest || []).some(t => {
+          const d = new Date(t.created_at);
+          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
         });
-        return;
-      }
-    }
 
-    let newBalance = account.balance;
-    let newTotalSavings = account.total_savings;
-
-    if (type === "deposit") {
-      newBalance += amount;
-      newTotalSavings += amount;
-    } else if (type === "withdrawal") {
-      newBalance -= amount;
-    } else if (type === "loan_disbursement") {
-      newBalance += amount;
-      // When disbursement is approved, ensure the loan is marked as disbursed
-      if (loanId) {
-        const { data: loanForDisb } = await supabase
-          .from("loans")
-          .select("status, outstanding_balance, amount, interest_rate, repayment_months")
-          .eq("id", loanId)
-          .single();
-        if (loanForDisb && loanForDisb.status !== "disbursed") {
-          const monthlyInterest = loanForDisb.amount * (loanForDisb.interest_rate / 100);
-          const totalInterest = monthlyInterest * (loanForDisb.repayment_months || 1);
-          const totalAmount = loanForDisb.amount + totalInterest;
-          await supabase
-            .from("loans")
-            .update({
-              status: "disbursed",
-              disbursed_at: new Date().toISOString(),
-              total_amount: totalAmount,
-              outstanding_balance: totalAmount,
-            })
-            .eq("id", loanId);
+        if (!hasInterestThisMonth) {
+          const interestDeducted = Math.min(monthlyInterest, amount);
+          if (interestDeducted > 0) {
+            const { data: tnxIdData } = await supabase.rpc("generate_tnx_id");
+            await supabase.from("transactions").insert({
+              account_id: accountId, transaction_type: "interest_received",
+              amount: interestDeducted, balance_after: 0,
+              description: `Monthly interest (2%) on loan ${loanId.substring(0, 8)}`,
+              status: "approved", approved_by: user?.id, approved_at: now.toISOString(),
+              loan_id: loanId, tnx_id: tnxIdData || `INT${Date.now()}`,
+            } as any);
+            toast({ title: "Interest Applied", description: `UGX ${interestDeducted.toLocaleString()} interest recorded.` });
+          }
         }
+
+        // Reduce outstanding by full repayment amount
+        const newOutstanding = Math.max(0, loan.outstanding_balance - amount);
+        const updateData: any = { outstanding_balance: newOutstanding };
+        if (newOutstanding <= 0) updateData.status = "completed";
+        await supabase.from("loans").update(updateData).eq("id", loanId);
+        if (newOutstanding <= 0) toast({ title: "🎉 Loan Completed", description: "This loan has been fully repaid" });
       }
-    } else if (type === "loan_repayment") {
-      newBalance -= amount;
     }
 
-    const { error: updateError } = await supabase
-      .from("accounts")
-      .update({ balance: newBalance, total_savings: newTotalSavings })
-      .eq("id", accountId);
+    // Mark transaction approved
+    const { error } = await supabase.from("transactions").update({
+      status: "approved", approved_by: user?.id, approved_at: new Date().toISOString(),
+    }).eq("id", transactionId);
 
-    if (updateError) {
-      toast({
-        title: "Error",
-        description: updateError.message,
-        variant: "destructive",
-      });
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
       return;
     }
 
-    // If this is a loan repayment, handle interest deduction for first payment of month
-    if (type === "loan_repayment" && loanId) {
-      const { data: loan } = await supabase
-        .from("loans")
-        .select("outstanding_balance, amount, total_amount, account_id, interest_rate, repayment_months, disbursed_at")
-        .eq("id", loanId)
-        .single();
+    // Recalculate balance from all approved transactions (source of truth)
+    const { data: allApproved } = await supabase
+      .from("transactions").select("transaction_type, amount")
+      .eq("account_id", accountId).eq("status", "approved");
 
-      if (loan) {
-        // Calculate monthly interest (2% of principal)
-        const monthlyInterest = loan.amount * (loan.interest_rate / 100);
-        
-        // Check if this is the first repayment of the current month
-        const currentMonth = new Date().getMonth();
-        const currentYear = new Date().getFullYear();
-        
-        const { data: monthRepayments } = await supabase
-          .from("transactions")
-          .select("id, created_at")
-          .eq("loan_id", loanId)
-          .eq("transaction_type", "loan_repayment")
-          .eq("status", "approved");
-        
-        // Filter to find repayments in the current month
-        const thisMonthRepayments = (monthRepayments || []).filter(t => {
-          const txDate = new Date(t.created_at);
-          return txDate.getMonth() === currentMonth && txDate.getFullYear() === currentYear;
-        });
+    const newBalance = (allApproved || []).reduce((sum, t) => {
+      if (["deposit", "loan_disbursement"].includes(t.transaction_type)) return sum + Number(t.amount);
+      if (["withdrawal", "loan_repayment"].includes(t.transaction_type)) return sum - Number(t.amount);
+      return sum;
+    }, 0);
+    const newTotalSavings = (allApproved || [])
+      .filter(t => t.transaction_type === "deposit")
+      .reduce((sum, t) => sum + Number(t.amount), 0);
 
-        let principalReduction = amount;
-        let interestDeducted = 0;
+    await supabase.from("accounts").update({ balance: newBalance, total_savings: newTotalSavings }).eq("id", accountId);
 
-        // If this is the first repayment of the month, deduct interest first
-        if (thisMonthRepayments.length === 0) {
-          interestDeducted = Math.min(monthlyInterest, amount);
-          principalReduction = amount - interestDeducted;
-          
-          if (interestDeducted > 0) {
-            // Generate a unique transaction ID for interest record
-            const { data: tnxIdData } = await supabase.rpc("generate_tnx_id");
-            const interestTnxId = tnxIdData || `INT${Date.now()}`;
-            
-            // Create interest_received transaction to track the interest
-            const { error: interestError } = await supabase
-              .from("transactions")
-              .insert({
-                account_id: accountId,
-                transaction_type: "interest_received",
-                amount: interestDeducted,
-                balance_after: newBalance,
-                description: `Monthly interest (2%) on loan ${loanId.substring(0, 8)}`,
-                status: "approved",
-                approved_by: user?.id,
-                approved_at: new Date().toISOString(),
-                loan_id: loanId,
-                tnx_id: interestTnxId,
-              } as any);
+    // Auto-generate receipt
+    supabase.functions.invoke('generate-receipt', { body: { transactionId } })
+      .catch(e => console.error('Receipt error:', e));
 
-            if (interestError) {
-              console.error("Error creating interest transaction:", interestError);
-            }
-
-            toast({
-              title: "Monthly Interest Applied",
-              description: `UGX ${interestDeducted.toLocaleString()} recorded as interest. UGX ${principalReduction.toLocaleString()} applied to principal.`,
-            });
-          }
-        }
-
-        // Only reduce outstanding balance by the principal portion
-        const newOutstanding = Math.max(0, loan.outstanding_balance - principalReduction);
-        const newStatus = newOutstanding <= 0 ? "completed" : undefined;
-
-        const updateData: any = { outstanding_balance: newOutstanding };
-        if (newStatus) {
-          updateData.status = newStatus;
-        }
-
-        await supabase
-          .from("loans")
-          .update(updateData)
-          .eq("id", loanId);
-
-        // Send notification when loan is completed
-        if (newOutstanding <= 0) {
-          toast({
-            title: "🎉 Loan Completed",
-            description: "This loan has been fully repaid",
-          });
-
-          // Get member details for notification
-          const transaction = transactions.find(t => t.id === transactionId);
-          if (transaction) {
-            try {
-              const { data: accountData } = await supabase
-                .from("accounts")
-                .select("user_id")
-                .eq("id", loan.account_id)
-                .single();
-
-              if (accountData) {
-                const { data: profile } = await supabase
-                  .from("profiles")
-                  .select("full_name, email")
-                  .eq("id", accountData.user_id)
-                  .single();
-
-                await supabase.functions.invoke("loan-status-notification", {
-                  body: {
-                    loanId,
-                    newStatus: "completed",
-                    memberName: profile?.full_name || "Member",
-                    memberEmail: profile?.email,
-                    loanAmount: loan.amount,
-                    outstandingBalance: 0,
-                    accountId: loan.account_id,
-                  },
-                });
-              }
-            } catch (notifError) {
-              console.error("Error sending completion notification:", notifError);
-            }
-          }
-        }
-      }
-    }
-
-    const { error } = await supabase
-      .from("transactions")
-      .update({
-        status: "approved",
-        approved_by: user?.id,
-        approved_at: new Date().toISOString(),
-        balance_after: newBalance,
-      })
-      .eq("id", transactionId);
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: "Success",
-        description: "Transaction approved successfully",
-      });
-      
-      // Auto-generate receipt in background
-      supabase.functions.invoke('generate-receipt', {
-        body: { transactionId }
-      }).then(({ error: receiptError }) => {
-        if (receiptError) {
-          console.error('Error generating receipt:', receiptError);
-        } else {
-          console.log('Receipt generated automatically');
-        }
-      });
-      
-      loadTransactions();
-      loadActiveLoans();
-      onUpdate();
-    }
+    toast({ title: "Success", description: "Transaction approved successfully" });
+    loadTransactions(); loadActiveLoans(); onUpdate();
   };
+
+
 
   const handleReject = async (transactionId: string) => {
     const { data: { user } } = await supabase.auth.getUser();

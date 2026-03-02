@@ -8,13 +8,20 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { LogOut, User, ChevronLeft, Shield } from "lucide-react";
+import { LogOut, User, ChevronLeft, Shield, Download } from "lucide-react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import NotificationsPopover from "./member/NotificationsPopover";
 import { motion } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+
+interface BeforeInstallPromptEvent extends Event {
+  prompt: () => Promise<void>;
+  userChoice: Promise<{ outcome: "accepted" | "dismissed" }>;
+}
 
 interface DashboardHeaderProps {
   title: string;
@@ -39,6 +46,32 @@ const DashboardHeader = ({
 }: DashboardHeaderProps) => {
   const navigate = useNavigate();
   const { toast } = useToast();
+  const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  useEffect(() => {
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      setIsInstalled(true);
+    }
+    const handler = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e as BeforeInstallPromptEvent);
+    };
+    window.addEventListener("beforeinstallprompt", handler);
+    window.addEventListener("appinstalled", () => { setIsInstalled(true); setDeferredPrompt(null); });
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (deferredPrompt) {
+      await deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === "accepted") setIsInstalled(true);
+      setDeferredPrompt(null);
+    } else {
+      navigate("/install");
+    }
+  };
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -99,6 +132,24 @@ const DashboardHeader = ({
       <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 shrink-0">
         {showNotifications && <NotificationsPopover />}
         <ThemeToggle />
+
+        {/* PWA Install Button - shown only when not already installed */}
+        {!isInstalled && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleInstall}
+                className="h-8 w-8 sm:h-9 sm:w-9 hover:bg-primary/10 hover:text-primary"
+                aria-label="Install App"
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Install App</TooltipContent>
+          </Tooltip>
+        )}
 
         {isAdmin ? (
           <Button
