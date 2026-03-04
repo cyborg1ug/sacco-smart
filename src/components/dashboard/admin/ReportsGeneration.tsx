@@ -181,10 +181,11 @@ const ReportsGeneration = () => {
         memberName: profile.full_name,
         email: profile.email,
         phoneNumber: profile.phone_number,
+        occupation: profile.occupation,
         accountNumber: memberAccount.account_number,
         balance: Number(memberAccount.balance),
         totalSavings: Number(memberAccount.total_savings),
-        transactions: periodTxns || [],
+        transactions: allTxns || [],
         loans: loans || [],
         savings: savings || [],
       });
@@ -476,12 +477,23 @@ const ReportsGeneration = () => {
     };
 
     if (asPdf) {
-      const membersData = accounts?.map(acc => ({
-        name: getMemberName(acc),
-        accountNumber: acc.account_number,
-        balance: Number(acc.balance),
-        savings: Number(acc.total_savings),
-      })) || [];
+      const membersData = (accounts || []).map(acc => {
+        const memberActiveLoans = activeLoans.filter((l: any) => l.account_id === acc.id);
+        const outstandingBalance = memberActiveLoans.reduce((s: number, l: any) => s + Number(l.outstanding_balance), 0);
+        const overdueLoan = memberActiveLoans.find((l: any) => isLoanOverdue(l));
+        return {
+          name: getMemberName(acc),
+          accountNumber: acc.account_number,
+          accountType: acc.account_type,
+          balance: Number(acc.balance),
+          savings: Number(acc.total_savings),
+          activeLoans: memberActiveLoans.length,
+          outstandingBalance,
+          isOverdue: !!overdueLoan,
+          daysOverdue: overdueLoan ? getDaysOverdue(overdueLoan) : 0,
+          overduePenalty: overdueLoan ? calcDailyOverdueInterest(overdueLoan) : 0,
+        };
+      });
       generateGroupReportPDF({
         totalMembers: profiles?.length || 0,
         totalBalance,
@@ -489,12 +501,22 @@ const ReportsGeneration = () => {
         totalOutstandingLoans: totalOutstanding,
         periodDeposits: totalDeposits,
         periodWithdrawals: totalWithdrawals,
-        pendingLoans: (allLoans || []).filter(l => l.status === "pending").length,
-        approvedLoans: (allLoans || []).filter(l => l.status === "approved").length,
-        disbursedLoans: (allLoans || []).filter(l => l.status === "disbursed").length,
-        completedLoans: (allLoans || []).filter(l => ["completed", "fully_paid"].includes(l.status)).length,
+        periodRepayments: totalRepayments,
+        periodInterest: totalInterestReceived,
+        pendingLoans: (allLoans || []).filter((l: any) => l.status === "pending").length,
+        approvedLoans: (allLoans || []).filter((l: any) => l.status === "approved").length,
+        disbursedLoans: (allLoans || []).filter((l: any) => ["disbursed", "active"].includes(l.status)).length,
+        completedLoans: (allLoans || []).filter((l: any) => ["completed", "fully_paid"].includes(l.status)).length,
         members: membersData,
         dateRange,
+        allTimeDeposits,
+        allTimeWithdrawals,
+        allTimeRepayments,
+        allTimeDisbursements,
+        allTimeInterest,
+        overdueLoansCount: overdueLoans.length,
+        totalOverdueBalance,
+        totalOverduePenalty,
       });
       toast({ title: "Success", description: "PDF group report generated" });
       setLoading(false);
