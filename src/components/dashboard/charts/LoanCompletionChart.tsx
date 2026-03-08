@@ -269,13 +269,17 @@ const LoanCompletionChart = ({ accountIds, isAdmin = false }: LoanCompletionChar
 
   if (loading) {
     return (
-      <Card className="overflow-hidden border-l-4 border-l-primary">
-        <CardHeader className="bg-gradient-to-r from-primary/10 via-chart-1/5 to-transparent">
-          <CardTitle className="flex items-center gap-2 text-base">
-            <TrendingUp className="h-5 w-5 text-primary" />
-            Active Loans Tracking
-          </CardTitle>
-          <CardDescription>Disbursed vs Repaid amounts</CardDescription>
+      <Card className="overflow-hidden rounded-2xl border-0 shadow-md">
+        <CardHeader className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-b border-border/40 pb-3">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center">
+              <TrendingUp className="h-4 w-4 text-primary" />
+            </div>
+            <div>
+              <CardTitle className="text-sm font-semibold">Loans & Interest Tracking</CardTitle>
+              <CardDescription className="text-xs">Disbursed vs Repaid amounts</CardDescription>
+            </div>
+          </div>
         </CardHeader>
         <CardContent className="flex items-center justify-center h-[250px]">
           <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -321,28 +325,32 @@ const LoanCompletionChart = ({ accountIds, isAdmin = false }: LoanCompletionChar
   }));
 
   return (
-    <Card className="overflow-hidden border-l-4 border-l-primary">
-      <CardHeader className="bg-gradient-to-r from-primary/10 via-chart-1/5 to-chart-2/5 pb-2">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <TrendingUp className="h-5 w-5 text-primary" />
-          Loans & Interest Tracking
-        </CardTitle>
-        <CardDescription>
-          {isAdmin 
-            ? `${activeLoans.length} active loan(s) - Financial overview`
-            : `Your active loan(s) - Financial overview`
-          }
-        </CardDescription>
+    <Card className="overflow-hidden rounded-2xl border-0 shadow-md">
+      <CardHeader className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-b border-border/40 pb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center">
+            <TrendingUp className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <CardTitle className="text-sm font-semibold">Loans & Interest Tracking</CardTitle>
+            <CardDescription className="text-xs">
+              {isAdmin 
+                ? `${activeLoans.length} active loan(s) — Financial overview`
+                : `Your active loan(s) — Financial overview`
+              }
+            </CardDescription>
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="pt-2">
+      <CardContent className="pt-4 pb-3 px-3">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-4">
-            <TabsTrigger value="loans" className="text-xs sm:text-sm">
-              <TrendingUp className="h-3.5 w-3.5 mr-1.5" />
+            <TabsTrigger value="loans" className="text-xs sm:text-sm gap-1.5">
+              <TrendingUp className="h-3.5 w-3.5" />
               Loans
             </TabsTrigger>
-            <TabsTrigger value="interest" className="text-xs sm:text-sm">
-              <Percent className="h-3.5 w-3.5 mr-1.5" />
+            <TabsTrigger value="interest" className="text-xs sm:text-sm gap-1.5">
+              <Percent className="h-3.5 w-3.5" />
               Interest Received
             </TabsTrigger>
           </TabsList>
@@ -503,36 +511,26 @@ const LoanCompletionChart = ({ accountIds, isAdmin = false }: LoanCompletionChar
         </Tabs>
         
         {/* Summary Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mt-4 pt-4 border-t border-border">
-          <div className="text-center p-2 rounded-lg bg-primary/10">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mt-4 pt-4 border-t border-border/60">
+          <div className="text-center p-2.5 rounded-xl bg-primary/10">
             <p className="text-[10px] text-muted-foreground">Disbursed</p>
-            <p className="text-xs font-bold text-primary">
-              UGX {totalDisbursed.toLocaleString()}
-            </p>
+            <p className="text-xs font-bold text-primary">UGX {totalDisbursed.toLocaleString()}</p>
           </div>
-          <div className="text-center p-2 rounded-lg bg-chart-3/10">
-            <p className="text-[10px] text-muted-foreground">Expected Interest</p>
-            <p className="text-xs font-bold text-chart-3">
-              UGX {totalExpectedInterest.toLocaleString()}
-            </p>
+          <div className="text-center p-2.5 rounded-xl bg-chart-3/10">
+            <p className="text-[10px] text-muted-foreground">Exp. Interest</p>
+            <p className="text-xs font-bold text-chart-3">UGX {totalExpectedInterest.toLocaleString()}</p>
           </div>
-          <div className="text-center p-2 rounded-lg bg-amber-500/10">
-            <p className="text-[10px] text-muted-foreground">Interest Received</p>
-            <p className="text-xs font-bold text-amber-600">
-              UGX {totalInterestReceived.toLocaleString()}
-            </p>
+          <div className="text-center p-2.5 rounded-xl bg-warning/10">
+            <p className="text-[10px] text-muted-foreground">Int. Received</p>
+            <p className="text-xs font-bold text-warning">UGX {totalInterestReceived.toLocaleString()}</p>
           </div>
-          <div className="text-center p-2 rounded-lg bg-success/10">
+          <div className="text-center p-2.5 rounded-xl bg-success/10">
             <p className="text-[10px] text-muted-foreground">Repaid</p>
-            <p className="text-xs font-bold text-success">
-              UGX {totalRepaid.toLocaleString()}
-            </p>
+            <p className="text-xs font-bold text-success">UGX {totalRepaid.toLocaleString()}</p>
           </div>
-          <div className="text-center p-2 rounded-lg bg-warning/10">
+          <div className="text-center p-2.5 rounded-xl bg-destructive/10">
             <p className="text-[10px] text-muted-foreground">Outstanding</p>
-            <p className="text-xs font-bold text-warning">
-              UGX {totalOutstanding.toLocaleString()}
-            </p>
+            <p className="text-xs font-bold text-destructive">UGX {totalOutstanding.toLocaleString()}</p>
           </div>
         </div>
       </CardContent>
