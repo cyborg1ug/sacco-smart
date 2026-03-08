@@ -42,6 +42,23 @@ const AdminDashboard = () => {
     loadUserName();
     loadStats();
     loadRecentTransactions();
+
+    // Real-time: reload stats whenever any transaction changes (especially approvals)
+    const channel = supabase
+      .channel("admin-dashboard-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "transactions" }, () => {
+        loadStats();
+        loadRecentTransactions();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "loans" }, () => {
+        loadStats();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "accounts" }, () => {
+        loadStats();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, []);
 
   const loadUserName = async () => {
