@@ -280,83 +280,67 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
       }
     }
 
-    // If this is a loan repayment, handle interest split + update outstanding
+    // If this is a loan repayment, handle monthly interest split + reduce outstanding balance
     if (type === "loan_repayment" && loanId) {
       const { data: loan } = await supabase
-        .from("loans").select("outstanding_balance, amount, total_amount, interest_rate, repayment_months, disbursed_at").eq("id", loanId).single();
+        .from("loans")
+        .select("outstanding_balance, amount, total_amount, interest_rate, repayment_months, disbursed_at")
+        .eq("id", loanId)
+        .single();
 
       if (loan) {
         const now = new Date();
         const monthlyInterest = loan.amount * (loan.interest_rate / 100);
 
-        // Check for overdue: daily interest accrual
-        let overdueInterestToApply = 0;
-        if (loan.disbursed_at && loan.repayment_months) {
-          const dueDate = new Date(loan.disbursed_at);
-          dueDate.setMonth(dueDate.getMonth() + loan.repayment_months);
-          if (now > dueDate) {
-            const daysOverdue = Math.floor((now.getTime() - dueDate.getTime()) / (1000 * 60 * 60 * 24));
-            const dailyRate = (loan.interest_rate / 100) / 30;
-            overdueInterestToApply = Math.round(loan.amount * dailyRate * daysOverdue);
-            // Check if already applied overdue interest for this period
-            const { data: existingOverdue } = await supabase
-              .from("transactions").select("id")
-              .eq("loan_id", loanId).eq("transaction_type", "interest_received").eq("status", "approved")
-              .ilike("description", "%overdue%");
-            if (existingOverdue && existingOverdue.length > 0) {
-              overdueInterestToApply = 0; // already applied
-            }
-          }
-        }
+        // NOTE: Overdue penalty interest (2%/30 daily accrual) is handled exclusively by the
+        // scheduled daily cron job (apply-overdue-interest). Do NOT apply it here to avoid
+        // double-counting. The outstanding balance already reflects any accrued daily penalties.
 
-        // Apply overdue interest if needed
-        if (overdueInterestToApply > 0) {
-          const { data: tnxIdOverdue } = await supabase.rpc("generate_tnx_id");
-          await supabase.from("transactions").insert({
-            account_id: accountId, transaction_type: "interest_received",
-            amount: overdueInterestToApply, balance_after: 0,
-            description: `Overdue interest (2%/mo daily accrual) on loan ${loanId.substring(0, 8)}`,
-            status: "approved", approved_by: user?.id, approved_at: now.toISOString(),
-            loan_id: loanId, tnx_id: tnxIdOverdue || `ODI${Date.now()}`,
-          } as any);
-          // Add overdue interest to outstanding balance
-          await supabase.from("loans").update({
-            outstanding_balance: loan.outstanding_balance + overdueInterestToApply
-          }).eq("id", loanId);
-          loan.outstanding_balance = loan.outstanding_balance + overdueInterestToApply;
-          toast({ title: "Overdue Interest Applied", description: `UGX ${overdueInterestToApply.toLocaleString()} overdue interest added.` });
-        }
+        // Monthly regular interest: record once per month, only for non-overdue period
+        const isOverdue = loan.disbursed_at && loan.repayment_months
+          ? (() => {
+              const dueDate = new Date(loan.disbursed_at);
+              dueDate.setMonth(dueDate.getMonth() + loan.repayment_months);
+              return now > dueDate;
+            })()
+          : false;
 
-        // Monthly interest: check if already applied this month
-        const { data: monthInterest } = await supabase
-          .from("transactions").select("id, created_at")
-          .eq("loan_id", loanId).eq("transaction_type", "interest_received").eq("status", "approved");
+        if (!isOverdue) {
+          // Only apply monthly interest split for loans still within repayment period
+          const { data: monthInterest } = await supabase
+            .from("transactions")
+            .select("id, created_at")
+            .eq("loan_id", loanId)
+            .eq("transaction_type", "interest_received")
+            .eq("status", "approved");
 
-        const hasInterestThisMonth = (monthInterest || []).some(t => {
-          const d = new Date(t.created_at);
-          return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
-            && !t.created_at.includes("overdue");
-        });
+          const hasInterestThisMonth = (monthInterest || []).some(t => {
+            const d = new Date(t.created_at);
+            return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
+          });
 
-        if (!hasInterestThisMonth) {
-          // Check total interest already recorded vs total expected
-          const totalInterestRecorded = (monthInterest || [])
-            .filter(t => !(t as any).description?.includes("overdue"))
-            .length;
-          const expectedMonths = loan.repayment_months || 1;
-          
-          if (totalInterestRecorded < expectedMonths) {
-            const interestDeducted = Math.min(monthlyInterest, amount);
-            if (interestDeducted > 0) {
-              const { data: tnxIdData } = await supabase.rpc("generate_tnx_id");
-              await supabase.from("transactions").insert({
-                account_id: accountId, transaction_type: "interest_received",
-                amount: interestDeducted, balance_after: 0,
-                description: `Monthly interest (2%) on loan ${loanId.substring(0, 8)}`,
-                status: "approved", approved_by: user?.id, approved_at: now.toISOString(),
-                loan_id: loanId, tnx_id: tnxIdData || `INT${Date.now()}`,
-              } as any);
-              toast({ title: "Interest Applied", description: `UGX ${interestDeducted.toLocaleString()} interest recorded.` });
+          if (!hasInterestThisMonth) {
+            const totalInterestRecorded = (monthInterest || []).length;
+            const expectedMonths = loan.repayment_months || 1;
+
+            if (totalInterestRecorded < expectedMonths) {
+              const interestDeducted = Math.min(monthlyInterest, amount);
+              if (interestDeducted > 0) {
+                const { data: tnxIdData } = await supabase.rpc("generate_tnx_id");
+                await supabase.from("transactions").insert({
+                  account_id: accountId,
+                  transaction_type: "interest_received",
+                  amount: interestDeducted,
+                  balance_after: 0,
+                  description: `Monthly interest (2%) on loan ${loanId.substring(0, 8)}`,
+                  status: "approved",
+                  approved_by: user?.id,
+                  approved_at: now.toISOString(),
+                  loan_id: loanId,
+                  tnx_id: tnxIdData,
+                } as any);
+                toast({ title: "Interest Applied", description: `UGX ${interestDeducted.toLocaleString()} interest recorded.` });
+              }
             }
           }
         }
