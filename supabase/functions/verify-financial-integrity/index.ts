@@ -183,7 +183,8 @@ serve(async (req) => {
       // Only flag if stored is LESS than calculated (indicates repayments not reflected)
       const diff = Math.round((Number(loan.outstanding_balance) - minExpected) * 100) / 100;
       // Only flag if stored is LESS than expected (repayments not reflected = real error)
-      // Positive = penalty accruals on top = healthy
+      // Positive diff = penalty accruals = healthy
+      const isDiscrepancy = diff < -0.01;
       if (isDiscrepancy) loanDiscrepancies++;
 
       const accInfo = accounts.find((a) => a.id === loan.account_id);
