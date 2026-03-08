@@ -100,12 +100,50 @@ const AdminDashboard = () => {
     const { data } = await supabase
       .from("transactions")
       .select(`
-        id, amount, transaction_type, status, created_at, tnx_id,
-        accounts!inner(account_number, user_id)
+        id, amount, transaction_type, status, created_at, tnx_id, balance_after, description,
+        accounts!inner(id, account_number, user_id, account_type, parent_account_id)
       `)
       .order("created_at", { ascending: false })
-      .limit(8);
-    if (data) setRecentTransactions(data);
+      .limit(10);
+
+    if (!data) return;
+
+    // Resolve account names: main accounts → profiles, sub-accounts → sub_account_profiles
+    const mainUserIds = [...new Set(
+      data.filter(t => (t.accounts as any)?.account_type === "main")
+          .map(t => (t.accounts as any)?.user_id).filter(Boolean)
+    )];
+    const subAccountIds = [...new Set(
+      data.filter(t => (t.accounts as any)?.account_type === "sub")
+          .map(t => (t.accounts as any)?.id).filter(Boolean)
+    )];
+
+    const [profilesRes, subProfilesRes] = await Promise.all([
+      mainUserIds.length > 0
+        ? supabase.from("profiles").select("id, full_name").in("id", mainUserIds)
+        : Promise.resolve({ data: [] }),
+      subAccountIds.length > 0
+        ? supabase.from("sub_account_profiles").select("account_id, full_name").in("account_id", subAccountIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const profileMap: Record<string, string> = {};
+    (profilesRes.data || []).forEach(p => { profileMap[p.id] = p.full_name; });
+    const subProfileMap: Record<string, string> = {};
+    (subProfilesRes.data || []).forEach(s => { subProfileMap[s.account_id] = s.full_name; });
+
+    const enriched = data.map(tx => {
+      const acc = tx.accounts as any;
+      let accountName = acc?.account_number;
+      if (acc?.account_type === "main" && acc?.user_id) {
+        accountName = profileMap[acc.user_id] || acc.account_number;
+      } else if (acc?.account_type === "sub") {
+        accountName = subProfileMap[acc.id] || acc.account_number;
+      }
+      return { ...tx, accountName, accountNumber: acc?.account_number };
+    });
+
+    setRecentTransactions(enriched);
   };
 
   const mobileNavItems = [
