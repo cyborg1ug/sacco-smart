@@ -913,10 +913,23 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     <>
       <Card>
       <CardHeader className="pb-3 sm:pb-4">
-        <CardTitle className="text-base sm:text-lg md:text-xl">Loans Management</CardTitle>
-        <CardDescription className="text-xs sm:text-sm">
-          Disbursed loans stay active until fully repaid
-        </CardDescription>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <CardTitle className="text-base sm:text-lg md:text-xl">Loans Management</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
+              Disbursed loans stay active until fully repaid
+            </CardDescription>
+          </div>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => { setOverdueResult(null); setOverdueDialogOpen(true); }}
+            className="flex items-center gap-2 shrink-0"
+          >
+            <Zap className="h-4 w-4" />
+            Apply Overdue Charges
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
         {/* Loan Status Tabs */}
