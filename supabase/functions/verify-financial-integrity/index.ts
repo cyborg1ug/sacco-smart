@@ -182,12 +182,14 @@ serve(async (req) => {
       const minExpected = Math.max(Number(loan.total_amount) + penalties - repaid, 0);
       // Only flag if stored is LESS than calculated (indicates repayments not reflected)
       const diff = Math.round((Number(loan.outstanding_balance) - minExpected) * 100) / 100;
-      // Positive diff = more than expected (penalty accruals) = OK; negative = under-reported = flag
-      const isDiscrepancy = diff < -0.01;
-      if (Math.abs(diff) > 0.01) loanDiscrepancies++;
+      // Only flag if stored is LESS than expected (repayments not reflected = real error)
+      // Positive = penalty accruals on top = healthy
+      if (isDiscrepancy) loanDiscrepancies++;
 
       const accInfo = accounts.find((a) => a.id === loan.account_id);
       const ownerProfile = accInfo ? profileMap[accInfo.user_id] : null;
+      // For display: calculated = minExpected; stored may be higher due to penalty accruals
+      const calcOutstanding = minExpected;
 
       loanReports.push({
         loan_id: loan.id,
