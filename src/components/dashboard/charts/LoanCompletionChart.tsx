@@ -181,7 +181,8 @@ const LoanCompletionChart = ({ accountIds, isAdmin = false }: LoanCompletionChar
         ...l,
         account_number: accountsMap.get(l.account_id)?.account_number || "Unknown",
         member_name: accountsMap.get(l.account_id)?.member_name || "Unknown",
-        disbursed_amount: disbursedMap.get(l.id) || l.amount // Use actual disbursed or fall back to loan amount
+        disbursed_amount: disbursedMap.get(l.id) || l.amount,
+        repaid_amount: repaidMap.get(l.id) || 0,
       }));
 
       setActiveLoans(loansWithNames);
