@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.apply-overdue-interest]
 verify_jwt = false
+
+[functions.verify-financial-integrity]
+verify_jwt = false
