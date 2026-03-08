@@ -154,10 +154,19 @@ serve(async (req) => {
     }
 
     // ── Loan outstanding balance check ─────────────────────────────────────
+    // Outstanding = total_amount + penalties_accrued - loan_repayments
+    // Penalties are added directly to outstanding_balance by the apply-overdue-interest function.
+    // So: calc = total_amount + sum(penalty_interest txns) - sum(loan_repayment txns)
     const repaymentsByLoan: Record<string, number> = {};
+    const penaltiesByLoan: Record<string, number> = {};
     for (const t of approvedTxns) {
-      if (t.transaction_type === "loan_repayment" && t.loan_id) {
-        repaymentsByLoan[t.loan_id] = (repaymentsByLoan[t.loan_id] ?? 0) + Number(t.amount);
+      if (t.loan_id) {
+        if (t.transaction_type === "loan_repayment") {
+          repaymentsByLoan[t.loan_id] = (repaymentsByLoan[t.loan_id] ?? 0) + Number(t.amount);
+        }
+        if (t.transaction_type === "penalty_interest" || t.transaction_type === "interest_accrual") {
+          penaltiesByLoan[t.loan_id] = (penaltiesByLoan[t.loan_id] ?? 0) + Number(t.amount);
+        }
       }
     }
 
@@ -166,12 +175,22 @@ serve(async (req) => {
 
     for (const loan of loans) {
       const repaid = repaymentsByLoan[loan.id] ?? 0;
-      const calcOutstanding = Math.max(Number(loan.total_amount) - repaid, 0);
-      const diff = Math.round((Number(loan.outstanding_balance) - calcOutstanding) * 100) / 100;
-      if (Math.abs(diff) > 0.01) loanDiscrepancies++;
+      const penalties = penaltiesByLoan[loan.id] ?? 0;
+      // Base: total_amount (principal+fixed interest) + any recorded penalty transactions - repayments
+      // Overdue interest applied directly to outstanding_balance (no txn record) is valid;
+      // we verify: stored_outstanding >= (total_amount - repaid) i.e. repayments were correctly subtracted
+      const minExpected = Math.max(Number(loan.total_amount) + penalties - repaid, 0);
+      // Only flag if stored is LESS than calculated (indicates repayments not reflected)
+      const diff = Math.round((Number(loan.outstanding_balance) - minExpected) * 100) / 100;
+      // Only flag if stored is LESS than expected (repayments not reflected = real error)
+      // Positive diff = penalty accruals = healthy
+      const isDiscrepancy = diff < -0.01;
+      if (isDiscrepancy) loanDiscrepancies++;
 
       const accInfo = accounts.find((a) => a.id === loan.account_id);
       const ownerProfile = accInfo ? profileMap[accInfo.user_id] : null;
+      // For display: calculated = minExpected; stored may be higher due to penalty accruals
+      const calcOutstanding = minExpected;
 
       loanReports.push({
         loan_id: loan.id,

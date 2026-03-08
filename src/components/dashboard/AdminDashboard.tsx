@@ -53,15 +53,19 @@ const AdminDashboard = () => {
   };
 
   const loadStats = async () => {
-    const [accountsRes, depositsRes, loansRes, pendingRes, loanAmtsRes] = await Promise.all([
-      supabase.from("accounts").select("id", { count: "exact" }),
-      supabase.from("transactions").select("amount").eq("transaction_type", "deposit").eq("status", "approved"),
+    const [accountsRes, allTxnsRes, loansRes, pendingRes, loanAmtsRes] = await Promise.all([
+      // Only count main accounts as "members"
+      supabase.from("accounts").select("id", { count: "exact" }).eq("account_type", "main"),
+      // Fetch all approved transactions for per-type recalculation
+      supabase.from("transactions").select("transaction_type, amount").eq("status", "approved"),
       supabase.from("loans").select("id", { count: "exact" }).in("status", ["approved", "disbursed", "active"]).gt("outstanding_balance", 0),
       supabase.from("transactions").select("id", { count: "exact" }).eq("status", "pending"),
       supabase.from("loans").select("amount, outstanding_balance").in("status", ["approved", "disbursed", "active"]),
     ]);
 
-    const totalSavings = depositsRes.data?.reduce((s, t) => s + Number(t.amount), 0) || 0;
+    const txns = allTxnsRes.data ?? [];
+    // Recalculate from transaction history (source of truth)
+    const totalSavings = txns.filter(t => t.transaction_type === "deposit").reduce((s, t) => s + Number(t.amount), 0);
     const totalLoanAmount = loanAmtsRes.data?.reduce((s, l) => s + Number(l.amount), 0) || 0;
     const outstandingBalance = loanAmtsRes.data?.reduce((s, l) => s + Number(l.outstanding_balance), 0) || 0;
 
