@@ -305,6 +305,24 @@ export default function DashboardLayout({
           <div className="p-4 md:p-6 lg:p-8 max-w-screen-2xl mx-auto">
             {children}
           </div>
+          {/* Copyright Footer */}
+          <footer className="border-t border-border/40 py-3 px-4 md:px-6 lg:px-8">
+            <div className="max-w-screen-2xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-1 text-[11px] text-muted-foreground/60">
+              <span>© {new Date().getFullYear()} CYBERSTEM Ltd. All rights reserved.</span>
+              <span className="flex items-center gap-2">
+                <a href="mailto:cyberstemug@gmail.com" className="hover:text-muted-foreground transition-colors">
+                  cyberstemug@gmail.com
+                </a>
+                <span>·</span>
+                <button
+                  onClick={() => navigate("/terms")}
+                  className="hover:text-muted-foreground transition-colors underline underline-offset-2"
+                >
+                  Terms & Conditions
+                </button>
+              </span>
+            </div>
+          </footer>
         </main>
       </div>
     </div>
