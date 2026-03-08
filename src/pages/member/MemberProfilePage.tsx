@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import DashboardLayout from "@/components/layout/DashboardLayout";
 import ProfileManagement from "@/components/dashboard/member/ProfileManagement";
 import { Loader2 } from "lucide-react";
 
 const MemberProfilePage = () => {
   const [userName, setUserName] = useState("");
   const [accountNumber, setAccountNumber] = useState("");
+  const [pendingGuarantor, setPendingGuarantor] = useState(0);
+  const [hasSubAccounts, setHasSubAccounts] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -18,36 +20,41 @@ const MemberProfilePage = () => {
     if (user) {
       const [profileResult, accountResult] = await Promise.all([
         supabase.from("profiles").select("full_name").eq("id", user.id).single(),
-        supabase.from("accounts").select("account_number").eq("user_id", user.id).eq("account_type", "main").maybeSingle(),
+        supabase.from("accounts").select("account_number, id").eq("user_id", user.id).eq("account_type", "main").maybeSingle(),
       ]);
       setUserName(profileResult.data?.full_name || "");
       setAccountNumber(accountResult.data?.account_number || "");
+
+      if (accountResult.data?.id) {
+        const [subAccountsResult, guarantorResult] = await Promise.all([
+          supabase.from("accounts").select("id").eq("parent_account_id", accountResult.data.id),
+          supabase.from("loans").select("id").eq("guarantor_account_id", accountResult.data.id).eq("guarantor_status", "pending"),
+        ]);
+        setHasSubAccounts((subAccountsResult.data?.length ?? 0) > 0);
+        setPendingGuarantor(guarantorResult.data?.length ?? 0);
+      }
     }
     setLoading(false);
   };
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen flex items-center justify-center bg-background">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
-      <div className="container mx-auto p-4 sm:p-6 space-y-6">
-        <DashboardHeader
-          title="Profile Settings"
-          subtitle={`Account: ${accountNumber}`}
-          userName={userName}
-          accountNumber={accountNumber}
-          showBackButton
-          showNotifications
-        />
-        <ProfileManagement />
-      </div>
-    </div>
+    <DashboardLayout
+      isAdmin={false}
+      userName={userName}
+      accountNumber={accountNumber}
+      pendingGuarantor={pendingGuarantor}
+      hasSubAccounts={hasSubAccounts}
+    >
+      <ProfileManagement />
+    </DashboardLayout>
   );
 };
 
