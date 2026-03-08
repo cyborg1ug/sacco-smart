@@ -34,6 +34,7 @@ import AdminWelfarePage from "./pages/admin/AdminWelfarePage";
 import AdminRemindersPage from "./pages/admin/AdminRemindersPage";
 import AdminStatementsPage from "./pages/admin/AdminStatementsPage";
 import AdminReportsPage from "./pages/admin/AdminReportsPage";
+import TermsAndConditions from "./pages/TermsAndConditions";
 
 const queryClient = new QueryClient();
 
