@@ -93,16 +93,30 @@ const MemberDashboard = () => {
 
     const allAccountIds = [accountData.id, ...(subAccountsData?.map(sa => sa.id) || [])];
 
+    // Build account name map: accountId → display name
+    const accountNameMap: Record<string, string> = { [accountData.id]: userName || "Main Account" };
+    if (subAccountsData && subAccountsData.length > 0) {
+      const { data: subProfiles2 } = await supabase
+        .from("sub_account_profiles").select("account_id, full_name")
+        .in("account_id", subAccountsData.map(sa => sa.id));
+      subProfiles2?.forEach(p => { accountNameMap[p.account_id] = p.full_name; });
+    }
+
     const [loansRes, guarantorRes, txRes] = await Promise.all([
       supabase.from("loans").select("id", { count: "exact" }).in("account_id", allAccountIds).in("status", ["approved", "disbursed"]),
       (supabase.from("loans").select("id", { count: "exact" }) as any).in("guarantor_account_id", allAccountIds).eq("guarantor_status", "pending"),
-      supabase.from("transactions").select("id, amount, transaction_type, status, created_at, tnx_id")
+      supabase.from("transactions").select("id, amount, transaction_type, status, created_at, tnx_id, account_id, balance_after")
         .in("account_id", allAccountIds).order("created_at", { ascending: false }).limit(6),
     ]);
 
     setActiveLoans(loansRes.count || 0);
     setPendingGuarantorRequests(guarantorRes.count || 0);
-    if (txRes.data) setRecentTransactions(txRes.data);
+    if (txRes.data) {
+      setRecentTransactions(txRes.data.map(tx => ({
+        ...tx,
+        account_name: accountNameMap[tx.account_id] || "Account",
+      })));
+    }
   };
 
   const displayBalance = showJointView ? jointTotals.balance : (account?.balance || 0);
