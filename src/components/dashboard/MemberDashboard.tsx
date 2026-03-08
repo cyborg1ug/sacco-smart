@@ -50,7 +50,25 @@ const MemberDashboard = () => {
   const [showJointView, setShowJointView] = useState(false);
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
 
-  useEffect(() => { loadAccountData(); }, []);
+  useEffect(() => {
+    loadAccountData();
+
+    // Real-time: reload when any transaction is updated (e.g. admin approves one)
+    const channel = supabase
+      .channel("member-dashboard-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "transactions" }, () => {
+        loadAccountData();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "accounts" }, () => {
+        loadAccountData();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "loans" }, () => {
+        loadAccountData();
+      })
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, []);
 
   const loadAccountData = async () => {
     const { data: { user } } = await supabase.auth.getUser();
