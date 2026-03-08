@@ -17,6 +17,7 @@ interface ActiveLoan {
   interest_rate?: number;
   repayment_months?: number;
   disbursed_amount?: number; // Actual disbursed from transactions
+  repaid_amount?: number;    // Actual repaid from loan_repayment transactions
 }
 
 interface InterestReceived {
