@@ -582,6 +582,42 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     }
   };
 
+  const handleApplyOverdueCharges = async () => {
+    setApplyingOverdue(true);
+    setOverdueResult(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/apply-overdue-interest`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Failed to apply charges");
+
+      setOverdueResult({ updated: result.updated, skipped: result.skipped, message: result.message });
+      if (result.updated > 0) {
+        loadLoans();
+        onUpdate();
+        toast({ title: "Overdue Charges Applied", description: `2% penalty applied to ${result.updated} overdue loan(s)` });
+      } else {
+        toast({ title: "No Changes Needed", description: "No overdue loans require penalty charges this month" });
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setApplyingOverdue(false);
+    }
+  };
+
   const getGuarantorStatusBadge = (status: string | null) => {
     if (!status || status === "none") return null;
     return (
