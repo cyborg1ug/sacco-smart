@@ -325,28 +325,32 @@ const LoanCompletionChart = ({ accountIds, isAdmin = false }: LoanCompletionChar
   }));
 
   return (
-    <Card className="overflow-hidden border-l-4 border-l-primary">
-      <CardHeader className="bg-gradient-to-r from-primary/10 via-chart-1/5 to-chart-2/5 pb-2">
-        <CardTitle className="flex items-center gap-2 text-base">
-          <TrendingUp className="h-5 w-5 text-primary" />
-          Loans & Interest Tracking
-        </CardTitle>
-        <CardDescription>
-          {isAdmin 
-            ? `${activeLoans.length} active loan(s) - Financial overview`
-            : `Your active loan(s) - Financial overview`
-          }
-        </CardDescription>
+    <Card className="overflow-hidden rounded-2xl border-0 shadow-md">
+      <CardHeader className="bg-gradient-to-br from-primary/10 via-primary/5 to-transparent border-b border-border/40 pb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-xl bg-primary/15 flex items-center justify-center">
+            <TrendingUp className="h-4 w-4 text-primary" />
+          </div>
+          <div>
+            <CardTitle className="text-sm font-semibold">Loans & Interest Tracking</CardTitle>
+            <CardDescription className="text-xs">
+              {isAdmin 
+                ? `${activeLoans.length} active loan(s) — Financial overview`
+                : `Your active loan(s) — Financial overview`
+              }
+            </CardDescription>
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="pt-2">
+      <CardContent className="pt-4 pb-3 px-3">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
           <TabsList className="grid w-full grid-cols-2 mb-4">
-            <TabsTrigger value="loans" className="text-xs sm:text-sm">
-              <TrendingUp className="h-3.5 w-3.5 mr-1.5" />
+            <TabsTrigger value="loans" className="text-xs sm:text-sm gap-1.5">
+              <TrendingUp className="h-3.5 w-3.5" />
               Loans
             </TabsTrigger>
-            <TabsTrigger value="interest" className="text-xs sm:text-sm">
-              <Percent className="h-3.5 w-3.5 mr-1.5" />
+            <TabsTrigger value="interest" className="text-xs sm:text-sm gap-1.5">
+              <Percent className="h-3.5 w-3.5" />
               Interest Received
             </TabsTrigger>
           </TabsList>
