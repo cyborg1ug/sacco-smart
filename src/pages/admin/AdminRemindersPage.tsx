@@ -1,20 +1,14 @@
-import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import DashboardLayout from "@/components/layout/DashboardLayout";
 import AlertsReminders from "@/components/dashboard/admin/AlertsReminders";
 
-const AdminRemindersPage = () => {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
-      <div className="container mx-auto p-4 sm:p-6 space-y-6">
-        <DashboardHeader
-          title="Alerts & Reminders"
-          subtitle="Manage member notifications"
-          isAdmin
-          showBackButton
-        />
-        <AlertsReminders />
-      </div>
+const AdminRemindersPage = () => (
+  <DashboardLayout isAdmin>
+    <div className="mb-6">
+      <h2 className="text-2xl font-bold text-foreground">Reminders</h2>
+      <p className="text-sm text-muted-foreground mt-0.5">Send alerts and manage member notifications</p>
     </div>
-  );
-};
+    <AlertsReminders />
+  </DashboardLayout>
+);
 
 export default AdminRemindersPage;
