@@ -164,16 +164,28 @@ const AdminDashboard = () => {
       : `UGX ${n.toLocaleString()}`;
 
   const txTypeColor: Record<string, string> = {
-    deposit:       "text-success",
-    withdrawal:    "text-destructive",
-    loan_repayment:"text-info",
+    deposit:           "text-success",
+    withdrawal:        "text-destructive",
+    loan_repayment:    "text-info",
     loan_disbursement: "text-warning",
+    interest_received: "text-primary",
+    overdue_interest:  "text-destructive",
+  };
+  const txTypeBg: Record<string, string> = {
+    deposit:           "bg-success/10",
+    withdrawal:        "bg-destructive/10",
+    loan_repayment:    "bg-info/10",
+    loan_disbursement: "bg-warning/10",
+    interest_received: "bg-primary/10",
+    overdue_interest:  "bg-destructive/10",
   };
   const txTypeLabel: Record<string, string> = {
-    deposit:         "Deposit",
-    withdrawal:      "Withdrawal",
-    loan_repayment:  "Repayment",
+    deposit:           "Deposit",
+    withdrawal:        "Withdrawal",
+    loan_repayment:    "Loan Repayment",
     loan_disbursement: "Disbursement",
+    interest_received: "Interest",
+    overdue_interest:  "Overdue Penalty",
   };
 
   return (
