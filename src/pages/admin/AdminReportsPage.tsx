@@ -1,20 +1,14 @@
-import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import DashboardLayout from "@/components/layout/DashboardLayout";
 import ReportsGeneration from "@/components/dashboard/admin/ReportsGeneration";
 
-const AdminReportsPage = () => {
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
-      <div className="container mx-auto p-4 sm:p-6 space-y-6">
-        <DashboardHeader
-          title="Reports"
-          subtitle="Generate financial reports"
-          isAdmin
-          showBackButton
-        />
-        <ReportsGeneration />
-      </div>
+const AdminReportsPage = () => (
+  <DashboardLayout isAdmin>
+    <div className="mb-6">
+      <h2 className="text-2xl font-bold text-foreground">Reports</h2>
+      <p className="text-sm text-muted-foreground mt-0.5">Generate comprehensive financial reports and analytics</p>
     </div>
-  );
-};
+    <ReportsGeneration />
+  </DashboardLayout>
+);
 
 export default AdminReportsPage;

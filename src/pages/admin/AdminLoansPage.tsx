@@ -1,22 +1,17 @@
 import { useState } from "react";
-import DashboardHeader from "@/components/dashboard/DashboardHeader";
+import DashboardLayout from "@/components/layout/DashboardLayout";
 import LoansManagement from "@/components/dashboard/admin/LoansManagement";
 
 const AdminLoansPage = () => {
   const [, setRefresh] = useState(0);
-
   return (
-    <div className="min-h-screen bg-gradient-to-br from-primary/5 via-background to-secondary/5">
-      <div className="container mx-auto p-4 sm:p-6 space-y-6">
-        <DashboardHeader
-          title="Loans Management"
-          subtitle="Manage loan applications"
-          isAdmin
-          showBackButton
-        />
-        <LoansManagement onUpdate={() => setRefresh((r) => r + 1)} />
+    <DashboardLayout isAdmin>
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-foreground">Loans</h2>
+        <p className="text-sm text-muted-foreground mt-0.5">Manage loan applications and disbursements</p>
       </div>
-    </div>
+      <LoansManagement onUpdate={() => setRefresh(r => r + 1)} />
+    </DashboardLayout>
   );
 };
 
