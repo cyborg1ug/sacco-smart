@@ -370,23 +370,21 @@ const AdminDashboard = () => {
                         className="flex items-center justify-between px-4 py-3 border-b border-border/40 last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
                         onClick={() => setActiveTab("transactions")}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                            tx.transaction_type === "deposit" ? "bg-success/10" :
-                            tx.transaction_type === "withdrawal" ? "bg-destructive/10" :
-                            tx.transaction_type === "loan_repayment" ? "bg-info/10" :
-                            "bg-warning/10"
-                          }`}>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-9 h-9 rounded-lg flex-shrink-0 flex items-center justify-center ${txTypeBg[tx.transaction_type] || "bg-muted"}`}>
                             <DollarSign className={`w-4 h-4 ${txTypeColor[tx.transaction_type] || "text-foreground"}`} />
                           </div>
-                          <div>
-                            <p className="text-xs font-medium text-foreground">
+                          <div className="min-w-0">
+                            <p className={`text-xs font-semibold ${txTypeColor[tx.transaction_type] || "text-foreground"}`}>
                               {txTypeLabel[tx.transaction_type] || tx.transaction_type}
                             </p>
-                            <p className="text-[10px] text-muted-foreground font-mono">{tx.tnx_id}</p>
+                            <p className="text-[11px] text-foreground/80 font-medium truncate">{tx.accountName}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">
+                              {tx.accountNumber} · Bal: UGX {Number(tx.balance_after).toLocaleString()}
+                            </p>
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right flex-shrink-0 ml-2">
                           <p className="text-xs font-bold tabular-nums text-foreground">
                             UGX {Number(tx.amount).toLocaleString()}
                           </p>
