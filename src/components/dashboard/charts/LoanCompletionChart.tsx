@@ -511,36 +511,26 @@ const LoanCompletionChart = ({ accountIds, isAdmin = false }: LoanCompletionChar
         </Tabs>
         
         {/* Summary Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mt-4 pt-4 border-t border-border">
-          <div className="text-center p-2 rounded-lg bg-primary/10">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mt-4 pt-4 border-t border-border/60">
+          <div className="text-center p-2.5 rounded-xl bg-primary/10">
             <p className="text-[10px] text-muted-foreground">Disbursed</p>
-            <p className="text-xs font-bold text-primary">
-              UGX {totalDisbursed.toLocaleString()}
-            </p>
+            <p className="text-xs font-bold text-primary">UGX {totalDisbursed.toLocaleString()}</p>
           </div>
-          <div className="text-center p-2 rounded-lg bg-chart-3/10">
-            <p className="text-[10px] text-muted-foreground">Expected Interest</p>
-            <p className="text-xs font-bold text-chart-3">
-              UGX {totalExpectedInterest.toLocaleString()}
-            </p>
+          <div className="text-center p-2.5 rounded-xl bg-chart-3/10">
+            <p className="text-[10px] text-muted-foreground">Exp. Interest</p>
+            <p className="text-xs font-bold text-chart-3">UGX {totalExpectedInterest.toLocaleString()}</p>
           </div>
-          <div className="text-center p-2 rounded-lg bg-amber-500/10">
-            <p className="text-[10px] text-muted-foreground">Interest Received</p>
-            <p className="text-xs font-bold text-amber-600">
-              UGX {totalInterestReceived.toLocaleString()}
-            </p>
+          <div className="text-center p-2.5 rounded-xl bg-warning/10">
+            <p className="text-[10px] text-muted-foreground">Int. Received</p>
+            <p className="text-xs font-bold text-warning">UGX {totalInterestReceived.toLocaleString()}</p>
           </div>
-          <div className="text-center p-2 rounded-lg bg-success/10">
+          <div className="text-center p-2.5 rounded-xl bg-success/10">
             <p className="text-[10px] text-muted-foreground">Repaid</p>
-            <p className="text-xs font-bold text-success">
-              UGX {totalRepaid.toLocaleString()}
-            </p>
+            <p className="text-xs font-bold text-success">UGX {totalRepaid.toLocaleString()}</p>
           </div>
-          <div className="text-center p-2 rounded-lg bg-warning/10">
+          <div className="text-center p-2.5 rounded-xl bg-destructive/10">
             <p className="text-[10px] text-muted-foreground">Outstanding</p>
-            <p className="text-xs font-bold text-warning">
-              UGX {totalOutstanding.toLocaleString()}
-            </p>
+            <p className="text-xs font-bold text-destructive">UGX {totalOutstanding.toLocaleString()}</p>
           </div>
         </div>
       </CardContent>
