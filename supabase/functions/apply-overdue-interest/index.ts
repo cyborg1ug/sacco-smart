@@ -64,15 +64,20 @@ Deno.serve(async (req) => {
     }
 
     const today = new Date();
-    const currentMonth = today.getMonth();
-    const currentYear = today.getFullYear();
+    // Use UTC date string YYYY-MM-DD for idempotency key (one accrual per day)
+    const todayKey = today.toISOString().split('T')[0];
 
-    // Get all active/disbursed loans with outstanding balance
+    // Daily accrual rate: 2% per month / 30 days = 0.0667% per day
+    const MONTHLY_PENALTY_RATE = 0.02;
+    const DAILY_PENALTY_RATE = MONTHLY_PENALTY_RATE / 30;
+
+    // Get all active loans with outstanding balance that have been disbursed
     const { data: loans, error: loansError } = await supabase
       .from("loans")
       .select("id, account_id, amount, outstanding_balance, repayment_months, disbursed_at, interest_rate")
       .in("status", ["disbursed", "active"])
-      .gt("outstanding_balance", 0);
+      .gt("outstanding_balance", 0)
+      .not("disbursed_at", "is", null);
 
     if (loansError) {
       console.error("Error fetching loans:", loansError);
@@ -84,59 +89,52 @@ Deno.serve(async (req) => {
 
     let updatedCount = 0;
     let skippedCount = 0;
+    const appliedLoans: { loanId: string; accountId: string; dailyCharge: number }[] = [];
 
     for (const loan of loans || []) {
-      if (!loan.disbursed_at) {
-        skippedCount++;
-        continue;
-      }
-
       const disbursedDate = new Date(loan.disbursed_at);
       const expectedEndDate = new Date(disbursedDate);
       expectedEndDate.setMonth(expectedEndDate.getMonth() + (loan.repayment_months || 1));
 
-      // Check if loan is overdue (past repayment period)
+      // Only apply to overdue loans (past their repayment end date)
       if (today <= expectedEndDate) {
         skippedCount++;
         continue;
       }
 
-      // Calculate months overdue (rounded up)
-      const monthsOverdue = Math.ceil(
-        (today.getTime() - expectedEndDate.getTime()) / (1000 * 60 * 60 * 24 * 30)
-      );
-
-      if (monthsOverdue <= 0) {
-        skippedCount++;
-        continue;
-      }
-
-      // Check if we already applied overdue interest this month
-      const monthYearKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
-      const { data: existingInterest } = await supabase
+      // ---- IDEMPOTENCY: check if we already applied overdue interest TODAY for this loan ----
+      const { data: existingToday } = await supabase
         .from("transactions")
         .select("id")
         .eq("loan_id", loan.id)
-        .eq("transaction_type", "loan_disbursement")
-        .ilike("description", `%overdue interest%${monthYearKey}%`)
+        .eq("transaction_type", "overdue_interest")
+        .gte("created_at", `${todayKey}T00:00:00.000Z`)
+        .lt("created_at", `${todayKey}T23:59:59.999Z`)
         .limit(1);
 
-      if (existingInterest && existingInterest.length > 0) {
-        console.log(`Loan ${loan.id} already has overdue interest for ${monthYearKey}`);
+      if (existingToday && existingToday.length > 0) {
+        console.log(`Loan ${loan.id} already has overdue interest for ${todayKey} — skipping`);
         skippedCount++;
         continue;
       }
 
-      // Calculate 2% of original loan amount for overdue interest
-      const overdueInterest = loan.amount * 0.02;
-      const newOutstandingBalance = loan.outstanding_balance + overdueInterest;
+      // Daily charge = principal * 0.02 / 30
+      const dailyCharge = Math.round((loan.amount * DAILY_PENALTY_RATE) * 100) / 100;
+
+      if (dailyCharge <= 0) {
+        skippedCount++;
+        continue;
+      }
+
+      const newOutstandingBalance = Math.round((loan.outstanding_balance + dailyCharge) * 100) / 100;
+
+      // Days overdue (for informative description)
+      const daysOverdue = Math.floor((today.getTime() - expectedEndDate.getTime()) / (1000 * 60 * 60 * 24));
 
       // Update loan outstanding balance
       const { error: updateError } = await supabase
         .from("loans")
-        .update({
-          outstanding_balance: newOutstandingBalance,
-        })
+        .update({ outstanding_balance: newOutstandingBalance })
         .eq("id", loan.id);
 
       if (updateError) {
@@ -144,33 +142,50 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Create a record for tracking
-      await supabase
+      // Record daily overdue interest as a transaction for full audit trail
+      // transaction_type = "overdue_interest" — distinct from disbursements/repayments
+      // tnx_id is left null so the DB trigger auto-generates a valid 9-digit ID
+      const { error: txError } = await supabase
         .from("transactions")
         .insert({
           account_id: loan.account_id,
-          transaction_type: "loan_disbursement",
-          amount: overdueInterest,
-          balance_after: 0,
-          description: `Overdue interest (2%) - ${monthYearKey}`,
+          transaction_type: "overdue_interest",
+          amount: dailyCharge,
+          balance_after: 0, // Does not directly affect account cash balance
+          description: `Daily overdue penalty (2%/30) - Day ${daysOverdue} overdue [${todayKey}]`,
           status: "approved",
           approved_at: new Date().toISOString(),
           loan_id: loan.id,
-          tnx_id: `OD-${Date.now()}-${loan.id.slice(0, 8)}`,
+          tnx_id: null, // Let DB trigger generate a valid 9-digit tnx_id
         } as any);
 
-      console.log(`Applied UGX ${overdueInterest.toLocaleString()} overdue interest to loan ${loan.id}`);
+      if (txError) {
+        console.error(`Error recording overdue interest transaction for loan ${loan.id}:`, txError);
+        // Roll back loan balance update
+        await supabase
+          .from("loans")
+          .update({ outstanding_balance: loan.outstanding_balance })
+          .eq("id", loan.id);
+        continue;
+      }
+
+      appliedLoans.push({ loanId: loan.id, accountId: loan.account_id, dailyCharge });
+      console.log(`Loan ${loan.id}: applied daily overdue charge of UGX ${dailyCharge.toLocaleString()} (Day ${daysOverdue} overdue)`);
       updatedCount++;
     }
 
-    console.log(`Overdue interest complete: ${updatedCount} loans updated, ${skippedCount} skipped`);
+    const totalCharged = appliedLoans.reduce((sum, l) => sum + l.dailyCharge, 0);
+    console.log(`Overdue interest complete: ${updatedCount} loans updated, ${skippedCount} skipped. Total charged: UGX ${totalCharged.toLocaleString()}`);
 
     return new Response(
       JSON.stringify({
         success: true,
-        message: `Applied overdue interest to ${updatedCount} loans, ${skippedCount} skipped`,
+        message: `Daily overdue interest applied to ${updatedCount} loans, ${skippedCount} skipped`,
         updated: updatedCount,
         skipped: skippedCount,
+        total_charged: totalCharged,
+        date: todayKey,
+        loans_affected: appliedLoans,
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
