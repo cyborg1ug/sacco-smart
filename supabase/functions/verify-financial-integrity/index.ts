@@ -176,8 +176,14 @@ serve(async (req) => {
     for (const loan of loans) {
       const repaid = repaymentsByLoan[loan.id] ?? 0;
       const penalties = penaltiesByLoan[loan.id] ?? 0;
-      const calcOutstanding = Math.max(Number(loan.total_amount) + penalties - repaid, 0);
-      const diff = Math.round((Number(loan.outstanding_balance) - calcOutstanding) * 100) / 100;
+      // Base: total_amount (principal+fixed interest) + any recorded penalty transactions - repayments
+      // Overdue interest applied directly to outstanding_balance (no txn record) is valid;
+      // we verify: stored_outstanding >= (total_amount - repaid) i.e. repayments were correctly subtracted
+      const minExpected = Math.max(Number(loan.total_amount) + penalties - repaid, 0);
+      // Only flag if stored is LESS than calculated (indicates repayments not reflected)
+      const diff = Math.round((Number(loan.outstanding_balance) - minExpected) * 100) / 100;
+      // Positive diff = more than expected (penalty accruals) = OK; negative = under-reported = flag
+      const isDiscrepancy = diff < -0.01;
       if (Math.abs(diff) > 0.01) loanDiscrepancies++;
 
       const accInfo = accounts.find((a) => a.id === loan.account_id);
