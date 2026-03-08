@@ -30,7 +30,6 @@ function generateReceiptContent(data: {
     });
   };
 
-  // Create a simple text-based receipt that can be stored and displayed
   return `
 ================================================================================
                               KINONI SACCO
@@ -83,9 +82,46 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
+    // AUTHENTICATION CHECK
+    const authHeader = req.headers.get('Authorization');
+    if (!authHeader) {
+      console.error('No authorization header provided');
+      return new Response(
+        JSON.stringify({ error: 'Authorization required' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const token = authHeader.replace('Bearer ', '');
+    const { data: { user }, error: authError } = await supabaseAdmin.auth.getUser(token);
+
+    if (authError || !user) {
+      console.error('Invalid token:', authError?.message);
+      return new Response(
+        JSON.stringify({ error: 'Invalid authentication token' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ADMIN ROLE CHECK
+    const { data: role, error: roleError } = await supabaseAdmin
+      .from('user_roles')
+      .select('role')
+      .eq('user_id', user.id)
+      .eq('role', 'admin')
+      .single();
+
+    if (roleError || !role) {
+      console.error(`User ${user.id} attempted receipt generation without admin role`);
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized - Admin access required' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { transactionId, generateAll } = await req.json()
 
-    console.log('Generate receipt request:', { transactionId, generateAll })
+    console.log(`Receipt generation by admin ${user.email}:`, { transactionId, generateAll })
 
     if (generateAll) {
       // Generate receipts for all approved transactions without receipts
