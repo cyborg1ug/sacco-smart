@@ -380,14 +380,12 @@ const MemberDashboard = () => {
                         </div>
                         <div>
                           <p className="text-xs font-medium">{txTypeLabel[tx.transaction_type] || tx.transaction_type}</p>
-                          <p className="text-[10px] text-muted-foreground font-mono">{tx.tnx_id}</p>
+                          <p className="text-[10px] text-muted-foreground truncate max-w-[100px]">{tx.account_name}</p>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="text-xs font-bold tabular-nums">UGX {Number(tx.amount).toLocaleString()}</p>
-                        <Badge variant="outline" className={`text-[9px] px-1 py-0 ${tx.status === "approved" ? "badge-approved" : tx.status === "pending" ? "badge-pending" : "badge-rejected"}`}>
-                          {tx.status}
-                        </Badge>
+                        <p className="text-[10px] text-muted-foreground tabular-nums">Bal: {Number(tx.balance_after).toLocaleString()}</p>
                       </div>
                     </div>
                   ))
