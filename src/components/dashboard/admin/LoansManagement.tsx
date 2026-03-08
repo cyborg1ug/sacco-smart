@@ -60,7 +60,10 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   const [loadingGuarantors, setLoadingGuarantors] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  
+  const [overdueDialogOpen, setOverdueDialogOpen] = useState(false);
+  const [applyingOverdue, setApplyingOverdue] = useState(false);
+  const [overdueResult, setOverdueResult] = useState<{ updated: number; skipped: number; message: string } | null>(null);
+
   // Edit form state
   const [editRepaymentMonths, setEditRepaymentMonths] = useState<number>(1);
   const [editDisbursedAt, setEditDisbursedAt] = useState<string>("");
