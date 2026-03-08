@@ -13,7 +13,7 @@ Deno.serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    
+
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // AUTHENTICATION CHECK
@@ -27,33 +27,41 @@ Deno.serve(async (req) => {
     }
 
     const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
-    if (authError || !user) {
-      console.error("Invalid token:", authError?.message);
-      return new Response(
-        JSON.stringify({ error: 'Invalid authentication token' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Allow service role key (used by cron jobs) to bypass user auth check
+    const isServiceRoleCall = token === supabaseServiceKey;
+
+    if (!isServiceRoleCall) {
+      // Normal user auth flow — verify admin role
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+
+      if (authError || !user) {
+        console.error("Invalid token:", authError?.message);
+        return new Response(
+          JSON.stringify({ error: 'Invalid authentication token' }),
+          { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const { data: role, error: roleError } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'admin')
+        .single();
+
+      if (roleError || !role) {
+        console.error(`User ${user.id} attempted overdue interest without admin role`);
+        return new Response(
+          JSON.stringify({ error: 'Unauthorized - Admin access required' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log(`Overdue interest check initiated by admin ${user.id} (${user.email})`);
+    } else {
+      console.log("Overdue interest check initiated by scheduled cron job (service role)");
     }
-
-    // ADMIN ROLE CHECK
-    const { data: role, error: roleError } = await supabase
-      .from('user_roles')
-      .select('role')
-      .eq('user_id', user.id)
-      .eq('role', 'admin')
-      .single();
-
-    if (roleError || !role) {
-      console.error(`User ${user.id} attempted overdue interest without admin role`);
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized - Admin access required' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log(`Overdue interest check initiated by admin ${user.id} (${user.email})`);
 
     const today = new Date();
     const currentMonth = today.getMonth();
@@ -104,7 +112,6 @@ Deno.serve(async (req) => {
       }
 
       // Check if we already applied overdue interest this month
-      // We track this by checking for a transaction with specific description
       const monthYearKey = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}`;
       const { data: existingInterest } = await supabase
         .from("transactions")
@@ -127,7 +134,7 @@ Deno.serve(async (req) => {
       // Update loan outstanding balance
       const { error: updateError } = await supabase
         .from("loans")
-        .update({ 
+        .update({
           outstanding_balance: newOutstandingBalance,
         })
         .eq("id", loan.id);
@@ -137,18 +144,19 @@ Deno.serve(async (req) => {
         continue;
       }
 
-      // Create a record for tracking (not a real transaction, just for logging)
+      // Create a record for tracking
       await supabase
         .from("transactions")
         .insert({
           account_id: loan.account_id,
           transaction_type: "loan_disbursement",
           amount: overdueInterest,
-          balance_after: 0, // Not affecting account balance
+          balance_after: 0,
           description: `Overdue interest (2%) - ${monthYearKey}`,
           status: "approved",
           approved_at: new Date().toISOString(),
           loan_id: loan.id,
+          tnx_id: `OD-${Date.now()}-${loan.id.slice(0, 8)}`,
         } as any);
 
       console.log(`Applied UGX ${overdueInterest.toLocaleString()} overdue interest to loan ${loan.id}`);
