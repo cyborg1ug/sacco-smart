@@ -100,12 +100,50 @@ const AdminDashboard = () => {
     const { data } = await supabase
       .from("transactions")
       .select(`
-        id, amount, transaction_type, status, created_at, tnx_id,
-        accounts!inner(account_number, user_id)
+        id, amount, transaction_type, status, created_at, tnx_id, balance_after, description,
+        accounts!inner(id, account_number, user_id, account_type, parent_account_id)
       `)
       .order("created_at", { ascending: false })
-      .limit(8);
-    if (data) setRecentTransactions(data);
+      .limit(10);
+
+    if (!data) return;
+
+    // Resolve account names: main accounts → profiles, sub-accounts → sub_account_profiles
+    const mainUserIds = [...new Set(
+      data.filter(t => (t.accounts as any)?.account_type === "main")
+          .map(t => (t.accounts as any)?.user_id).filter(Boolean)
+    )];
+    const subAccountIds = [...new Set(
+      data.filter(t => (t.accounts as any)?.account_type === "sub")
+          .map(t => (t.accounts as any)?.id).filter(Boolean)
+    )];
+
+    const [profilesRes, subProfilesRes] = await Promise.all([
+      mainUserIds.length > 0
+        ? supabase.from("profiles").select("id, full_name").in("id", mainUserIds)
+        : Promise.resolve({ data: [] }),
+      subAccountIds.length > 0
+        ? supabase.from("sub_account_profiles").select("account_id, full_name").in("account_id", subAccountIds)
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const profileMap: Record<string, string> = {};
+    (profilesRes.data || []).forEach(p => { profileMap[p.id] = p.full_name; });
+    const subProfileMap: Record<string, string> = {};
+    (subProfilesRes.data || []).forEach(s => { subProfileMap[s.account_id] = s.full_name; });
+
+    const enriched = data.map(tx => {
+      const acc = tx.accounts as any;
+      let accountName = acc?.account_number;
+      if (acc?.account_type === "main" && acc?.user_id) {
+        accountName = profileMap[acc.user_id] || acc.account_number;
+      } else if (acc?.account_type === "sub") {
+        accountName = subProfileMap[acc.id] || acc.account_number;
+      }
+      return { ...tx, accountName, accountNumber: acc?.account_number };
+    });
+
+    setRecentTransactions(enriched);
   };
 
   const mobileNavItems = [
@@ -126,16 +164,28 @@ const AdminDashboard = () => {
       : `UGX ${n.toLocaleString()}`;
 
   const txTypeColor: Record<string, string> = {
-    deposit:       "text-success",
-    withdrawal:    "text-destructive",
-    loan_repayment:"text-info",
+    deposit:           "text-success",
+    withdrawal:        "text-destructive",
+    loan_repayment:    "text-info",
     loan_disbursement: "text-warning",
+    interest_received: "text-primary",
+    overdue_interest:  "text-destructive",
+  };
+  const txTypeBg: Record<string, string> = {
+    deposit:           "bg-success/10",
+    withdrawal:        "bg-destructive/10",
+    loan_repayment:    "bg-info/10",
+    loan_disbursement: "bg-warning/10",
+    interest_received: "bg-primary/10",
+    overdue_interest:  "bg-destructive/10",
   };
   const txTypeLabel: Record<string, string> = {
-    deposit:         "Deposit",
-    withdrawal:      "Withdrawal",
-    loan_repayment:  "Repayment",
+    deposit:           "Deposit",
+    withdrawal:        "Withdrawal",
+    loan_repayment:    "Loan Repayment",
     loan_disbursement: "Disbursement",
+    interest_received: "Interest",
+    overdue_interest:  "Overdue Penalty",
   };
 
   return (
@@ -207,17 +257,22 @@ const AdminDashboard = () => {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-1 p-2">
               {recentTransactions.slice(0, 5).map(tx => (
-                <div key={tx.id} className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0">
-                  <div>
-                    <p className={`text-xs font-medium ${txTypeColor[tx.transaction_type] || "text-foreground"}`}>
-                      {txTypeLabel[tx.transaction_type] || tx.transaction_type}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground font-mono">{tx.tnx_id}</p>
+                <div key={tx.id} className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-muted/40 transition-colors">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className={`w-7 h-7 rounded-md flex-shrink-0 flex items-center justify-center ${txTypeBg[tx.transaction_type] || "bg-muted"}`}>
+                      <DollarSign className={`w-3.5 h-3.5 ${txTypeColor[tx.transaction_type] || "text-foreground"}`} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className={`text-xs font-semibold truncate ${txTypeColor[tx.transaction_type] || "text-foreground"}`}>
+                        {txTypeLabel[tx.transaction_type] || tx.transaction_type}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground truncate">{tx.accountName}</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs font-semibold tabular-nums">UGX {Number(tx.amount).toLocaleString()}</p>
+                  <div className="text-right flex-shrink-0 ml-2">
+                    <p className="text-xs font-bold tabular-nums">UGX {Number(tx.amount).toLocaleString()}</p>
                     <Badge variant="outline" className={`text-[9px] px-1 py-0 ${tx.status === "approved" ? "badge-approved" : tx.status === "pending" ? "badge-pending" : "badge-rejected"}`}>
                       {tx.status}
                     </Badge>
@@ -315,23 +370,21 @@ const AdminDashboard = () => {
                         className="flex items-center justify-between px-4 py-3 border-b border-border/40 last:border-0 hover:bg-muted/30 transition-colors cursor-pointer"
                         onClick={() => setActiveTab("transactions")}
                       >
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                            tx.transaction_type === "deposit" ? "bg-success/10" :
-                            tx.transaction_type === "withdrawal" ? "bg-destructive/10" :
-                            tx.transaction_type === "loan_repayment" ? "bg-info/10" :
-                            "bg-warning/10"
-                          }`}>
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className={`w-9 h-9 rounded-lg flex-shrink-0 flex items-center justify-center ${txTypeBg[tx.transaction_type] || "bg-muted"}`}>
                             <DollarSign className={`w-4 h-4 ${txTypeColor[tx.transaction_type] || "text-foreground"}`} />
                           </div>
-                          <div>
-                            <p className="text-xs font-medium text-foreground">
+                          <div className="min-w-0">
+                            <p className={`text-xs font-semibold ${txTypeColor[tx.transaction_type] || "text-foreground"}`}>
                               {txTypeLabel[tx.transaction_type] || tx.transaction_type}
                             </p>
-                            <p className="text-[10px] text-muted-foreground font-mono">{tx.tnx_id}</p>
+                            <p className="text-[11px] text-foreground/80 font-medium truncate">{tx.accountName}</p>
+                            <p className="text-[10px] text-muted-foreground truncate">
+                              {tx.accountNumber} · Bal: UGX {Number(tx.balance_after).toLocaleString()}
+                            </p>
                           </div>
                         </div>
-                        <div className="text-right">
+                        <div className="text-right flex-shrink-0 ml-2">
                           <p className="text-xs font-bold tabular-nums text-foreground">
                             UGX {Number(tx.amount).toLocaleString()}
                           </p>
