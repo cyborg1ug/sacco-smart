@@ -93,16 +93,30 @@ const MemberDashboard = () => {
 
     const allAccountIds = [accountData.id, ...(subAccountsData?.map(sa => sa.id) || [])];
 
+    // Build account name map: accountId → display name
+    const accountNameMap: Record<string, string> = { [accountData.id]: userName || "Main Account" };
+    if (subAccountsData && subAccountsData.length > 0) {
+      const { data: subProfiles2 } = await supabase
+        .from("sub_account_profiles").select("account_id, full_name")
+        .in("account_id", subAccountsData.map(sa => sa.id));
+      subProfiles2?.forEach(p => { accountNameMap[p.account_id] = p.full_name; });
+    }
+
     const [loansRes, guarantorRes, txRes] = await Promise.all([
       supabase.from("loans").select("id", { count: "exact" }).in("account_id", allAccountIds).in("status", ["approved", "disbursed"]),
       (supabase.from("loans").select("id", { count: "exact" }) as any).in("guarantor_account_id", allAccountIds).eq("guarantor_status", "pending"),
-      supabase.from("transactions").select("id, amount, transaction_type, status, created_at, tnx_id")
+      supabase.from("transactions").select("id, amount, transaction_type, status, created_at, tnx_id, account_id, balance_after")
         .in("account_id", allAccountIds).order("created_at", { ascending: false }).limit(6),
     ]);
 
     setActiveLoans(loansRes.count || 0);
     setPendingGuarantorRequests(guarantorRes.count || 0);
-    if (txRes.data) setRecentTransactions(txRes.data);
+    if (txRes.data) {
+      setRecentTransactions(txRes.data.map(tx => ({
+        ...tx,
+        account_name: accountNameMap[tx.account_id] || "Account",
+      })));
+    }
   };
 
   const displayBalance = showJointView ? jointTotals.balance : (account?.balance || 0);
@@ -269,13 +283,11 @@ const MemberDashboard = () => {
                       <p className={`text-xs font-medium ${txTypeColor[tx.transaction_type] || "text-foreground"}`}>
                         {txTypeLabel[tx.transaction_type] || tx.transaction_type}
                       </p>
-                      <p className="text-[10px] text-muted-foreground font-mono">{tx.tnx_id}</p>
+                      <p className="text-[10px] text-muted-foreground truncate max-w-[120px]">{tx.account_name}</p>
                     </div>
                     <div className="text-right">
                       <p className="text-xs font-semibold tabular-nums">UGX {Number(tx.amount).toLocaleString()}</p>
-                      <Badge variant="outline" className={`text-[9px] px-1 py-0 ${tx.status === "approved" ? "badge-approved" : tx.status === "pending" ? "badge-pending" : "badge-rejected"}`}>
-                        {tx.status}
-                      </Badge>
+                      <p className="text-[10px] text-muted-foreground tabular-nums">Bal: {Number(tx.balance_after).toLocaleString()}</p>
                     </div>
                   </div>
                 ))}
@@ -368,14 +380,12 @@ const MemberDashboard = () => {
                         </div>
                         <div>
                           <p className="text-xs font-medium">{txTypeLabel[tx.transaction_type] || tx.transaction_type}</p>
-                          <p className="text-[10px] text-muted-foreground font-mono">{tx.tnx_id}</p>
+                          <p className="text-[10px] text-muted-foreground truncate max-w-[100px]">{tx.account_name}</p>
                         </div>
                       </div>
                       <div className="text-right">
                         <p className="text-xs font-bold tabular-nums">UGX {Number(tx.amount).toLocaleString()}</p>
-                        <Badge variant="outline" className={`text-[9px] px-1 py-0 ${tx.status === "approved" ? "badge-approved" : tx.status === "pending" ? "badge-pending" : "badge-rejected"}`}>
-                          {tx.status}
-                        </Badge>
+                        <p className="text-[10px] text-muted-foreground tabular-nums">Bal: {Number(tx.balance_after).toLocaleString()}</p>
                       </div>
                     </div>
                   ))
