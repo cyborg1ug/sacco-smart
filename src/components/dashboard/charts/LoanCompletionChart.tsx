@@ -118,18 +118,23 @@ const LoanCompletionChart = ({ accountIds, isAdmin = false }: LoanCompletionChar
         return;
       }
 
-      // Get actual disbursed amounts from transactions
+      // Get actual disbursed amounts AND repayment amounts from transactions
       const loanIds = loans.map(l => l.id);
-      const { data: disbursementTxns } = await supabase
+      const { data: loanTxns } = await supabase
         .from("transactions")
-        .select("loan_id, amount")
+        .select("loan_id, amount, transaction_type")
         .in("loan_id", loanIds)
-        .eq("transaction_type", "loan_disbursement")
+        .in("transaction_type", ["loan_disbursement", "loan_repayment"])
         .eq("status", "approved");
 
       const disbursedMap = new Map<string, number>();
-      disbursementTxns?.forEach(t => {
-        disbursedMap.set(t.loan_id!, (disbursedMap.get(t.loan_id!) || 0) + Number(t.amount));
+      const repaidMap = new Map<string, number>();
+      loanTxns?.forEach(t => {
+        if (t.transaction_type === "loan_disbursement") {
+          disbursedMap.set(t.loan_id!, (disbursedMap.get(t.loan_id!) || 0) + Number(t.amount));
+        } else if (t.transaction_type === "loan_repayment") {
+          repaidMap.set(t.loan_id!, (repaidMap.get(t.loan_id!) || 0) + Number(t.amount));
+        }
       });
 
       // Get account info for names
