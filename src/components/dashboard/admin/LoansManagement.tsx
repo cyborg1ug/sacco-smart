@@ -4,16 +4,17 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Send, Loader2, Users, UserPlus, CheckCircle, Edit, Clock, CheckCircle2, TrendingUp, Search, Calendar } from "lucide-react";
+import { Check, X, Send, Loader2, Users, UserPlus, CheckCircle, Edit, Clock, CheckCircle2, TrendingUp, Search, Calendar, AlertTriangle, Zap } from "lucide-react";
 import { format } from "date-fns";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MobileCardList, MobileCard } from "@/components/ui/MobileCardList";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface Loan {
   id: string;
@@ -59,7 +60,10 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   const [loadingGuarantors, setLoadingGuarantors] = useState(false);
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  
+  const [overdueDialogOpen, setOverdueDialogOpen] = useState(false);
+  const [applyingOverdue, setApplyingOverdue] = useState(false);
+  const [overdueResult, setOverdueResult] = useState<{ updated: number; skipped: number; message: string } | null>(null);
+
   // Edit form state
   const [editRepaymentMonths, setEditRepaymentMonths] = useState<number>(1);
   const [editDisbursedAt, setEditDisbursedAt] = useState<string>("");
@@ -578,6 +582,42 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     }
   };
 
+  const handleApplyOverdueCharges = async () => {
+    setApplyingOverdue(true);
+    setOverdueResult(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const response = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/apply-overdue-interest`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${session.access_token}`,
+          },
+        }
+      );
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Failed to apply charges");
+
+      setOverdueResult({ updated: result.updated, skipped: result.skipped, message: result.message });
+      if (result.updated > 0) {
+        loadLoans();
+        onUpdate();
+        toast({ title: "Overdue Charges Applied", description: `2% penalty applied to ${result.updated} overdue loan(s)` });
+      } else {
+        toast({ title: "No Changes Needed", description: "No overdue loans require penalty charges this month" });
+      }
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally {
+      setApplyingOverdue(false);
+    }
+  };
+
   const getGuarantorStatusBadge = (status: string | null) => {
     if (!status || status === "none") return null;
     return (
@@ -873,10 +913,23 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     <>
       <Card>
       <CardHeader className="pb-3 sm:pb-4">
-        <CardTitle className="text-base sm:text-lg md:text-xl">Loans Management</CardTitle>
-        <CardDescription className="text-xs sm:text-sm">
-          Disbursed loans stay active until fully repaid
-        </CardDescription>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <CardTitle className="text-base sm:text-lg md:text-xl">Loans Management</CardTitle>
+            <CardDescription className="text-xs sm:text-sm">
+              Disbursed loans stay active until fully repaid
+            </CardDescription>
+          </div>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => { setOverdueResult(null); setOverdueDialogOpen(true); }}
+            className="flex items-center gap-2 shrink-0"
+          >
+            <Zap className="h-4 w-4" />
+            Apply Overdue Charges
+          </Button>
+        </div>
       </CardHeader>
       <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
         {/* Loan Status Tabs */}
@@ -1061,6 +1114,57 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
                 Update Loan Details
               </Button>
             </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Apply Overdue Charges Confirmation Dialog */}
+      <Dialog open={overdueDialogOpen} onOpenChange={setOverdueDialogOpen}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Apply Overdue Penalty Charges
+            </DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              This will apply a <strong>2% penalty</strong> on the principal amount to all loans that have exceeded their repayment period. Each loan is charged once per month.
+            </DialogDescription>
+          </DialogHeader>
+
+          {overdueResult ? (
+            <div className="space-y-3">
+              <Alert>
+                <CheckCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <p className="font-medium">{overdueResult.message}</p>
+                  <div className="mt-2 text-xs space-y-1">
+                    <p>✅ <strong>{overdueResult.updated}</strong> loan(s) charged with 2% overdue penalty</p>
+                    <p>⏭ <strong>{overdueResult.skipped}</strong> loan(s) skipped (not overdue or already charged this month)</p>
+                  </div>
+                </AlertDescription>
+              </Alert>
+              <DialogFooter>
+                <Button onClick={() => setOverdueDialogOpen(false)} className="w-full">Close</Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-2">
+              <Button variant="outline" onClick={() => setOverdueDialogOpen(false)} className="flex-1">
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleApplyOverdueCharges}
+                disabled={applyingOverdue}
+                className="flex-1"
+              >
+                {applyingOverdue ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
+                ) : (
+                  <><Zap className="mr-2 h-4 w-4" />Apply Charges</>
+                )}
+              </Button>
+            </DialogFooter>
           )}
         </DialogContent>
       </Dialog>
