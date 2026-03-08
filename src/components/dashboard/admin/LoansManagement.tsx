@@ -1117,6 +1117,57 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Apply Overdue Charges Confirmation Dialog */}
+      <Dialog open={overdueDialogOpen} onOpenChange={setOverdueDialogOpen}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              Apply Overdue Penalty Charges
+            </DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              This will apply a <strong>2% penalty</strong> on the principal amount to all loans that have exceeded their repayment period. Each loan is charged once per month.
+            </DialogDescription>
+          </DialogHeader>
+
+          {overdueResult ? (
+            <div className="space-y-3">
+              <Alert>
+                <CheckCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <p className="font-medium">{overdueResult.message}</p>
+                  <div className="mt-2 text-xs space-y-1">
+                    <p>✅ <strong>{overdueResult.updated}</strong> loan(s) charged with 2% overdue penalty</p>
+                    <p>⏭ <strong>{overdueResult.skipped}</strong> loan(s) skipped (not overdue or already charged this month)</p>
+                  </div>
+                </AlertDescription>
+              </Alert>
+              <DialogFooter>
+                <Button onClick={() => setOverdueDialogOpen(false)} className="w-full">Close</Button>
+              </DialogFooter>
+            </div>
+          ) : (
+            <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-2">
+              <Button variant="outline" onClick={() => setOverdueDialogOpen(false)} className="flex-1">
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={handleApplyOverdueCharges}
+                disabled={applyingOverdue}
+                className="flex-1"
+              >
+                {applyingOverdue ? (
+                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
+                ) : (
+                  <><Zap className="mr-2 h-4 w-4" />Apply Charges</>
+                )}
+              </Button>
+            </DialogFooter>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
