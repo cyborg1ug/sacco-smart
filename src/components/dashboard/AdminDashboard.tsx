@@ -257,17 +257,22 @@ const AdminDashboard = () => {
                 </Button>
               </div>
             </CardHeader>
-            <CardContent className="space-y-2">
+            <CardContent className="space-y-1 p-2">
               {recentTransactions.slice(0, 5).map(tx => (
-                <div key={tx.id} className="flex items-center justify-between py-1.5 border-b border-border/40 last:border-0">
-                  <div>
-                    <p className={`text-xs font-medium ${txTypeColor[tx.transaction_type] || "text-foreground"}`}>
-                      {txTypeLabel[tx.transaction_type] || tx.transaction_type}
-                    </p>
-                    <p className="text-[10px] text-muted-foreground font-mono">{tx.tnx_id}</p>
+                <div key={tx.id} className="flex items-center justify-between px-2 py-2 rounded-lg hover:bg-muted/40 transition-colors">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className={`w-7 h-7 rounded-md flex-shrink-0 flex items-center justify-center ${txTypeBg[tx.transaction_type] || "bg-muted"}`}>
+                      <DollarSign className={`w-3.5 h-3.5 ${txTypeColor[tx.transaction_type] || "text-foreground"}`} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className={`text-xs font-semibold truncate ${txTypeColor[tx.transaction_type] || "text-foreground"}`}>
+                        {txTypeLabel[tx.transaction_type] || tx.transaction_type}
+                      </p>
+                      <p className="text-[10px] text-muted-foreground truncate">{tx.accountName}</p>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <p className="text-xs font-semibold tabular-nums">UGX {Number(tx.amount).toLocaleString()}</p>
+                  <div className="text-right flex-shrink-0 ml-2">
+                    <p className="text-xs font-bold tabular-nums">UGX {Number(tx.amount).toLocaleString()}</p>
                     <Badge variant="outline" className={`text-[9px] px-1 py-0 ${tx.status === "approved" ? "badge-approved" : tx.status === "pending" ? "badge-pending" : "badge-rejected"}`}>
                       {tx.status}
                     </Badge>
