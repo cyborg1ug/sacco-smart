@@ -17,6 +17,7 @@ interface ActiveLoan {
   interest_rate?: number;
   repayment_months?: number;
   disbursed_amount?: number; // Actual disbursed from transactions
+  repaid_amount?: number;    // Actual repaid from loan_repayment transactions
 }
 
 interface InterestReceived {
@@ -118,18 +119,23 @@ const LoanCompletionChart = ({ accountIds, isAdmin = false }: LoanCompletionChar
         return;
       }
 
-      // Get actual disbursed amounts from transactions
+      // Get actual disbursed amounts AND repayment amounts from transactions
       const loanIds = loans.map(l => l.id);
-      const { data: disbursementTxns } = await supabase
+      const { data: loanTxns } = await supabase
         .from("transactions")
-        .select("loan_id, amount")
+        .select("loan_id, amount, transaction_type")
         .in("loan_id", loanIds)
-        .eq("transaction_type", "loan_disbursement")
+        .in("transaction_type", ["loan_disbursement", "loan_repayment"])
         .eq("status", "approved");
 
       const disbursedMap = new Map<string, number>();
-      disbursementTxns?.forEach(t => {
-        disbursedMap.set(t.loan_id!, (disbursedMap.get(t.loan_id!) || 0) + Number(t.amount));
+      const repaidMap = new Map<string, number>();
+      loanTxns?.forEach(t => {
+        if (t.transaction_type === "loan_disbursement") {
+          disbursedMap.set(t.loan_id!, (disbursedMap.get(t.loan_id!) || 0) + Number(t.amount));
+        } else if (t.transaction_type === "loan_repayment") {
+          repaidMap.set(t.loan_id!, (repaidMap.get(t.loan_id!) || 0) + Number(t.amount));
+        }
       });
 
       // Get account info for names
@@ -176,7 +182,8 @@ const LoanCompletionChart = ({ accountIds, isAdmin = false }: LoanCompletionChar
         ...l,
         account_number: accountsMap.get(l.account_id)?.account_number || "Unknown",
         member_name: accountsMap.get(l.account_id)?.member_name || "Unknown",
-        disbursed_amount: disbursedMap.get(l.id) || l.amount // Use actual disbursed or fall back to loan amount
+        disbursed_amount: disbursedMap.get(l.id) || l.amount,
+        repaid_amount: repaidMap.get(l.id) || 0,
       }));
 
       setActiveLoans(loansWithNames);
@@ -293,21 +300,22 @@ const LoanCompletionChart = ({ accountIds, isAdmin = false }: LoanCompletionChar
     return null;
   }
 
-  // Calculate totals - use actual disbursed amounts from transactions
+  // Calculate totals — use actual transaction amounts (never total_amount - outstanding_balance,
+  // which goes negative when overdue penalties inflate outstanding_balance beyond total_amount)
   const totalDisbursed = activeLoans.reduce((sum, l) => sum + (l.disbursed_amount || l.amount), 0);
   const totalExpectedInterest = activeLoans.reduce((sum, l) => sum + (l.total_amount - l.amount), 0);
   const totalInterestReceived = interestData.reduce((sum, i) => sum + i.total_interest, 0);
-  const totalRepaid = activeLoans.reduce((sum, l) => sum + (l.total_amount - l.outstanding_balance), 0);
+  const totalRepaid = activeLoans.reduce((sum, l) => sum + (l.repaid_amount || 0), 0);
   const totalOutstanding = activeLoans.reduce((sum, l) => sum + l.outstanding_balance, 0);
 
-  // Prepare chart data: use actual disbursed amount from transactions
+  // Prepare chart data: use actual repaid amount from loan_repayment transactions
   const chartData = activeLoans.map((loan, index) => {
-    const repaidAmount = loan.total_amount - loan.outstanding_balance;
+    const repaidAmount = loan.repaid_amount || 0; // from actual repayment transactions
     const loanInterest = loan.total_amount - loan.amount;
     return {
       name: isAdmin ? loan.member_name?.split(' ')[0] || 'Member' : `Loan ${index + 1}`,
       fullName: isAdmin ? loan.member_name : `Loan ${index + 1}`,
-      disbursed: loan.disbursed_amount || loan.amount, // Use actual disbursed from transactions
+      disbursed: loan.disbursed_amount || loan.amount,
       repaid: repaidAmount,
       outstanding: loan.outstanding_balance,
       interest: loanInterest,
