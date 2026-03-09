@@ -221,14 +221,16 @@ export default function DashboardLayout({
       <motion.aside
         animate={{ width: collapsed ? 64 : 240 }}
         transition={{ duration: 0.25, ease: "easeInOut" }}
-        className="hidden md:flex flex-col bg-sidebar relative shrink-0 overflow-hidden"
+        className="hidden md:flex flex-col bg-sidebar relative shrink-0"
         style={{ boxShadow: "2px 0 20px hsl(0 0% 0% / 0.15)" }}
       >
-        <SidebarContent />
-        {/* Collapse Toggle */}
+        <div className="flex flex-col h-full overflow-hidden">
+          <SidebarContent />
+        </div>
+        {/* Collapse Toggle - floats outside sidebar */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="absolute top-5 -right-4 w-8 h-8 rounded-full bg-sidebar border-2 border-sidebar-border shadow-lg flex items-center justify-center hover:bg-primary hover:border-primary hover:shadow-primary/30 transition-all duration-200 z-10"
+          className="absolute top-5 -right-4 w-8 h-8 rounded-full bg-sidebar border-2 border-sidebar-border shadow-lg flex items-center justify-center hover:bg-primary hover:border-primary hover:shadow-primary/30 transition-all duration-200 z-20"
         >
           {collapsed
             ? <ChevronRight className="w-4 h-4 text-sidebar-foreground" />
