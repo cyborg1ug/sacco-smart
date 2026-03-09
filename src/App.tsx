@@ -35,6 +35,7 @@ import AdminRemindersPage from "./pages/admin/AdminRemindersPage";
 import AdminStatementsPage from "./pages/admin/AdminStatementsPage";
 import AdminReportsPage from "./pages/admin/AdminReportsPage";
 import TermsAndConditions from "./pages/TermsAndConditions";
+import Changelog from "./pages/Changelog";
 
 const queryClient = new QueryClient();
 
@@ -76,6 +77,7 @@ const App = () => (
             <Route path="/admin/reports" element={<ProtectedRoute><AdminReportsPage /></ProtectedRoute>} />
             
             <Route path="/terms" element={<TermsAndConditions />} />
+            <Route path="/changelog" element={<Changelog />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </TooltipProvider>
