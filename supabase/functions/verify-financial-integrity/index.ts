@@ -238,29 +238,29 @@ SYSTEM TOTALS:
 - Total Loans: ${loans.length}
 
 TRANSACTION TYPE TOTALS (approved only):
-- Total Deposits: KES ${grandTotalDeposits.toFixed(2)}
-- Total Withdrawals: KES ${grandTotalWithdrawals.toFixed(2)}
-- Total Loan Disbursements: KES ${grandTotalLoanDisbursements.toFixed(2)}
-- Total Loan Repayments: KES ${grandTotalLoanRepayments.toFixed(2)}
-- Total Welfare Deductions: KES ${grandTotalWelfare.toFixed(2)}
+- Total Deposits: UGX ${grandTotalDeposits.toFixed(2)}
+- Total Withdrawals: UGX ${grandTotalWithdrawals.toFixed(2)}
+- Total Loan Disbursements: UGX ${grandTotalLoanDisbursements.toFixed(2)}
+- Total Loan Repayments: UGX ${grandTotalLoanRepayments.toFixed(2)}
+- Total Welfare Deductions: UGX ${grandTotalWelfare.toFixed(2)}
 
 BALANCE INTEGRITY:
-- Stored Total Balance (all accounts): KES ${totalStoredBalance.toFixed(2)}
-- Recalculated Total Balance: KES ${totalCalcBalance.toFixed(2)}
-- Balance Difference: KES ${(totalStoredBalance - totalCalcBalance).toFixed(2)}
-- Stored Total Savings: KES ${totalStoredSavings.toFixed(2)}
-- Recalculated Total Savings: KES ${totalCalcSavings.toFixed(2)}
-- Savings Difference: KES ${(totalStoredSavings - totalCalcSavings).toFixed(2)}
+- Stored Total Balance (all accounts): UGX ${totalStoredBalance.toFixed(2)}
+- Recalculated Total Balance: UGX ${totalCalcBalance.toFixed(2)}
+- Balance Difference: UGX ${(totalStoredBalance - totalCalcBalance).toFixed(2)}
+- Stored Total Savings: UGX ${totalStoredSavings.toFixed(2)}
+- Recalculated Total Savings: UGX ${totalCalcSavings.toFixed(2)}
+- Savings Difference: UGX ${(totalStoredSavings - totalCalcSavings).toFixed(2)}
 
 ACCOUNT DISCREPANCIES: ${totalDiscrepancies} account(s) with issues
-${discrepantAccounts.slice(0, 10).map((a) => `  - ${a.owner_name} (${a.account_number}): Balance diff KES ${a.balance_discrepancy}, Savings diff KES ${a.savings_discrepancy}`).join("\n")}
+${discrepantAccounts.slice(0, 10).map((a) => `  - ${a.owner_name} (${a.account_number}): Balance diff UGX ${a.balance_discrepancy}, Savings diff UGX ${a.savings_discrepancy}`).join("\n")}
 
 LOAN DISCREPANCIES: ${loanDiscrepancies} loan(s) with issues
-${discrepantLoans.slice(0, 10).map((l) => `  - ${l.owner_name} (${l.account_number}): Outstanding diff KES ${l.discrepancy} [${l.status}]`).join("\n")}
+${discrepantLoans.slice(0, 10).map((l) => `  - ${l.owner_name} (${l.account_number}): Outstanding diff UGX ${l.discrepancy} [${l.status}]`).join("\n")}
 
 NET SACCO POSITION:
-- Net Flow = Deposits - Withdrawals - Welfare = KES ${(grandTotalDeposits - grandTotalWithdrawals - grandTotalWelfare).toFixed(2)}
-- Total Active Loan Exposure = KES ${loans.filter((l) => ["active", "disbursed", "approved"].includes(l.status)).reduce((s, l) => s + Number(l.outstanding_balance), 0).toFixed(2)}
+- Net Flow = Deposits - Withdrawals - Welfare = UGX ${(grandTotalDeposits - grandTotalWithdrawals - grandTotalWelfare).toFixed(2)}
+- Total Active Loan Exposure = UGX ${loans.filter((l) => ["active", "disbursed", "approved"].includes(l.status)).reduce((s, l) => s + Number(l.outstanding_balance), 0).toFixed(2)}
 
 Accounting rules used:
 1. Available Balance = Deposits + Loan Disbursements - Withdrawals - Loan Repayments - Welfare Deductions
@@ -274,7 +274,7 @@ Provide:
 4. Specific recommendations if any discrepancies exist
 5. A final sign-off statement
 
-Be direct, professional, and use KES currency formatting.
+Be direct, professional, and use UGX currency formatting throughout.
 `;
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
