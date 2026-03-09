@@ -341,6 +341,10 @@ export function generateBankMemberPDF(params: {
     doc.text("It is for informational purposes only and does not constitute financial advice. Data verified against KINONI SACCO records.", 18, boxY + 9);
   }
 
+  // ── Analyst Endorsement ───────────────────────────────────────────────
+  if (y > 255) { doc.addPage(); y = 20; }
+  addAnalystEndorsement(doc, (doc as any).lastAutoTable?.finalY ?? y);
+
   addFooter(doc);
   doc.save(`KINONI_SACCO_Statement_${accountNumber}_${format(new Date(), "yyyyMMdd")}.pdf`);
 }
