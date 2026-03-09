@@ -236,6 +236,12 @@ const Auth = () => {
     setLoading(false);
   };
 
+  const copyright = (
+    <p className="text-xs text-muted-foreground text-center mt-4">
+      © {new Date().getFullYear()} CYBERSTEM Ltd. All Rights Reserved.
+    </p>
+  );
+
   // Show loading while checking session
   if (checkingSession) {
     return (
@@ -247,11 +253,12 @@ const Auth = () => {
 
   if (isResettingPassword) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
         <div className="absolute top-4 right-4">
           <ThemeToggle />
         </div>
         <UpdatePasswordForm />
+        {copyright}
       </div>
     );
   }
@@ -259,7 +266,7 @@ const Auth = () => {
   // Show options for already signed-in users
   if (existingSession) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
         <div className="absolute top-4 right-4">
           <ThemeToggle />
         </div>
@@ -287,12 +294,13 @@ const Auth = () => {
             </Button>
           </CardContent>
         </Card>
+        {copyright}
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4">
       <div className="absolute top-4 right-4">
         <ThemeToggle />
       </div>
@@ -565,6 +573,7 @@ const Auth = () => {
           )}
         </CardContent>
       </Card>
+      {copyright}
     </div>
   );
 };
