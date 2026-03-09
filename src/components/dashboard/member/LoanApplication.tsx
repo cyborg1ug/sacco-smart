@@ -313,7 +313,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
           ) : (
             <>
               <Alert>
-                <CheckCircle className="h-4 w-4 text-green-600" />
+                <CheckCircle className="h-4 w-4 text-chart-2" />
                 <AlertDescription>
                   {selectedAccount?.account_type === "sub" ? "This sub-account is eligible for a loan! " : "You are eligible for a loan! "}
                   Maximum amount: <strong>UGX {eligibility.max_loan_amount.toLocaleString()}</strong> (3× savings of UGX {eligibility.total_savings.toLocaleString()})
