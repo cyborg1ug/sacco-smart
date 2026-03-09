@@ -59,7 +59,7 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
 
       const [{ data: allTxns }, { data: periodTxns }, { data: loans }, { data: savings }] = await Promise.all([
         supabase.from("transactions").select("*").eq("account_id", acc.id).eq("status", "approved").order("created_at", { ascending: false }),
-        supabase.from("transactions").select("*").eq("account_id", acc.id)
+        supabase.from("transactions").select("*").eq("account_id", acc.id).eq("status", "approved")
           .gte("created_at", dr.start.toISOString()).lte("created_at", dr.end.toISOString()),
         supabase.from("loans").select("*").eq("account_id", acc.id),
         supabase.from("savings").select("*").eq("account_id", acc.id).gte("week_start", dr.start.toISOString()),
@@ -107,7 +107,7 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
       supabase.from("profiles").select("*"),
       supabase.from("sub_account_profiles").select("*"),
       supabase.from("transactions").select("*").eq("status", "approved"),
-      supabase.from("transactions").select("*").gte("created_at", dr.start.toISOString()).lte("created_at", dr.end.toISOString()),
+      supabase.from("transactions").select("*").eq("status", "approved").gte("created_at", dr.start.toISOString()).lte("created_at", dr.end.toISOString()),
       supabase.from("loans").select("*"),
       supabase.from("savings").select("*").gte("week_start", dr.start.toISOString()),
     ]);
@@ -245,7 +245,7 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
 
     if (reportData.type === "member") {
       generateBankMemberPDF({
-        memberName: d.acc.account_number, email: d.profile.email,
+        memberName: d.profile.full_name, email: d.profile.email,
         phoneNumber: d.profile.phone_number, occupation: d.profile.occupation,
         accountNumber: d.acc.account_number, balance: Number(d.acc.balance),
         totalSavings: Number(d.acc.total_savings), period: d.dr,
