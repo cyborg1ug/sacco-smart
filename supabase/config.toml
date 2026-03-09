@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.verify-financial-integrity]
 verify_jwt = false
+
+[functions.ai-report-analysis]
+verify_jwt = false
