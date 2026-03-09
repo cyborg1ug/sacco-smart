@@ -86,8 +86,8 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
       setAiEligibility(null);
       setAiChecked(false);
       // Reload guarantors filtered by this account's savings at DB level
-      const savings = myAccounts.find(a => a.id === selectedAccountId)?.total_savings ?? 0;
-      loadMembers(savings);
+      // Reload guarantors — will be re-filtered by loan amount when amount is entered
+      loadMembers(0);
       setSelectedGuarantor("");
     }
   }, [selectedAccountId, myAccounts]);
@@ -196,11 +196,11 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
 
   const validateGuarantor = (guarantorId: string) => {
     if (!guarantorId) { setGuarantorError("Please select a guarantor"); return false; }
-    const mySavings = getSelectedAccountSavings();
+    const amount = parseFloat(loanAmount) || 0;
     const guarantor = members.find(m => m.id === guarantorId);
     if (guarantorId === selectedAccountId) { setGuarantorError("You cannot be your own guarantor"); return false; }
-    if (!guarantor || guarantor.total_savings < mySavings) {
-      setGuarantorError("Selected member's savings must be equal to or greater than the applying account's savings");
+    if (!guarantor || guarantor.total_savings < amount) {
+      setGuarantorError(`Selected member's savings must be equal to or greater than the loan amount (UGX ${amount.toLocaleString()})`);
       return false;
     }
     setGuarantorError("");
@@ -376,7 +376,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
                     </SelectContent>
                   </Select>
                   {eligibleGuarantors.length === 0 && (
-                    <p className="text-sm text-destructive">No eligible guarantors found. A guarantor must have savings ≥ UGX {mySavings.toLocaleString()}</p>
+                    <p className="text-sm text-destructive">No eligible guarantors found. A guarantor must have savings ≥ the loan amount being applied for.</p>
                   )}
                   {guarantorError && <p className="text-sm text-destructive">{guarantorError}</p>}
                   {selectedMember && (

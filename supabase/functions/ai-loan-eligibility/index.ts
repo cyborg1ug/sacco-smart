@@ -139,7 +139,7 @@ ELIGIBILITY RULES:
 1. Applicant must have savings > 0
 2. Maximum loan = 3× applicant's total savings
 3. Applicant must NOT have any existing active loan with outstanding balance > 0
-4. Guarantor's total savings must be ≥ applicant's total savings
+4. Guarantor's total savings must be ≥ the loan amount being applied for
 5. Guarantor must NOT currently be guaranteeing another active loan (max 1 active guarantee at a time)
 6. Guarantor cannot be the same account as the applicant
 7. Interest rate is 2% per month flat; total interest = principal × 2% × months
