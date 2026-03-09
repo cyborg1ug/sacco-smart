@@ -120,11 +120,16 @@ serve(async (req) => {
       const loanDisbursements = acctTxns.filter((t) => t.transaction_type === "loan_disbursement").reduce((s, t) => s + Number(t.amount), 0);
       const loanRepayments = acctTxns.filter((t) => t.transaction_type === "loan_repayment").reduce((s, t) => s + Number(t.amount), 0);
       const welfareDeductions = acctTxns.filter((t) => t.transaction_type === "welfare_deduction").reduce((s, t) => s + Number(t.amount), 0);
+      // overdue_interest: penalty charged as a debit against the account balance
+      const overdueInterest = acctTxns.filter((t) => t.transaction_type === "overdue_interest").reduce((s, t) => s + Number(t.amount), 0);
+      // interest_received: SACCO-side interest income credited to the account
+      const interestReceived = acctTxns.filter((t) => t.transaction_type === "interest_received").reduce((s, t) => s + Number(t.amount), 0);
 
-      // Per accounting rules: Balance = Deposits + LoanDisbursements - Withdrawals - LoanRepayments - WelfareDeductions
-      const calcBalance = deposits + loanDisbursements - withdrawals - loanRepayments - welfareDeductions;
+      // Balance = Deposits + LoanDisbursements + InterestReceived - Withdrawals - LoanRepayments - WelfareDeductions - OverdueInterest
+      const calcBalance = deposits + loanDisbursements + interestReceived - withdrawals - loanRepayments - welfareDeductions - overdueInterest;
       // Total Savings = sum of approved deposits only
       const calcSavings = deposits;
+
 
       const balanceDiff = Math.round((Number(acc.balance) - calcBalance) * 100) / 100;
       const savingsDiff = Math.round((Number(acc.total_savings) - calcSavings) * 100) / 100;
