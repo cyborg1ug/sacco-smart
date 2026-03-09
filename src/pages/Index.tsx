@@ -50,7 +50,7 @@ const Index = () => {
               Digital Banking Platform
             </div>
             <h1 className="text-4xl md:text-6xl font-bold text-foreground tracking-tight leading-tight mb-5">
-              Modern SACCO
+              KINONI SACCO
               <span className="block text-primary">Management Platform</span>
             </h1>
             <p className="text-base md:text-lg text-muted-foreground max-w-xl mx-auto mb-8 leading-relaxed">
