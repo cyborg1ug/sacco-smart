@@ -266,10 +266,10 @@ export default function DashboardLayout({
       {/* Main Content */}
       <div className="flex-1 flex flex-col overflow-hidden min-w-0">
         {/* Top Header */}
-        <header className="shrink-0 h-14 flex items-center justify-between px-4 bg-card border-b border-border/60"
+        <header className="shrink-0 h-14 grid grid-cols-3 items-center px-4 bg-card border-b border-border/60"
           style={{ boxShadow: "0 1px 4px hsl(0 0% 0% / 0.06)" }}>
+          {/* Left: hamburger */}
           <div className="flex items-center gap-3">
-            {/* Mobile hamburger */}
             <Button
               variant="ghost"
               size="icon"
@@ -278,17 +278,20 @@ export default function DashboardLayout({
             >
               <Menu className="w-4 h-4" />
             </Button>
-            <div>
-              <h1 className="text-sm font-semibold text-foreground leading-none">
-                {isAdmin ? "Admin Dashboard" : "My Account"}
-              </h1>
-              {!isAdmin && accountNumber && (
-                <p className="text-xs text-muted-foreground font-mono mt-0.5">{accountNumber}</p>
-              )}
-            </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Center: title */}
+          <div className="flex flex-col items-center justify-center">
+            <h1 className="text-sm font-semibold text-foreground leading-none text-center">
+              {isAdmin ? "Admin Dashboard" : "My Account"}
+            </h1>
+            {!isAdmin && accountNumber && (
+              <p className="text-xs text-muted-foreground font-mono mt-0.5">{accountNumber}</p>
+            )}
+          </div>
+
+          {/* Right: badge + avatar */}
+          <div className="flex items-center gap-2 justify-end">
             {isAdmin && (
               <Badge variant="outline" className="text-xs border-primary/30 text-primary hidden sm:flex">
                 Administrator
@@ -303,14 +306,14 @@ export default function DashboardLayout({
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto pb-10">
+        <main className="flex-1 overflow-y-auto pb-4">
           <div className="p-4 md:p-6 lg:p-8 max-w-screen-2xl mx-auto">
             {children}
           </div>
         </main>
 
         {/* Copyright Footer — fixed at bottom center */}
-        <footer className="shrink-0 border-t border-border/40 py-2 px-4 bg-card/80 backdrop-blur-sm">
+        <footer className="shrink-0 border-t border-border/40 py-1 px-4 bg-card/80 backdrop-blur-sm">
           <div className="flex items-center justify-center gap-3 text-[11px] text-muted-foreground/60">
             <span>© {new Date().getFullYear()} CYBERSTEM Ltd. All rights reserved.</span>
             <span className="opacity-40">·</span>
