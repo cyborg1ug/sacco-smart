@@ -82,7 +82,7 @@ interface IntegrityResult {
 }
 
 const fmt = (n: number) =>
-  new Intl.NumberFormat("en-KE", { style: "currency", currency: "KES", minimumFractionDigits: 2 }).format(n);
+  `UGX ${new Intl.NumberFormat("en-UG", { minimumFractionDigits: 2 }).format(n)}`;
 
 const DiscBadge = ({ val }: { val: number }) => {
   if (Math.abs(val) < 0.01)
