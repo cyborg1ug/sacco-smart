@@ -120,11 +120,16 @@ serve(async (req) => {
       const loanDisbursements = acctTxns.filter((t) => t.transaction_type === "loan_disbursement").reduce((s, t) => s + Number(t.amount), 0);
       const loanRepayments = acctTxns.filter((t) => t.transaction_type === "loan_repayment").reduce((s, t) => s + Number(t.amount), 0);
       const welfareDeductions = acctTxns.filter((t) => t.transaction_type === "welfare_deduction").reduce((s, t) => s + Number(t.amount), 0);
+      // overdue_interest: penalty charged as a debit against the account balance
+      const overdueInterest = acctTxns.filter((t) => t.transaction_type === "overdue_interest").reduce((s, t) => s + Number(t.amount), 0);
+      // interest_received: SACCO-side interest income credited to the account
+      const interestReceived = acctTxns.filter((t) => t.transaction_type === "interest_received").reduce((s, t) => s + Number(t.amount), 0);
 
-      // Per accounting rules: Balance = Deposits + LoanDisbursements - Withdrawals - LoanRepayments - WelfareDeductions
-      const calcBalance = deposits + loanDisbursements - withdrawals - loanRepayments - welfareDeductions;
+      // Balance = Deposits + LoanDisbursements + InterestReceived - Withdrawals - LoanRepayments - WelfareDeductions - OverdueInterest
+      const calcBalance = deposits + loanDisbursements + interestReceived - withdrawals - loanRepayments - welfareDeductions - overdueInterest;
       // Total Savings = sum of approved deposits only
       const calcSavings = deposits;
+
 
       const balanceDiff = Math.round((Number(acc.balance) - calcBalance) * 100) / 100;
       const savingsDiff = Math.round((Number(acc.total_savings) - calcSavings) * 100) / 100;
@@ -218,6 +223,9 @@ serve(async (req) => {
     const grandTotalLoanDisbursements = summaryByType["loan_disbursement"] ?? 0;
     const grandTotalLoanRepayments = summaryByType["loan_repayment"] ?? 0;
     const grandTotalWelfare = summaryByType["welfare_deduction"] ?? 0;
+    const grandTotalOverdueInterest = summaryByType["overdue_interest"] ?? 0;
+    const grandTotalInterestReceived = summaryByType["interest_received"] ?? 0;
+
 
     const totalStoredBalance = accounts.reduce((s, a) => s + Number(a.balance), 0);
     const totalCalcBalance = accountReports.reduce((s, a) => s + a.calculated_balance, 0);
@@ -243,6 +251,8 @@ TRANSACTION TYPE TOTALS (approved only):
 - Total Loan Disbursements: UGX ${grandTotalLoanDisbursements.toFixed(2)}
 - Total Loan Repayments: UGX ${grandTotalLoanRepayments.toFixed(2)}
 - Total Welfare Deductions: UGX ${grandTotalWelfare.toFixed(2)}
+- Total Overdue Interest Charged: UGX ${grandTotalOverdueInterest.toFixed(2)}
+- Total Interest Received (income): UGX ${grandTotalInterestReceived.toFixed(2)}
 
 BALANCE INTEGRITY:
 - Stored Total Balance (all accounts): UGX ${totalStoredBalance.toFixed(2)}
@@ -259,13 +269,14 @@ LOAN DISCREPANCIES: ${loanDiscrepancies} loan(s) with issues
 ${discrepantLoans.slice(0, 10).map((l) => `  - ${l.owner_name} (${l.account_number}): Outstanding diff UGX ${l.discrepancy} [${l.status}]`).join("\n")}
 
 NET SACCO POSITION:
-- Net Flow = Deposits - Withdrawals - Welfare = UGX ${(grandTotalDeposits - grandTotalWithdrawals - grandTotalWelfare).toFixed(2)}
+- Net Flow = Deposits + InterestReceived - Withdrawals - Welfare - OverdueInterest = UGX ${(grandTotalDeposits + grandTotalInterestReceived - grandTotalWithdrawals - grandTotalWelfare - grandTotalOverdueInterest).toFixed(2)}
 - Total Active Loan Exposure = UGX ${loans.filter((l) => ["active", "disbursed", "approved"].includes(l.status)).reduce((s, l) => s + Number(l.outstanding_balance), 0).toFixed(2)}
 
 Accounting rules used:
-1. Available Balance = Deposits + Loan Disbursements - Withdrawals - Loan Repayments - Welfare Deductions
+1. Available Balance = Deposits + Loan Disbursements + Interest Received - Withdrawals - Loan Repayments - Welfare Deductions - Overdue Interest
 2. Total Savings = Sum of approved deposit transactions only
 3. Loan Outstanding = Loan Total Amount - Sum of approved loan repayment transactions
+
 
 Provide:
 1. An OVERALL HEALTH STATUS (Healthy / Minor Issues / Critical Issues)
