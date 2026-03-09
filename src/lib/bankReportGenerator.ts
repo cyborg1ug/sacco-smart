@@ -581,10 +581,10 @@ export function generateBankExcel(params: {
     const colWidths = sheet.data.reduce((acc: number[], row) => {
       row.forEach((cell, i) => {
         const len = String(cell ?? "").length;
-        acc[i] = Math.max(acc[i] || 0, len);
+        acc[i] = Math.max(acc[i] ?? 0, len);
       });
       return acc;
-    }, []).map(w => ({ wch: Math.min(Math.max(w, 10), 50) }));
+    }, [] as number[]).map((w: number) => ({ wch: Math.min(Math.max(w, 10), 50) }));
     ws["!cols"] = colWidths;
 
     XLSX.utils.book_append_sheet(wb, ws, sheet.name);
