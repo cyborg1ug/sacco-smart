@@ -51,9 +51,9 @@ interface AIEligibility {
 }
 
 const riskColors: Record<string, string> = {
-  low: "text-green-500 bg-green-500/10 border-green-500/30",
-  medium: "text-yellow-500 bg-yellow-500/10 border-yellow-500/30",
-  high: "text-orange-500 bg-orange-500/10 border-orange-500/30",
+  low: "text-chart-2 bg-chart-2/10 border-chart-2/30",
+  medium: "text-chart-4 bg-chart-4/10 border-chart-4/30",
+  high: "text-chart-5 bg-chart-5/10 border-chart-5/30",
   critical: "text-destructive bg-destructive/10 border-destructive/30",
 };
 
