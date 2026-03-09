@@ -419,16 +419,27 @@ export type Database = {
       check_loan_eligibility: { Args: { p_account_id: string }; Returns: Json }
       generate_tnx_id: { Args: never; Returns: string }
       get_email_by_phone: { Args: { p_phone_number: string }; Returns: string }
-      get_guarantor_candidates: {
-        Args: never
-        Returns: {
-          account_id: string
-          account_number: string
-          account_type: string
-          full_name: string
-          total_savings: number
-        }[]
-      }
+      get_guarantor_candidates:
+        | {
+            Args: never
+            Returns: {
+              account_id: string
+              account_number: string
+              account_type: string
+              full_name: string
+              total_savings: number
+            }[]
+          }
+        | {
+            Args: { p_min_savings?: number }
+            Returns: {
+              account_id: string
+              account_number: string
+              account_type: string
+              full_name: string
+              total_savings: number
+            }[]
+          }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
