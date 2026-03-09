@@ -59,7 +59,7 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
 
       const [{ data: allTxns }, { data: periodTxns }, { data: loans }, { data: savings }] = await Promise.all([
         supabase.from("transactions").select("*").eq("account_id", acc.id).eq("status", "approved").order("created_at", { ascending: false }),
-        supabase.from("transactions").select("*").eq("account_id", acc.id)
+        supabase.from("transactions").select("*").eq("account_id", acc.id).eq("status", "approved")
           .gte("created_at", dr.start.toISOString()).lte("created_at", dr.end.toISOString()),
         supabase.from("loans").select("*").eq("account_id", acc.id),
         supabase.from("savings").select("*").eq("account_id", acc.id).gte("week_start", dr.start.toISOString()),
