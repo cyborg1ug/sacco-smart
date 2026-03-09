@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.ai-report-analysis]
 verify_jwt = false
+
+[functions.ai-loan-eligibility]
+verify_jwt = false
