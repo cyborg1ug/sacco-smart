@@ -146,18 +146,20 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
     setCheckingEligibility(false);
   };
 
-  const loadMembers = async () => {
-    const { data, error } = await supabase.rpc("get_guarantor_candidates");
+  const loadMembers = async (minSavings = 0) => {
+    const { data, error } = await supabase.rpc("get_guarantor_candidates", {
+      p_min_savings: minSavings,
+    } as any);
     if (error) { console.error("Error loading guarantor candidates:", error); return; }
-    if (data?.length) {
-      setMembers(data.map((c: any) => ({
+    setMembers(
+      (data ?? []).map((c: any) => ({
         id: c.account_id,
         account_number: c.account_number,
         full_name: c.full_name,
         total_savings: c.total_savings,
         account_type: c.account_type,
-      })));
-    }
+      }))
+    );
   };
 
   const getSelectedAccountSavings = () => myAccounts.find(a => a.id === selectedAccountId)?.total_savings || 0;
