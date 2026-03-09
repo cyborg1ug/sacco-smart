@@ -223,6 +223,9 @@ serve(async (req) => {
     const grandTotalLoanDisbursements = summaryByType["loan_disbursement"] ?? 0;
     const grandTotalLoanRepayments = summaryByType["loan_repayment"] ?? 0;
     const grandTotalWelfare = summaryByType["welfare_deduction"] ?? 0;
+    const grandTotalOverdueInterest = summaryByType["overdue_interest"] ?? 0;
+    const grandTotalInterestReceived = summaryByType["interest_received"] ?? 0;
+
 
     const totalStoredBalance = accounts.reduce((s, a) => s + Number(a.balance), 0);
     const totalCalcBalance = accountReports.reduce((s, a) => s + a.calculated_balance, 0);
