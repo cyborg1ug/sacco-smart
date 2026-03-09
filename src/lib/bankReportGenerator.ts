@@ -565,6 +565,9 @@ export function generateBankGroupPDF(params: {
     doc.text("For informational and audit purposes only. Not financial advice. Report Reference: " + refNo, 18, boxY + 9);
   }
 
+  // ── Analyst Endorsement ───────────────────────────────────────────────
+  addAnalystEndorsement(doc, (doc as any).lastAutoTable?.finalY ?? y);
+
   addFooter(doc);
   doc.save(`KINONI_SACCO_Group_Report_${format(new Date(), "yyyyMMdd")}.pdf`);
 }
