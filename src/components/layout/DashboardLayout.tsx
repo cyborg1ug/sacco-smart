@@ -309,21 +309,15 @@ export default function DashboardLayout({
 
         {/* Copyright Footer — fixed at bottom center */}
         <footer className="shrink-0 border-t border-border/40 py-2 px-4 bg-card/80 backdrop-blur-sm">
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3 text-[11px] text-muted-foreground/60">
+          <div className="flex items-center justify-center gap-3 text-[11px] text-muted-foreground/60">
             <span>© {new Date().getFullYear()} CYBERSTEM Ltd. All rights reserved.</span>
-            <span className="hidden sm:inline opacity-40">·</span>
-            <span className="flex items-center gap-2">
-              <a href="mailto:cyberstemug@gmail.com" className="hover:text-muted-foreground transition-colors">
-                cyberstemug@gmail.com
-              </a>
-              <span className="opacity-40">·</span>
-              <button
-                onClick={() => navigate("/terms")}
-                className="hover:text-muted-foreground transition-colors underline underline-offset-2"
-              >
-                Terms & Conditions
-              </button>
-            </span>
+            <span className="opacity-40">·</span>
+            <button
+              onClick={() => navigate("/terms")}
+              className="hover:text-muted-foreground transition-colors underline underline-offset-2"
+            >
+              Terms & Conditions
+            </button>
           </div>
         </footer>
       </div>
