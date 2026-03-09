@@ -313,7 +313,7 @@ export default function DashboardLayout({
         </main>
 
         {/* Copyright Footer — fixed at bottom center */}
-        <footer className="shrink-0 border-t border-border/40 py-2 px-4 bg-card/80 backdrop-blur-sm">
+        <footer className="shrink-0 border-t border-border/40 py-1 px-4 bg-card/80 backdrop-blur-sm">
           <div className="flex items-center justify-center gap-3 text-[11px] text-muted-foreground/60">
             <span>© {new Date().getFullYear()} CYBERSTEM Ltd. All rights reserved.</span>
             <span className="opacity-40">·</span>
