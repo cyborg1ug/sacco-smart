@@ -245,7 +245,7 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
 
     if (reportData.type === "member") {
       generateBankMemberPDF({
-        memberName: d.acc.account_number, email: d.profile.email,
+        memberName: d.profile.full_name, email: d.profile.email,
         phoneNumber: d.profile.phone_number, occupation: d.profile.occupation,
         accountNumber: d.acc.account_number, balance: Number(d.acc.balance),
         totalSavings: Number(d.acc.total_savings), period: d.dr,
