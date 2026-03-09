@@ -675,5 +675,21 @@ export function generateBankExcel(params: {
     XLSX.utils.book_append_sheet(wb, wsAI, "AI Analysis");
   }
 
+  // Analyst Endorsement sheet
+  const endorsementRows: (string | number)[][] = [
+    ["ANALYST ENDORSEMENT"],
+    [],
+    ["Prepared & Endorsed By", ANALYST.name],
+    ["Title", ANALYST.title],
+    ["Institution", ANALYST.institution],
+    ["Date", format(new Date(), "dd MMMM yyyy")],
+    ["Signature", "________________________________"],
+    [],
+    ["This report has been reviewed and endorsed by the named analyst above."],
+  ];
+  const wsEndorse = XLSX.utils.aoa_to_sheet(endorsementRows);
+  wsEndorse["!cols"] = [{ wch: 30 }, { wch: 50 }];
+  XLSX.utils.book_append_sheet(wb, wsEndorse, "Endorsement");
+
   XLSX.writeFile(wb, params.filename);
 }
