@@ -86,8 +86,8 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
       setAiEligibility(null);
       setAiChecked(false);
       // Reload guarantors filtered by this account's savings at DB level
-      const savings = myAccounts.find(a => a.id === selectedAccountId)?.total_savings ?? 0;
-      loadMembers(savings);
+      // Reload guarantors — will be re-filtered by loan amount when amount is entered
+      loadMembers(0);
       setSelectedGuarantor("");
     }
   }, [selectedAccountId, myAccounts]);
