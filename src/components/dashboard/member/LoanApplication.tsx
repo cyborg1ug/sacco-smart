@@ -269,7 +269,8 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
   }
 
   const mySavings = getSelectedAccountSavings();
-  const eligibleGuarantors = members.filter(m => m.total_savings >= mySavings && m.id !== selectedAccountId);
+  // DB already filtered by savings >= mySavings; just exclude the applicant's own account
+  const eligibleGuarantors = members.filter(m => m.id !== selectedAccountId);
   const selectedAccount = myAccounts.find(a => a.id === selectedAccountId);
   const selectedMember = members.find(m => m.id === selectedGuarantor);
 
