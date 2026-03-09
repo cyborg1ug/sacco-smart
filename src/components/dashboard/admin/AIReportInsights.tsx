@@ -107,7 +107,7 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
       supabase.from("profiles").select("*"),
       supabase.from("sub_account_profiles").select("*"),
       supabase.from("transactions").select("*").eq("status", "approved"),
-      supabase.from("transactions").select("*").gte("created_at", dr.start.toISOString()).lte("created_at", dr.end.toISOString()),
+      supabase.from("transactions").select("*").eq("status", "approved").gte("created_at", dr.start.toISOString()).lte("created_at", dr.end.toISOString()),
       supabase.from("loans").select("*"),
       supabase.from("savings").select("*").gte("week_start", dr.start.toISOString()),
     ]);
