@@ -443,12 +443,12 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Eligibility Checks</p>
                 {aiEligibility.checks.map((check, i) => (
-                  <div key={i} className={`flex items-start gap-2.5 p-2.5 rounded-md border text-sm ${check.passed ? "bg-green-500/5 border-green-500/20" : "bg-destructive/5 border-destructive/20"}`}>
+                  <div key={i} className={`flex items-start gap-2.5 p-2.5 rounded-md border text-sm ${check.passed ? "bg-chart-2/5 border-chart-2/20" : "bg-destructive/5 border-destructive/20"}`}>
                     {check.passed
-                      ? <CheckCircle className="h-4 w-4 text-green-500 shrink-0 mt-0.5" />
+                      ? <CheckCircle className="h-4 w-4 text-chart-2 shrink-0 mt-0.5" />
                       : <TriangleAlert className="h-4 w-4 text-destructive shrink-0 mt-0.5" />}
                     <div>
-                      <p className={`font-medium text-xs ${check.passed ? "text-green-600 dark:text-green-400" : "text-destructive"}`}>{check.rule}</p>
+                      <p className={`font-medium text-xs ${check.passed ? "text-chart-2" : "text-destructive"}`}>{check.rule}</p>
                       <p className="text-xs text-muted-foreground mt-0.5">{check.detail}</p>
                     </div>
                   </div>
