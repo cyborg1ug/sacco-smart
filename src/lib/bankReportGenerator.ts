@@ -618,6 +618,14 @@ export function generateBankTextReport(params: {
   }
 
   r += `${line}\n`;
+  r += `ANALYST ENDORSEMENT\n${dline}\n`;
+  r += `${pad("Prepared & Endorsed By:", 44)} ${rpad(ANALYST.name, W - 45)}\n`;
+  r += `${pad("Title:", 44)} ${rpad(ANALYST.title, W - 45)}\n`;
+  r += `${pad("Institution:", 44)} ${rpad(ANALYST.institution, W - 45)}\n`;
+  r += `${pad("Date:", 44)} ${rpad(format(new Date(), "dd MMMM yyyy"), W - 45)}\n`;
+  r += `${pad("Signature:", 44)} ${rpad("_".repeat(30), W - 45)}\n\n`;
+
+  r += `${line}\n`;
   r += `END OF REPORT — KINONI SACCO MANAGEMENT SYSTEM\n`;
   r += `This is a computer-generated report. Reference: ${params.refNo}\n`;
   r += `${line}\n`;
