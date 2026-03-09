@@ -7,6 +7,24 @@ const corsHeaders = {
     "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+/** Fetch ALL rows from a query by paginating in chunks of 1000 */
+async function fetchAll<T>(
+  queryFn: (from: number, to: number) => Promise<{ data: T[] | null; error: unknown }>
+): Promise<T[]> {
+  const PAGE = 1000;
+  const results: T[] = [];
+  let from = 0;
+  while (true) {
+    const { data, error } = await queryFn(from, from + PAGE - 1);
+    if (error) throw error;
+    if (!data || data.length === 0) break;
+    results.push(...data);
+    if (data.length < PAGE) break;
+    from += PAGE;
+  }
+  return results;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -53,21 +71,31 @@ serve(async (req) => {
     // Use service role for full data access
     const admin = createClient(supabaseUrl, serviceRoleKey);
 
-    // ── Fetch all data in parallel ──────────────────────────────────────────
-    const [accountsRes, transactionsRes, loansRes, profilesRes] = await Promise.all([
-      admin.from("accounts").select("id, account_number, account_type, balance, total_savings, user_id, parent_account_id"),
-      admin.from("transactions").select("id, account_id, transaction_type, amount, balance_after, status, loan_id, created_at"),
-      admin.from("loans").select("id, account_id, amount, total_amount, outstanding_balance, status, interest_rate"),
-      admin.from("profiles").select("id, full_name, email"),
+    // ── Fetch ALL data with pagination to avoid 1000-row truncation ─────────
+    const [accounts, transactions, loans, profiles, subAccountProfiles] = await Promise.all([
+      fetchAll((from, to) =>
+        admin.from("accounts").select("id, account_number, account_type, balance, total_savings, user_id, parent_account_id").range(from, to)
+      ),
+      fetchAll((from, to) =>
+        admin.from("transactions").select("id, account_id, transaction_type, amount, balance_after, status, loan_id, created_at").range(from, to)
+      ),
+      fetchAll((from, to) =>
+        admin.from("loans").select("id, account_id, amount, total_amount, outstanding_balance, status, interest_rate").range(from, to)
+      ),
+      fetchAll((from, to) =>
+        admin.from("profiles").select("id, full_name, email").range(from, to)
+      ),
+      fetchAll((from, to) =>
+        admin.from("sub_account_profiles").select("account_id, full_name").range(from, to)
+      ),
     ]);
 
-    const accounts = accountsRes.data ?? [];
-    const transactions = transactionsRes.data ?? [];
-    const loans = loansRes.data ?? [];
-    const profiles = profilesRes.data ?? [];
-
+    // Build lookup maps
     const profileMap: Record<string, { full_name: string; email: string }> = {};
     for (const p of profiles) profileMap[p.id] = { full_name: p.full_name, email: p.email };
+
+    const subProfileMap: Record<string, string> = {}; // account_id -> full_name
+    for (const sp of subAccountProfiles) subProfileMap[sp.account_id] = sp.full_name;
 
     // ── Recalculate balances from approved transactions ────────────────────
     interface AccountReport {
@@ -101,6 +129,7 @@ serve(async (req) => {
       status: string;
     }
 
+    // Only count approved transactions for balance calculations
     const approvedTxns = transactions.filter((t) => t.status === "approved");
 
     // Group by account
@@ -115,14 +144,29 @@ serve(async (req) => {
 
     for (const acc of accounts) {
       const acctTxns = txnsByAccount[acc.id] ?? [];
-      const deposits = acctTxns.filter((t) => t.transaction_type === "deposit").reduce((s, t) => s + Number(t.amount), 0);
-      const withdrawals = acctTxns.filter((t) => t.transaction_type === "withdrawal").reduce((s, t) => s + Number(t.amount), 0);
-      const loanDisbursements = acctTxns.filter((t) => t.transaction_type === "loan_disbursement").reduce((s, t) => s + Number(t.amount), 0);
-      const loanRepayments = acctTxns.filter((t) => t.transaction_type === "loan_repayment").reduce((s, t) => s + Number(t.amount), 0);
-      const welfareDeductions = acctTxns.filter((t) => t.transaction_type === "welfare_deduction").reduce((s, t) => s + Number(t.amount), 0);
 
-      // Per accounting rules: Balance = Deposits + LoanDisbursements - Withdrawals - LoanRepayments - WelfareDeductions
+      // Only types that affect cash balance
+      const deposits = acctTxns
+        .filter((t) => t.transaction_type === "deposit")
+        .reduce((s, t) => s + Number(t.amount), 0);
+      const withdrawals = acctTxns
+        .filter((t) => t.transaction_type === "withdrawal")
+        .reduce((s, t) => s + Number(t.amount), 0);
+      const loanDisbursements = acctTxns
+        .filter((t) => t.transaction_type === "loan_disbursement")
+        .reduce((s, t) => s + Number(t.amount), 0);
+      const loanRepayments = acctTxns
+        .filter((t) => t.transaction_type === "loan_repayment")
+        .reduce((s, t) => s + Number(t.amount), 0);
+      // welfare_deduction affects balance; overdue_interest has balance_after=0 so excluded
+      const welfareDeductions = acctTxns
+        .filter((t) => t.transaction_type === "welfare_deduction")
+        .reduce((s, t) => s + Number(t.amount), 0);
+
+      // Accounting rule: Balance = Deposits + LoanDisbursements - Withdrawals - LoanRepayments - WelfareDeductions
+      // overdue_interest does NOT affect cash balance (balance_after=0 in those txns)
       const calcBalance = deposits + loanDisbursements - withdrawals - loanRepayments - welfareDeductions;
+
       // Total Savings = sum of approved deposits only
       const calcSavings = deposits;
 
@@ -131,8 +175,13 @@ serve(async (req) => {
 
       if (Math.abs(balanceDiff) > 0.01 || Math.abs(savingsDiff) > 0.01) totalDiscrepancies++;
 
-      const profile = acc.account_type === "main" ? profileMap[acc.user_id] : null;
-      const ownerName = profile?.full_name ?? "Sub-account";
+      // Resolve owner name — main accounts use profiles, sub-accounts use sub_account_profiles
+      let ownerName: string;
+      if (acc.account_type === "sub") {
+        ownerName = subProfileMap[acc.id] ?? "Sub-account";
+      } else {
+        ownerName = profileMap[acc.user_id]?.full_name ?? "Unknown";
+      }
 
       accountReports.push({
         account_id: acc.id,
@@ -154,18 +203,19 @@ serve(async (req) => {
     }
 
     // ── Loan outstanding balance check ─────────────────────────────────────
-    // Outstanding = total_amount + penalties_accrued - loan_repayments
-    // Penalties are added directly to outstanding_balance by the apply-overdue-interest function.
-    // So: calc = total_amount + sum(penalty_interest txns) - sum(loan_repayment txns)
+    // Loan outstanding = total_amount + overdue_interest_accrued - loan_repayments
+    // overdue_interest transactions (type="overdue_interest") increase outstanding_balance directly
     const repaymentsByLoan: Record<string, number> = {};
-    const penaltiesByLoan: Record<string, number> = {};
+    const overdueInterestByLoan: Record<string, number> = {};
+
     for (const t of approvedTxns) {
       if (t.loan_id) {
         if (t.transaction_type === "loan_repayment") {
           repaymentsByLoan[t.loan_id] = (repaymentsByLoan[t.loan_id] ?? 0) + Number(t.amount);
         }
-        if (t.transaction_type === "penalty_interest" || t.transaction_type === "interest_accrual") {
-          penaltiesByLoan[t.loan_id] = (penaltiesByLoan[t.loan_id] ?? 0) + Number(t.amount);
+        // "overdue_interest" is the exact type used by apply-overdue-interest function
+        if (t.transaction_type === "overdue_interest") {
+          overdueInterestByLoan[t.loan_id] = (overdueInterestByLoan[t.loan_id] ?? 0) + Number(t.amount);
         }
       }
     }
@@ -175,30 +225,34 @@ serve(async (req) => {
 
     for (const loan of loans) {
       const repaid = repaymentsByLoan[loan.id] ?? 0;
-      const penalties = penaltiesByLoan[loan.id] ?? 0;
-      // Base: total_amount (principal+fixed interest) + any recorded penalty transactions - repayments
-      // Overdue interest applied directly to outstanding_balance (no txn record) is valid;
-      // we verify: stored_outstanding >= (total_amount - repaid) i.e. repayments were correctly subtracted
-      const minExpected = Math.max(Number(loan.total_amount) + penalties - repaid, 0);
-      // Only flag if stored is LESS than calculated (indicates repayments not reflected)
-      const diff = Math.round((Number(loan.outstanding_balance) - minExpected) * 100) / 100;
-      // Only flag if stored is LESS than expected (repayments not reflected = real error)
-      // Positive diff = penalty accruals = healthy
-      const isDiscrepancy = diff < -0.01;
+      const overdueAccrued = overdueInterestByLoan[loan.id] ?? 0;
+
+      // Expected outstanding = total_amount + all accrued overdue interest - all repayments
+      const calcOutstanding = Math.max(Number(loan.total_amount) + overdueAccrued - repaid, 0);
+      const storedOutstanding = Math.round(Number(loan.outstanding_balance) * 100) / 100;
+      const diff = Math.round((storedOutstanding - calcOutstanding) * 100) / 100;
+
+      // Flag any meaningful discrepancy in either direction
+      const isDiscrepancy = Math.abs(diff) > 0.01;
       if (isDiscrepancy) loanDiscrepancies++;
 
       const accInfo = accounts.find((a) => a.id === loan.account_id);
-      const ownerProfile = accInfo ? profileMap[accInfo.user_id] : null;
-      // For display: calculated = minExpected; stored may be higher due to penalty accruals
-      const calcOutstanding = minExpected;
+      let ownerName = "Unknown";
+      if (accInfo) {
+        if (accInfo.account_type === "sub") {
+          ownerName = subProfileMap[accInfo.id] ?? "Sub-account";
+        } else {
+          ownerName = profileMap[accInfo.user_id]?.full_name ?? "Unknown";
+        }
+      }
 
       loanReports.push({
         loan_id: loan.id,
         account_number: accInfo?.account_number ?? "Unknown",
-        owner_name: ownerProfile?.full_name ?? "Unknown",
+        owner_name: ownerName,
         principal: Number(loan.amount),
         total_amount: Number(loan.total_amount),
-        stored_outstanding: Math.round(Number(loan.outstanding_balance) * 100) / 100,
+        stored_outstanding: storedOutstanding,
         calculated_outstanding: Math.round(calcOutstanding * 100) / 100,
         discrepancy: diff,
         total_repaid: Math.round(repaid * 100) / 100,
@@ -207,9 +261,8 @@ serve(async (req) => {
     }
 
     // ── Summary statistics ─────────────────────────────────────────────────
-    const allApproved = approvedTxns;
     const summaryByType: Record<string, number> = {};
-    for (const t of allApproved) {
+    for (const t of approvedTxns) {
       summaryByType[t.transaction_type] = (summaryByType[t.transaction_type] ?? 0) + Number(t.amount);
     }
 
@@ -218,6 +271,7 @@ serve(async (req) => {
     const grandTotalLoanDisbursements = summaryByType["loan_disbursement"] ?? 0;
     const grandTotalLoanRepayments = summaryByType["loan_repayment"] ?? 0;
     const grandTotalWelfare = summaryByType["welfare_deduction"] ?? 0;
+    const grandTotalOverdueInterest = summaryByType["overdue_interest"] ?? 0;
 
     const totalStoredBalance = accounts.reduce((s, a) => s + Number(a.balance), 0);
     const totalCalcBalance = accountReports.reduce((s, a) => s + a.calculated_balance, 0);
@@ -225,7 +279,9 @@ serve(async (req) => {
     const totalCalcSavings = accountReports.reduce((s, a) => s + a.calculated_savings, 0);
 
     // ── Build AI prompt ────────────────────────────────────────────────────
-    const discrepantAccounts = accountReports.filter((a) => Math.abs(a.balance_discrepancy) > 0.01 || Math.abs(a.savings_discrepancy) > 0.01);
+    const discrepantAccounts = accountReports.filter(
+      (a) => Math.abs(a.balance_discrepancy) > 0.01 || Math.abs(a.savings_discrepancy) > 0.01
+    );
     const discrepantLoans = loanReports.filter((l) => Math.abs(l.discrepancy) > 0.01);
 
     const summaryPrompt = `
@@ -234,7 +290,7 @@ You are a certified SACCO financial auditor AI. Analyze this financial integrity
 SYSTEM TOTALS:
 - Total Members: ${accounts.filter((a) => a.account_type === "main").length}
 - Total Accounts (including sub): ${accounts.length}
-- Total Approved Transactions: ${allApproved.length}
+- Total Approved Transactions: ${approvedTxns.length}
 - Total Loans: ${loans.length}
 
 TRANSACTION TYPE TOTALS (approved only):
@@ -243,6 +299,7 @@ TRANSACTION TYPE TOTALS (approved only):
 - Total Loan Disbursements: UGX ${grandTotalLoanDisbursements.toFixed(2)}
 - Total Loan Repayments: UGX ${grandTotalLoanRepayments.toFixed(2)}
 - Total Welfare Deductions: UGX ${grandTotalWelfare.toFixed(2)}
+- Total Overdue Interest Accrued: UGX ${grandTotalOverdueInterest.toFixed(2)}
 
 BALANCE INTEGRITY:
 - Stored Total Balance (all accounts): UGX ${totalStoredBalance.toFixed(2)}
@@ -261,11 +318,12 @@ ${discrepantLoans.slice(0, 10).map((l) => `  - ${l.owner_name} (${l.account_numb
 NET SACCO POSITION:
 - Net Flow = Deposits - Withdrawals - Welfare = UGX ${(grandTotalDeposits - grandTotalWithdrawals - grandTotalWelfare).toFixed(2)}
 - Total Active Loan Exposure = UGX ${loans.filter((l) => ["active", "disbursed", "approved"].includes(l.status)).reduce((s, l) => s + Number(l.outstanding_balance), 0).toFixed(2)}
+- Total Overdue Interest Accrued = UGX ${grandTotalOverdueInterest.toFixed(2)}
 
 Accounting rules used:
-1. Available Balance = Deposits + Loan Disbursements - Withdrawals - Loan Repayments - Welfare Deductions
+1. Available Balance = Deposits + Loan Disbursements - Withdrawals - Loan Repayments - Welfare Deductions (overdue_interest does NOT affect cash balance)
 2. Total Savings = Sum of approved deposit transactions only
-3. Loan Outstanding = Loan Total Amount - Sum of approved loan repayment transactions
+3. Loan Outstanding = Loan Total Amount + Overdue Interest Accrued - Sum of approved loan repayment transactions
 
 Provide:
 1. An OVERALL HEALTH STATUS (Healthy / Minor Issues / Critical Issues)
@@ -310,7 +368,7 @@ Be direct, professional, and use UGX currency formatting throughout.
         ai_report: aiReport,
         summary: {
           total_accounts: accounts.length,
-          total_transactions: allApproved.length,
+          total_transactions: approvedTxns.length,
           total_loans: loans.length,
           account_discrepancies: totalDiscrepancies,
           loan_discrepancies: loanDiscrepancies,
