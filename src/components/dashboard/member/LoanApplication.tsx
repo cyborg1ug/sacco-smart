@@ -85,8 +85,12 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
       checkEligibility(selectedAccountId);
       setAiEligibility(null);
       setAiChecked(false);
+      // Reload guarantors filtered by this account's savings at DB level
+      const savings = myAccounts.find(a => a.id === selectedAccountId)?.total_savings ?? 0;
+      loadMembers(savings);
+      setSelectedGuarantor("");
     }
-  }, [selectedAccountId]);
+  }, [selectedAccountId, myAccounts]);
 
   // Auto-run AI check when key fields change
   useEffect(() => {
