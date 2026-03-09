@@ -77,6 +77,7 @@ const App = () => (
             <Route path="/admin/reports" element={<ProtectedRoute><AdminReportsPage /></ProtectedRoute>} />
             
             <Route path="/terms" element={<TermsAndConditions />} />
+            <Route path="/changelog" element={<Changelog />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </TooltipProvider>
