@@ -228,11 +228,11 @@ export default function DashboardLayout({
         {/* Collapse Toggle */}
         <button
           onClick={() => setCollapsed(!collapsed)}
-          className="absolute top-4 -right-3 w-6 h-6 rounded-full bg-sidebar border border-sidebar-border flex items-center justify-center hover:bg-primary hover:border-primary transition-colors z-10"
+          className="absolute top-5 -right-4 w-8 h-8 rounded-full bg-sidebar border-2 border-sidebar-border shadow-lg flex items-center justify-center hover:bg-primary hover:border-primary hover:shadow-primary/30 transition-all duration-200 z-10"
         >
           {collapsed
-            ? <ChevronRight className="w-3 h-3 text-sidebar-foreground" />
-            : <ChevronLeft className="w-3 h-3 text-sidebar-foreground" />}
+            ? <ChevronRight className="w-4 h-4 text-sidebar-foreground" />
+            : <ChevronLeft className="w-4 h-4 text-sidebar-foreground" />}
         </button>
       </motion.aside>
 
