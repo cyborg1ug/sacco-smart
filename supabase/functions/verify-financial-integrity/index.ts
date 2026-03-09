@@ -251,6 +251,8 @@ TRANSACTION TYPE TOTALS (approved only):
 - Total Loan Disbursements: UGX ${grandTotalLoanDisbursements.toFixed(2)}
 - Total Loan Repayments: UGX ${grandTotalLoanRepayments.toFixed(2)}
 - Total Welfare Deductions: UGX ${grandTotalWelfare.toFixed(2)}
+- Total Overdue Interest Charged: UGX ${grandTotalOverdueInterest.toFixed(2)}
+- Total Interest Received (income): UGX ${grandTotalInterestReceived.toFixed(2)}
 
 BALANCE INTEGRITY:
 - Stored Total Balance (all accounts): UGX ${totalStoredBalance.toFixed(2)}
@@ -267,13 +269,14 @@ LOAN DISCREPANCIES: ${loanDiscrepancies} loan(s) with issues
 ${discrepantLoans.slice(0, 10).map((l) => `  - ${l.owner_name} (${l.account_number}): Outstanding diff UGX ${l.discrepancy} [${l.status}]`).join("\n")}
 
 NET SACCO POSITION:
-- Net Flow = Deposits - Withdrawals - Welfare = UGX ${(grandTotalDeposits - grandTotalWithdrawals - grandTotalWelfare).toFixed(2)}
+- Net Flow = Deposits + InterestReceived - Withdrawals - Welfare - OverdueInterest = UGX ${(grandTotalDeposits + grandTotalInterestReceived - grandTotalWithdrawals - grandTotalWelfare - grandTotalOverdueInterest).toFixed(2)}
 - Total Active Loan Exposure = UGX ${loans.filter((l) => ["active", "disbursed", "approved"].includes(l.status)).reduce((s, l) => s + Number(l.outstanding_balance), 0).toFixed(2)}
 
 Accounting rules used:
-1. Available Balance = Deposits + Loan Disbursements - Withdrawals - Loan Repayments - Welfare Deductions
+1. Available Balance = Deposits + Loan Disbursements + Interest Received - Withdrawals - Loan Repayments - Welfare Deductions - Overdue Interest
 2. Total Savings = Sum of approved deposit transactions only
 3. Loan Outstanding = Loan Total Amount - Sum of approved loan repayment transactions
+
 
 Provide:
 1. An OVERALL HEALTH STATUS (Healthy / Minor Issues / Critical Issues)
