@@ -301,29 +301,31 @@ export default function DashboardLayout({
         </header>
 
         {/* Page Content */}
-        <main className="flex-1 overflow-y-auto">
+        <main className="flex-1 overflow-y-auto pb-10">
           <div className="p-4 md:p-6 lg:p-8 max-w-screen-2xl mx-auto">
             {children}
           </div>
-          {/* Copyright Footer */}
-          <footer className="border-t border-border/40 py-3 px-4 md:px-6 lg:px-8">
-            <div className="max-w-screen-2xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-1 text-[11px] text-muted-foreground/60">
-              <span>© {new Date().getFullYear()} CYBERSTEM Ltd. All rights reserved.</span>
-              <span className="flex items-center gap-2">
-                <a href="mailto:cyberstemug@gmail.com" className="hover:text-muted-foreground transition-colors">
-                  cyberstemug@gmail.com
-                </a>
-                <span>·</span>
-                <button
-                  onClick={() => navigate("/terms")}
-                  className="hover:text-muted-foreground transition-colors underline underline-offset-2"
-                >
-                  Terms & Conditions
-                </button>
-              </span>
-            </div>
-          </footer>
         </main>
+
+        {/* Copyright Footer — fixed at bottom center */}
+        <footer className="shrink-0 border-t border-border/40 py-2 px-4 bg-card/80 backdrop-blur-sm">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-3 text-[11px] text-muted-foreground/60">
+            <span>© {new Date().getFullYear()} CYBERSTEM Ltd. All rights reserved.</span>
+            <span className="hidden sm:inline opacity-40">·</span>
+            <span className="flex items-center gap-2">
+              <a href="mailto:cyberstemug@gmail.com" className="hover:text-muted-foreground transition-colors">
+                cyberstemug@gmail.com
+              </a>
+              <span className="opacity-40">·</span>
+              <button
+                onClick={() => navigate("/terms")}
+                className="hover:text-muted-foreground transition-colors underline underline-offset-2"
+              >
+                Terms & Conditions
+              </button>
+            </span>
+          </div>
+        </footer>
       </div>
     </div>
   );
