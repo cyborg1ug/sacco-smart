@@ -177,6 +177,17 @@ const ReportsGeneration = () => {
     const { profile, memberAccount, periodTxns, allTxns, savings, loans, dateRange } = data;
 
     if (asPdf) {
+      // Filter loans disbursed within the period
+      const periodLoans = (loans || []).filter(l => {
+        if (l.disbursed_at) {
+          const disbDate = new Date(l.disbursed_at);
+          return disbDate >= dateRange.start && disbDate <= dateRange.end;
+        }
+        // Include pending/approved loans created in period
+        const createdDate = new Date(l.created_at);
+        return createdDate >= dateRange.start && createdDate <= dateRange.end;
+      });
+
       generateMemberStatementPDF({
         memberName: profile.full_name,
         email: profile.email,
@@ -185,8 +196,8 @@ const ReportsGeneration = () => {
         accountNumber: memberAccount.account_number,
         balance: Number(memberAccount.balance),
         totalSavings: Number(memberAccount.total_savings),
-        transactions: allTxns || [],
-        loans: loans || [],
+        transactions: (periodTxns || []),
+        loans: periodLoans,
         savings: savings || [],
       });
       toast({ title: "Success", description: "PDF report generated" });
