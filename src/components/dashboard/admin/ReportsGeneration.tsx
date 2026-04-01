@@ -594,7 +594,33 @@ const ReportsGeneration = () => {
     report += `Completed/Fully Paid:         ${(allLoans || []).filter(l => ["completed", "fully_paid"].includes(l.status)).length}\n`;
     report += `Rejected:                     ${(allLoans || []).filter(l => l.status === "rejected").length}\n\n`;
 
-    report += `DISBURSED LOANS PER MEMBER\n${"─".repeat(75)}\n`;
+    // Filter loans disbursed within the period for the period section
+    const periodDisbursedLoans = activeLoans.filter(l => {
+      if (!l.disbursed_at) return false;
+      const disbDate = new Date(l.disbursed_at);
+      return disbDate >= dateRange.start && disbDate <= dateRange.end;
+    });
+
+    if (periodDisbursedLoans.length > 0) {
+      report += `LOANS DISBURSED IN PERIOD\n${"─".repeat(75)}\n`;
+      periodDisbursedLoans.forEach(l => {
+        const acc = accounts?.find(a => a.id === l.account_id);
+        const memberName = acc ? getMemberName(acc) : "Unknown";
+        const disbDate = l.disbursed_at ? format(new Date(l.disbursed_at), "MMM dd, yyyy") : "N/A";
+        const amountRepaid = Number(l.total_amount) - Number(l.outstanding_balance);
+        const overdue = isLoanOverdue(l);
+        const days = getDaysOverdue(l);
+        const penalty = calcDailyOverdueInterest(l);
+        const totalInterest = Number(l.amount) * (Number(l.interest_rate) / 100) * (l.repayment_months || 1);
+        report += `${memberName.padEnd(30)} | Acc: ${acc?.account_number || "N/A"}\n`;
+        report += `  Principal:   UGX ${Number(l.amount).toLocaleString().padStart(12)} | Disbursed: ${disbDate}\n`;
+        report += `  Total Int.:  UGX ${totalInterest.toLocaleString().padStart(12)} | Rate: ${l.interest_rate}%/mo × ${l.repayment_months}mo\n`;
+        report += `  Repaid:      UGX ${amountRepaid.toLocaleString().padStart(12)} | Outstanding: UGX ${Number(l.outstanding_balance).toLocaleString()}\n`;
+        report += `  Status: ${overdue ? `⚠ OVERDUE (${days} days) | Penalty: UGX ${penalty.toLocaleString()}` : "Active"}\n\n`;
+      });
+    }
+
+    report += `ALL ACTIVE LOANS\n${"─".repeat(75)}\n`;
     activeLoans.forEach(l => {
       const acc = accounts?.find(a => a.id === l.account_id);
       const memberName = acc ? getMemberName(acc) : "Unknown";
