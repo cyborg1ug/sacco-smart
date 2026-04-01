@@ -389,9 +389,9 @@ const ReportsGeneration = () => {
     const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
     XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
-    // Sheet 2: All Transactions
+    // Sheet 2: Period Transactions
     const txnHeaders = ["Date", "TXN ID", "Type", "Amount (UGX)", "Balance After (UGX)", "Status", "Description"];
-    const txnRows = (allTxns || []).map((t: any) => [
+    const txnRows = (periodTxns || []).map((t: any) => [
       format(new Date(t.created_at), "MMM dd, yyyy HH:mm"),
       t.tnx_id,
       t.transaction_type.replace(/_/g, " ").toUpperCase(),
@@ -401,7 +401,7 @@ const ReportsGeneration = () => {
       t.description || "",
     ]);
     const wsTxns = XLSX.utils.aoa_to_sheet([txnHeaders, ...txnRows]);
-    XLSX.utils.book_append_sheet(wb, wsTxns, "Transactions");
+    XLSX.utils.book_append_sheet(wb, wsTxns, "Period Transactions");
 
     // Sheet 3: Loans
     const loanHeaders = ["Principal (UGX)", "Interest Rate", "Repayment Months", "Total Payable (UGX)", "Total Interest (UGX)", "Amount Repaid (UGX)", "Outstanding (UGX)", "Status", "Disbursed On", "Due Date", "Days Overdue", "Overdue Penalty (UGX)"];
