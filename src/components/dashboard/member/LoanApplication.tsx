@@ -67,6 +67,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
   const [members, setMembers] = useState<MemberOption[]>([]);
   const [selectedGuarantor, setSelectedGuarantor] = useState("");
   const [loanAmount, setLoanAmount] = useState("");
+  const [loanPurpose, setLoanPurpose] = useState("");
   const [repaymentMonths, setRepaymentMonths] = useState("1");
   const [guarantorError, setGuarantorError] = useState("");
 
