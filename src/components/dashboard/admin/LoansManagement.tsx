@@ -9,9 +9,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Send, Loader2, Users, UserPlus, CheckCircle, Edit, Clock, CheckCircle2, TrendingUp, Search, Calendar, AlertTriangle, Zap } from "lucide-react";
-import { format } from "date-fns";
+import { Check, X, Send, Loader2, Users, UserPlus, CheckCircle, Edit, Clock, CheckCircle2, TrendingUp, Search, Calendar, AlertTriangle, Zap, Eye } from "lucide-react";
+import { format, differenceInMonths, differenceInDays } from "date-fns";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MobileCardList, MobileCard } from "@/components/ui/MobileCardList";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -29,6 +30,7 @@ interface Loan {
   guarantor_status: string | null;
   max_loan_amount: number | null;
   repayment_months: number;
+  purpose: string | null;
   account: {
     id: string;
     account_number: string;
@@ -54,6 +56,7 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   const [loading, setLoading] = useState(true);
   const [guarantorDialogOpen, setGuarantorDialogOpen] = useState(false);
   const [editLoanDialogOpen, setEditLoanDialogOpen] = useState(false);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [selectedLoan, setSelectedLoan] = useState<Loan | null>(null);
   const [selectedGuarantor, setSelectedGuarantor] = useState("");
   const [guarantorCandidates, setGuarantorCandidates] = useState<any[]>([]);
@@ -69,23 +72,53 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   const [editDisbursedAt, setEditDisbursedAt] = useState<string>("");
   const [editGuarantor, setEditGuarantor] = useState<string>("");
 
+  const isLoanOverdue = (loan: Loan): boolean => {
+    if (!loan.disbursed_at || !loan.repayment_months) return false;
+    if (loan.outstanding_balance <= 0) return false;
+    const monthsElapsed = differenceInMonths(new Date(), new Date(loan.disbursed_at));
+    return monthsElapsed > loan.repayment_months;
+  };
+
+  const getDaysOverdue = (loan: Loan): number => {
+    if (!loan.disbursed_at || !loan.repayment_months) return 0;
+    const dueDate = new Date(loan.disbursed_at);
+    dueDate.setMonth(dueDate.getMonth() + loan.repayment_months);
+    if (new Date() <= dueDate) return 0;
+    return differenceInDays(new Date(), dueDate);
+  };
+
+  const calcDailyOverdueInterest = (loan: Loan): number => {
+    const days = getDaysOverdue(loan);
+    if (days <= 0) return 0;
+    const dailyRate = (Number(loan.interest_rate) / 100) / 30;
+    return Math.round(Number(loan.amount) * dailyRate * days);
+  };
+
+  // Generate loan display ID
+  const getLoanDisplayId = (loan: Loan, index: number) => {
+    const year = new Date(loan.created_at).getFullYear();
+    const num = String(index + 1).padStart(3, "0");
+    return `LN-${year}-${num}`;
+  };
+
   // Filter loans by status and search
   const filteredLoans = useMemo(() => {
     return loans.filter(loan => {
-      // Status filter
       if (statusFilter !== "all") {
+        const overdue = isLoanOverdue(loan);
+        if (statusFilter === "overdue" && !overdue) return false;
         if (statusFilter === "pending" && loan.status !== "pending") return false;
         if (statusFilter === "approved" && loan.status !== "approved") return false;
-        if (statusFilter === "active" && !["disbursed", "active"].includes(loan.status)) return false;
+        if (statusFilter === "active" && (!["disbursed", "active"].includes(loan.status) || overdue)) return false;
         if (statusFilter === "completed" && loan.status !== "completed" && loan.status !== "fully_paid") return false;
       }
       
-      // Search filter
       if (searchQuery.trim()) {
         const query = searchQuery.toLowerCase();
         return (
           loan.account.user.full_name.toLowerCase().includes(query) ||
           loan.account.account_number.toLowerCase().includes(query) ||
+          (loan.purpose || "").toLowerCase().includes(query) ||
           loan.guarantor_account?.user?.full_name?.toLowerCase().includes(query)
         );
       }
@@ -94,38 +127,28 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     });
   }, [loans, statusFilter, searchQuery]);
 
-  // Setup real-time subscription for loans and transactions
+  const overdueCount = useMemo(() => loans.filter(l => isLoanOverdue(l)).length, [loans]);
+  const activeCount = useMemo(() => loans.filter(l => ["disbursed", "active"].includes(l.status) && !isLoanOverdue(l)).length, [loans]);
+
+  // Setup real-time subscription
   useEffect(() => {
     loadLoans();
     
-    // Subscribe to real-time loan updates
     const loansChannel = supabase
       .channel('loans-realtime')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'loans' },
-        () => {
-          loadLoans();
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'loans' }, () => loadLoans())
       .subscribe();
 
-    // Subscribe to real-time transaction updates (for loan repayments)
     const transactionsChannel = supabase
       .channel('transactions-realtime-loans')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'transactions' },
-        (payload: any) => {
-          // Reload loans when a loan-related transaction changes
-          if (payload.new?.transaction_type === 'loan_repayment' || 
-              payload.new?.transaction_type === 'loan_disbursement' ||
-              payload.old?.transaction_type === 'loan_repayment' ||
-              payload.old?.transaction_type === 'loan_disbursement') {
-            loadLoans();
-          }
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, (payload: any) => {
+        if (payload.new?.transaction_type === 'loan_repayment' || 
+            payload.new?.transaction_type === 'loan_disbursement' ||
+            payload.old?.transaction_type === 'loan_repayment' ||
+            payload.old?.transaction_type === 'loan_disbursement') {
+          loadLoans();
         }
-      )
+      })
       .subscribe();
 
     return () => {
@@ -135,45 +158,33 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   }, []);
 
   const loadLoans = async () => {
-    // Fetch all loans
     const { data: loansData } = await supabase
       .from("loans")
       .select("*")
       .order("created_at", { ascending: false });
 
-    if (!loansData) {
-      setLoading(false);
-      return;
-    }
+    if (!loansData) { setLoading(false); return; }
 
-    // Get unique account IDs (both loan accounts and guarantor accounts)
     const accountIds = [...new Set([
       ...loansData.map(l => l.account_id),
       ...loansData.filter(l => l.guarantor_account_id).map(l => l.guarantor_account_id as string)
     ])];
 
-    // Fetch accounts
     const { data: accountsData } = await supabase
       .from("accounts")
       .select("id, account_number, user_id, account_type")
       .in("id", accountIds);
 
-    if (!accountsData) {
-      setLoading(false);
-      return;
-    }
+    if (!accountsData) { setLoading(false); return; }
 
-    // Separate main accounts and sub-accounts
     const mainAccountUserIds = [...new Set(accountsData.filter(a => a.account_type === 'main').map(a => a.user_id))];
     const subAccountIds = accountsData.filter(a => a.account_type === 'sub').map(a => a.id);
 
-    // Fetch profiles for main accounts
     const { data: profilesData } = await supabase
       .from("profiles")
       .select("id, full_name")
       .in("id", mainAccountUserIds);
 
-    // Fetch sub_account_profiles for sub-accounts
     const { data: subAccountProfilesData } = await supabase
       .from("sub_account_profiles")
       .select("account_id, full_name")
@@ -182,7 +193,6 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     const profilesMap = new Map(profilesData?.map(p => [p.id, p.full_name]) || []);
     const subProfilesMap = new Map(subAccountProfilesData?.map(p => [p.account_id, p.full_name]) || []);
 
-    // Build accounts map with proper names
     const accountsMap = new Map(accountsData.map(a => {
       let fullName = "Unknown";
       if (a.account_type === 'sub') {
@@ -190,14 +200,9 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
       } else {
         fullName = profilesMap.get(a.user_id) || "Unknown";
       }
-      return [a.id, {
-        id: a.id,
-        account_number: a.account_number,
-        user: { full_name: fullName }
-      }];
+      return [a.id, { id: a.id, account_number: a.account_number, user: { full_name: fullName } }];
     }));
 
-    // Map loans with account info
     const loansWithAccounts = loansData.map(loan => ({
       ...loan,
       account: accountsMap.get(loan.account_id) || { id: loan.account_id, account_number: "Unknown", user: { full_name: "Unknown" } },
@@ -210,17 +215,12 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
 
   const loadGuarantorCandidates = async (loanAccountId: string) => {
     setLoadingGuarantors(true);
-    // Get all accounts except the loan applicant's account
     const { data: accountsData } = await supabase
       .from("accounts")
       .select("id, account_number, user_id, account_type, total_savings");
 
-    if (!accountsData) {
-      setLoadingGuarantors(false);
-      return;
-    }
+    if (!accountsData) { setLoadingGuarantors(false); return; }
 
-    // Get all accounts that are currently guarantors on active/outstanding loans
     const { data: activeGuarantorLoans } = await supabase
       .from("loans")
       .select("guarantor_account_id")
@@ -232,23 +232,17 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
       activeGuarantorLoans?.map(l => l.guarantor_account_id).filter(Boolean) || []
     );
 
-    // Get loan applicant's savings
     const loanAccount = accountsData.find(a => a.id === loanAccountId);
     const minSavings = loanAccount?.total_savings || 0;
 
-    // Filter candidates:
-    // 1. Must have savings >= applicant's savings
-    // 2. Exclude the loan applicant
-    // 3. Exclude accounts already guaranteeing outstanding loans
     const eligibleAccounts = accountsData.filter(a => 
       a.id !== loanAccountId && 
       a.total_savings >= minSavings &&
       !alreadyGuaranteeing.has(a.id)
     );
 
-    // Get profiles for main accounts
     const mainAccountUserIds = [...new Set(eligibleAccounts.filter(a => a.account_type === 'main').map(a => a.user_id))];
-    const subAccountIds = eligibleAccounts.filter(a => a.account_type === 'sub').map(a => a.id);
+    const subAccountIdsList = eligibleAccounts.filter(a => a.account_type === 'sub').map(a => a.id);
 
     const { data: profilesData } = await supabase
       .from("profiles")
@@ -258,7 +252,7 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     const { data: subAccountProfilesData } = await supabase
       .from("sub_account_profiles")
       .select("account_id, full_name")
-      .in("account_id", subAccountIds);
+      .in("account_id", subAccountIdsList);
 
     const profilesMap = new Map(profilesData?.map(p => [p.id, p.full_name]) || []);
     const subProfilesMap = new Map(subAccountProfilesData?.map(p => [p.account_id, p.full_name]) || []);
@@ -283,26 +277,15 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
 
   const handleSetGuarantor = async () => {
     if (!selectedLoan || !selectedGuarantor) return;
-
     const { error } = await supabase
       .from("loans")
-      .update({
-        guarantor_account_id: selectedGuarantor,
-        guarantor_status: "pending",
-      })
+      .update({ guarantor_account_id: selectedGuarantor, guarantor_status: "pending" })
       .eq("id", selectedLoan.id);
 
     if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
-      toast({
-        title: "Success",
-        description: "Guarantor assigned successfully",
-      });
+      toast({ title: "Success", description: "Guarantor assigned successfully" });
       setGuarantorDialogOpen(false);
       loadLoans();
       onUpdate();
@@ -310,24 +293,11 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   };
 
   const handleApproveGuarantor = async (loanId: string) => {
-    const { error } = await supabase
-      .from("loans")
-      .update({
-        guarantor_status: "approved",
-      })
-      .eq("id", loanId);
-
+    const { error } = await supabase.from("loans").update({ guarantor_status: "approved" }).eq("id", loanId);
     if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
-      toast({
-        title: "Success",
-        description: "Guarantor approved by admin",
-      });
+      toast({ title: "Success", description: "Guarantor approved by admin" });
       loadLoans();
       onUpdate();
     }
@@ -335,24 +305,14 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
 
   const sendLoanNotification = async (loan: Loan, newStatus: string) => {
     try {
-      // Get account user_id first
       const { data: accountData } = await supabase
-        .from("accounts")
-        .select("user_id")
-        .eq("id", loan.account.id)
-        .single();
-
+        .from("accounts").select("user_id").eq("id", loan.account.id).single();
       if (accountData) {
         const { data: profile } = await supabase
-          .from("profiles")
-          .select("email")
-          .eq("id", accountData.user_id)
-          .single();
-
+          .from("profiles").select("email").eq("id", accountData.user_id).single();
         await supabase.functions.invoke("loan-status-notification", {
           body: {
-            loanId: loan.id,
-            newStatus,
+            loanId: loan.id, newStatus,
             memberName: loan.account.user?.full_name || "Member",
             memberEmail: profile?.email,
             loanAmount: loan.amount,
@@ -367,40 +327,19 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   };
 
   const handleApprove = async (loan: Loan) => {
-    // Check if guarantor approval is required and pending
     if (loan.guarantor_account_id && loan.guarantor_status !== "approved") {
-      toast({
-        title: "Cannot Approve Yet",
-        description: "The guarantor must approve this loan request first",
-        variant: "destructive",
-      });
+      toast({ title: "Cannot Approve Yet", description: "The guarantor must approve this loan request first", variant: "destructive" });
       return;
     }
-
     const { data: { user } } = await supabase.auth.getUser();
-
-    // Approved loans become active immediately
-    const { error } = await supabase
-      .from("loans")
-      .update({
-        status: "active",
-        approved_by: user?.id,
-        approved_at: new Date().toISOString(),
-      })
+    const { error } = await supabase.from("loans")
+      .update({ status: "active", approved_by: user?.id, approved_at: new Date().toISOString() })
       .eq("id", loan.id);
 
     if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
-      toast({
-        title: "Success",
-        description: "Loan approved and is now active",
-      });
-      // Send notification
+      toast({ title: "Success", description: "Loan approved and is now active" });
       sendLoanNotification({ ...loan, outstanding_balance: loan.total_amount }, "approved");
       loadLoans();
       onUpdate();
@@ -410,27 +349,13 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   const handleReject = async (loanId: string) => {
     const { data: { user } } = await supabase.auth.getUser();
     const loan = loans.find(l => l.id === loanId);
-
-    const { error } = await supabase
-      .from("loans")
-      .update({
-        status: "rejected",
-        approved_by: user?.id,
-        approved_at: new Date().toISOString(),
-      })
+    const { error } = await supabase.from("loans")
+      .update({ status: "rejected", approved_by: user?.id, approved_at: new Date().toISOString() })
       .eq("id", loanId);
-
     if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
-      toast({
-        title: "Success",
-        description: "Loan rejected",
-      });
+      toast({ title: "Success", description: "Loan rejected" });
       if (loan) sendLoanNotification(loan, "rejected");
       loadLoans();
       onUpdate();
@@ -440,60 +365,30 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   const handleDisburse = async (loan: Loan) => {
     const { id: loanId, account, amount, total_amount } = loan;
     const accountId = account.id;
-    
-    // Update loan status to disbursed (active until fully repaid)
-    const { error: loanError } = await supabase
-      .from("loans")
-      .update({
-        status: "disbursed",
-        disbursed_at: new Date().toISOString(),
-      })
+    const { error: loanError } = await supabase.from("loans")
+      .update({ status: "disbursed", disbursed_at: new Date().toISOString() })
       .eq("id", loanId);
 
-    if (loanError) {
-      toast({
-        title: "Error",
-        description: loanError.message,
-        variant: "destructive",
-      });
-      return;
-    }
+    if (loanError) { toast({ title: "Error", description: loanError.message, variant: "destructive" }); return; }
 
-    // Create transaction for loan disbursement
-    const { data: accountData } = await supabase
-      .from("accounts")
-      .select("balance")
-      .eq("id", accountId)
-      .single();
-
+    const { data: accountData } = await supabase.from("accounts").select("balance").eq("id", accountId).single();
     if (!accountData) return;
-
     const newBalance = accountData.balance + amount;
 
-    const { error: transactionError } = await supabase
-      .from("transactions")
-      .insert({
-        account_id: accountId,
-        transaction_type: "loan_disbursement",
-        amount,
-        balance_after: newBalance,
-        description: `Loan disbursement for loan ${loanId}`,
-        status: "pending",
-        loan_id: loanId,
-      } as any);
+    const { error: transactionError } = await supabase.from("transactions").insert({
+      account_id: accountId,
+      transaction_type: "loan_disbursement",
+      amount,
+      balance_after: newBalance,
+      description: `Loan disbursement for loan ${loanId}`,
+      status: "pending",
+      loan_id: loanId,
+    } as any);
 
     if (transactionError) {
-      toast({
-        title: "Error",
-        description: transactionError.message,
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: transactionError.message, variant: "destructive" });
     } else {
-      toast({
-        title: "Success",
-        description: "Loan disbursed - awaiting transaction approval",
-      });
-      // Send notification
+      toast({ title: "Success", description: "Loan disbursed - awaiting transaction approval" });
       sendLoanNotification({ ...loan, outstanding_balance: total_amount }, "disbursed");
       loadLoans();
       onUpdate();
@@ -512,31 +407,19 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   const handleUpdateLoanDetails = async () => {
     if (!selectedLoan) return;
 
-    // First fetch actual repaid amount from transactions
     const { data: repaymentData } = await supabase
-      .from("transactions")
-      .select("amount")
-      .eq("loan_id", selectedLoan.id)
-      .eq("transaction_type", "loan_repayment")
-      .eq("status", "approved");
+      .from("transactions").select("amount")
+      .eq("loan_id", selectedLoan.id).eq("transaction_type", "loan_repayment").eq("status", "approved");
 
     const totalRepaid = repaymentData?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
-
-    // Interest is 2% per month × repayment months
     const monthlyInterest = selectedLoan.amount * (selectedLoan.interest_rate / 100);
     const totalInterest = monthlyInterest * editRepaymentMonths;
     const newTotalAmount = selectedLoan.amount + totalInterest;
-    
-    // Calculate new outstanding based on actual repayments
     const newOutstanding = Math.max(0, newTotalAmount - totalRepaid);
     
-    // Determine correct status based on outstanding balance
     let newStatus = selectedLoan.status;
-    if (newOutstanding <= 0) {
-      newStatus = "fully_paid";
-    } else if (selectedLoan.disbursed_at || editDisbursedAt) {
-      newStatus = "disbursed";
-    }
+    if (newOutstanding <= 0) newStatus = "fully_paid";
+    else if (selectedLoan.disbursed_at || editDisbursedAt) newStatus = "disbursed";
 
     const updateData: any = {
       repayment_months: editRepaymentMonths,
@@ -545,37 +428,21 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
       status: newStatus,
     };
 
-    // Update disbursed date if provided
-    if (editDisbursedAt) {
-      updateData.disbursed_at = new Date(editDisbursedAt).toISOString();
-    }
-
-    // Update guarantor if changed (handle "none" as null)
+    if (editDisbursedAt) updateData.disbursed_at = new Date(editDisbursedAt).toISOString();
     const normalizedGuarantor = editGuarantor === "none" || editGuarantor === "" ? null : editGuarantor;
     if (normalizedGuarantor && normalizedGuarantor !== selectedLoan.guarantor_account_id) {
       updateData.guarantor_account_id = normalizedGuarantor;
-      updateData.guarantor_status = "approved"; // Admin-assigned guarantors are auto-approved
+      updateData.guarantor_status = "approved";
     } else if (!normalizedGuarantor && selectedLoan.guarantor_account_id) {
       updateData.guarantor_account_id = null;
       updateData.guarantor_status = null;
     }
 
-    const { error } = await supabase
-      .from("loans")
-      .update(updateData)
-      .eq("id", selectedLoan.id);
-
+    const { error } = await supabase.from("loans").update(updateData).eq("id", selectedLoan.id);
     if (error) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
-      toast({
-        title: "Success",
-        description: "Loan details updated successfully",
-      });
+      toast({ title: "Success", description: "Loan details updated successfully" });
       setEditLoanDialogOpen(false);
       loadLoans();
       onUpdate();
@@ -588,25 +455,16 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
-
       const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
       const response = await fetch(
         `https://${projectId}.supabase.co/functions/v1/apply-overdue-interest`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${session.access_token}`,
-          },
-        }
+        { method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.access_token}` } }
       );
       const result = await response.json();
       if (!response.ok) throw new Error(result.error || "Failed to apply charges");
-
       setOverdueResult({ updated: result.updated, skipped: result.skipped, message: result.message });
       if (result.updated > 0) {
-        loadLoans();
-        onUpdate();
+        loadLoans(); onUpdate();
         toast({ title: "Overdue Charges Applied", description: `2% penalty applied to ${result.updated} overdue loan(s)` });
       } else {
         toast({ title: "No Changes Needed", description: "No overdue loans require penalty charges this month" });
@@ -618,56 +476,61 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     }
   };
 
-  const getGuarantorStatusBadge = (status: string | null) => {
-    if (!status || status === "none") return null;
-    return (
-      <Badge variant={
-        status === "approved" ? "default" :
-        status === "pending" ? "outline" : "destructive"
-      } className="text-[9px] sm:text-[10px]">
-        {status}
-      </Badge>
-    );
+  const getLoanStatusBadge = (loan: Loan) => {
+    const overdue = isLoanOverdue(loan);
+    if (overdue) return { label: "Overdue", variant: "destructive" as const };
+    
+    const isFullyRepaid = loan.outstanding_balance <= 0;
+    if ((loan.status === "active" || loan.status === "disbursed") && isFullyRepaid) {
+      return { label: "Completed", variant: "default" as const };
+    }
+    
+    const displayStatus = loan.status === "disbursed" ? "active" : loan.status;
+    switch (displayStatus) {
+      case "active": return { label: "Active", variant: "default" as const };
+      case "completed": return { label: "Completed", variant: "default" as const };
+      case "approved": return { label: "Approved", variant: "secondary" as const };
+      case "pending": return { label: "Pending", variant: "outline" as const };
+      case "fully_paid": return { label: "Completed", variant: "default" as const };
+      default: return { label: displayStatus, variant: "destructive" as const };
+    }
   };
 
-  const getLoanStatusBadge = (loan: Loan) => {
-    // Treat disbursed loans as active until fully repaid
-    const displayStatus = loan.status === "disbursed" ? "active" : loan.status;
-    const isFullyRepaid = loan.outstanding_balance <= 0;
-    
-    // If loan is active/disbursed but fully repaid, show as completed
-    if ((loan.status === "active" || loan.status === "disbursed") && isFullyRepaid) {
-      return { label: "completed", variant: "default" as const };
-    }
-    
-    switch (displayStatus) {
-      case "active":
-        return { label: "active", variant: "default" as const };
-      case "completed":
-        return { label: "completed", variant: "default" as const };
-      case "approved":
-        return { label: "approved", variant: "secondary" as const };
-      case "pending":
-        return { label: "pending", variant: "outline" as const };
-      default:
-        return { label: displayStatus, variant: "destructive" as const };
-    }
+  const getRepaymentProgress = (loan: Loan) => {
+    if (loan.total_amount <= 0) return { percent: 0, repaid: 0, remaining: 0 };
+    const repaid = loan.total_amount - loan.outstanding_balance;
+    const percent = Math.round((repaid / loan.total_amount) * 100);
+    return { percent: Math.min(100, Math.max(0, percent)), repaid, remaining: loan.outstanding_balance };
+  };
+
+  const getDueDate = (loan: Loan) => {
+    if (!loan.disbursed_at || !loan.repayment_months) return null;
+    const due = new Date(loan.disbursed_at);
+    due.setMonth(due.getMonth() + loan.repayment_months);
+    return due;
+  };
+
+  const calculateMonthlyPayment = (loan: Loan) => {
+    const monthlyInterest = loan.amount * (loan.interest_rate / 100);
+    const totalInterest = monthlyInterest * (loan.repayment_months || 1);
+    const totalWithInterest = loan.amount + totalInterest;
+    const monthlyPayment = totalWithInterest / (loan.repayment_months || 1);
+    return { monthlyPayment, totalInterest, totalWithInterest };
+  };
+
+  const openDetailsDialog = (loan: Loan) => {
+    setSelectedLoan(loan);
+    setDetailsDialogOpen(true);
   };
 
   const renderLoanActions = (loan: Loan) => {
     if (loan.status === "pending") {
       return (
         <div className="flex gap-1 flex-wrap">
-          {/* Admin guarantor management */}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => openGuarantorDialog(loan)}
-                  className="h-7 w-7 sm:h-8 sm:w-8 p-0"
-                >
+                <Button size="sm" variant="ghost" onClick={() => openGuarantorDialog(loan)} className="h-7 w-7 sm:h-8 sm:w-8 p-0">
                   <UserPlus className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-blue-500" />
                 </Button>
               </TooltipTrigger>
@@ -675,17 +538,11 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
             </Tooltip>
           </TooltipProvider>
           
-          {/* Admin approve guarantor */}
           {loan.guarantor_account_id && loan.guarantor_status === "pending" && (
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => handleApproveGuarantor(loan.id)}
-                    className="h-7 w-7 sm:h-8 sm:w-8 p-0"
-                  >
+                  <Button size="sm" variant="ghost" onClick={() => handleApproveGuarantor(loan.id)} className="h-7 w-7 sm:h-8 sm:w-8 p-0">
                     <CheckCircle className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-purple-500" />
                   </Button>
                 </TooltipTrigger>
@@ -697,61 +554,37 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => handleApprove(loan)}
+                <Button size="sm" variant="ghost" onClick={() => handleApprove(loan)}
                   disabled={loan.guarantor_account_id !== null && loan.guarantor_status !== "approved"}
-                  className="h-7 w-7 sm:h-8 sm:w-8 p-0"
-                >
+                  className="h-7 w-7 sm:h-8 sm:w-8 p-0">
                   <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-success" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>
-                {loan.guarantor_account_id && loan.guarantor_status !== "approved" 
-                  ? "Waiting for guarantor approval" 
-                  : "Approve loan"}
+                {loan.guarantor_account_id && loan.guarantor_status !== "approved" ? "Waiting for guarantor approval" : "Approve loan"}
               </TooltipContent>
             </Tooltip>
           </TooltipProvider>
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => handleReject(loan.id)}
-            className="h-7 w-7 sm:h-8 sm:w-8 p-0"
-          >
+          <Button size="sm" variant="ghost" onClick={() => handleReject(loan.id)} className="h-7 w-7 sm:h-8 sm:w-8 p-0">
             <X className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-destructive" />
           </Button>
         </div>
       );
     }
     
-    // For active/disbursed/approved/fully_paid loans, show edit and disburse buttons
     if (["active", "disbursed", "approved", "fully_paid", "completed"].includes(loan.status)) {
       return (
         <div className="flex gap-1">
-          {/* Disburse button for approved/active loans without disbursement yet */}
           {(loan.status === "approved" || (loan.status === "active" && !loan.disbursed_at)) && (
-            <Button
-              size="sm"
-              onClick={() => handleDisburse(loan)}
-              className="h-7 sm:h-8 text-[10px] sm:text-xs bg-gradient-to-r from-success to-success/80 hover:from-success/90 hover:to-success/70"
-            >
-              <Send className="mr-1 sm:mr-1.5 h-3 w-3 sm:h-3.5 sm:w-3.5" />
-              Disburse
+            <Button size="sm" onClick={() => handleDisburse(loan)}
+              className="h-7 sm:h-8 text-[10px] sm:text-xs bg-gradient-to-r from-success to-success/80 hover:from-success/90 hover:to-success/70">
+              <Send className="mr-1 sm:mr-1.5 h-3 w-3 sm:h-3.5 sm:w-3.5" /> Disburse
             </Button>
           )}
-          
-          {/* Edit button for all active/disbursed/completed loans */}
           <TooltipProvider>
             <Tooltip>
               <TooltipTrigger asChild>
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => openEditLoanDialog(loan)}
-                  className="h-7 w-7 sm:h-8 sm:w-8 p-0"
-                >
+                <Button size="sm" variant="ghost" onClick={() => openEditLoanDialog(loan)} className="h-7 w-7 sm:h-8 sm:w-8 p-0">
                   <Edit className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
                 </Button>
               </TooltipTrigger>
@@ -765,41 +598,46 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     return null;
   };
 
-  const calculateMonthlyPayment = (loan: Loan) => {
-    // Interest is 2% per month × repayment months
-    const monthlyInterest = loan.amount * (loan.interest_rate / 100);
-    const totalInterest = monthlyInterest * (loan.repayment_months || 1);
-    const totalWithInterest = loan.amount + totalInterest;
-    const monthlyPayment = totalWithInterest / (loan.repayment_months || 1);
-    return { monthlyPayment, totalInterest, totalWithInterest };
-  };
-
   const renderMobileCard = (loan: Loan) => {
     const statusInfo = getLoanStatusBadge(loan);
-    const { monthlyPayment } = calculateMonthlyPayment(loan);
+    const progress = getRepaymentProgress(loan);
+    const overdue = isLoanOverdue(loan);
+    const penalty = overdue ? calcDailyOverdueInterest(loan) : 0;
+    const loanIndex = loans.indexOf(loan);
     
     return (
       <MobileCard
         key={loan.id}
         fields={[
+          { label: "Loan", value: getLoanDisplayId(loan, loans.length - 1 - loanIndex) },
           { label: "Member", value: loan.account.user.full_name },
+          { label: "Purpose", value: loan.purpose || "—" },
           { label: "Amount", value: `UGX ${loan.amount.toLocaleString()}` },
-          { label: "Outstanding", value: `UGX ${loan.outstanding_balance.toLocaleString()}` },
-          { label: "Repayment Plan", value: `${loan.repayment_months || 1} month(s) @ UGX ${monthlyPayment.toLocaleString()}/mo` },
-          { 
-            label: "Guarantor", 
-            value: loan.guarantor_account ? (
-              <div className="flex items-center gap-1">
-                <Users className="h-3 w-3" />
-                <span>{loan.guarantor_account.user.full_name}</span>
-                {getGuarantorStatusBadge(loan.guarantor_status)}
+          { label: "Balance", value: (
+            <span className={overdue ? "text-destructive" : "text-primary"}>
+              UGX {loan.outstanding_balance.toLocaleString()}
+              {penalty > 0 && <span className="text-destructive text-[10px] block">+UGX {penalty.toLocaleString()} penalty</span>}
+            </span>
+          )},
+          { label: "Progress", value: (
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px]">
+                <span>{progress.percent}% repaid</span>
+                <span>UGX {progress.remaining.toLocaleString()} left</span>
               </div>
-            ) : "—" 
-          },
-          { label: "Date", value: format(new Date(loan.created_at), "MMM dd, yyyy") },
+              <Progress value={progress.percent} className={`h-1.5 ${overdue ? "[&>div]:bg-destructive" : "[&>div]:bg-primary"}`} />
+            </div>
+          )},
         ]}
         status={{ label: statusInfo.label, variant: statusInfo.variant }}
-        actions={renderLoanActions(loan)}
+        actions={
+          <div className="flex items-center gap-1">
+            <Button size="sm" variant="ghost" onClick={() => openDetailsDialog(loan)} className="h-7 w-7 p-0">
+              <Eye className="h-3.5 w-3.5 text-primary" />
+            </Button>
+            {renderLoanActions(loan)}
+          </div>
+        }
       />
     );
   };
@@ -809,83 +647,67 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead className="whitespace-nowrap">Date</TableHead>
+            <TableHead className="whitespace-nowrap">Loan</TableHead>
             <TableHead>Member</TableHead>
-            <TableHead className="hidden md:table-cell">Account</TableHead>
-            <TableHead className="hidden lg:table-cell">Guarantor</TableHead>
-            <TableHead className="hidden sm:table-cell">G. Status</TableHead>
+            <TableHead className="hidden md:table-cell">Purpose</TableHead>
             <TableHead className="text-right whitespace-nowrap">Amount</TableHead>
-            <TableHead className="hidden md:table-cell text-right">Rate/Mo</TableHead>
-            <TableHead className="hidden sm:table-cell text-center">Plan</TableHead>
-            <TableHead className="hidden lg:table-cell text-right">Total</TableHead>
-            <TableHead className="text-right whitespace-nowrap">Outstanding</TableHead>
+            <TableHead className="text-right whitespace-nowrap">Balance</TableHead>
+            <TableHead className="hidden sm:table-cell">Progress</TableHead>
+            <TableHead className="hidden lg:table-cell">Due Date</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="text-center">Actions</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
-          {filteredLoans.map((loan) => {
+          {filteredLoans.map((loan, idx) => {
             const statusInfo = getLoanStatusBadge(loan);
-            const { monthlyPayment } = calculateMonthlyPayment(loan);
+            const progress = getRepaymentProgress(loan);
+            const overdue = isLoanOverdue(loan);
+            const penalty = overdue ? calcDailyOverdueInterest(loan) : 0;
+            const dueDate = getDueDate(loan);
+            const loanIndex = loans.indexOf(loan);
+
             return (
               <TableRow key={loan.id}>
-                <TableCell className="text-xs whitespace-nowrap">
-                  {format(new Date(loan.created_at), "MMM dd, yyyy")}
+                <TableCell className="whitespace-nowrap">
+                  <div>
+                    <span className="text-primary font-medium text-xs">{getLoanDisplayId(loan, loans.length - 1 - loanIndex)}</span>
+                    <div className="text-[10px] text-muted-foreground">{loan.interest_rate}% p.a.</div>
+                    <div className="text-[10px] text-muted-foreground">{loan.repayment_months || 1}mo term</div>
+                  </div>
                 </TableCell>
-                <TableCell className="font-medium text-xs sm:text-sm">
-                  {loan.account.user.full_name}
+                <TableCell>
+                  <span className="font-medium text-xs sm:text-sm text-primary cursor-pointer hover:underline">
+                    {loan.account.user.full_name}
+                  </span>
                 </TableCell>
-                <TableCell className="hidden md:table-cell font-mono text-[10px]">
-                  {loan.account.account_number}
+                <TableCell className="hidden md:table-cell text-xs text-muted-foreground">
+                  {loan.purpose || "—"}
                 </TableCell>
-                <TableCell className="hidden lg:table-cell">
-                  {loan.guarantor_account ? (
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger className="flex items-center gap-1 text-xs">
-                          <Users className="h-3 w-3 sm:h-4 sm:w-4" />
-                          <span className="truncate max-w-[80px]">
-                            {loan.guarantor_account.user.full_name}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent>
-                          Account: {loan.guarantor_account.account_number}
-                        </TooltipContent>
-                      </Tooltip>
-                    </TooltipProvider>
-                  ) : (
-                    "—"
-                  )}
-                </TableCell>
-                <TableCell className="hidden sm:table-cell">
-                  {getGuarantorStatusBadge(loan.guarantor_status)}
-                  {!loan.guarantor_account_id && "—"}
-                </TableCell>
-                <TableCell className="text-right whitespace-nowrap text-[10px] sm:text-xs">
+                <TableCell className="text-right whitespace-nowrap text-[10px] sm:text-xs tabular-nums">
                   UGX {loan.amount.toLocaleString()}
                 </TableCell>
-                <TableCell className="hidden md:table-cell text-right text-xs">
-                  {loan.interest_rate}%/mo
+                <TableCell className="text-right whitespace-nowrap">
+                  <div>
+                    <span className={`text-[10px] sm:text-xs font-medium tabular-nums ${overdue ? "text-destructive" : "text-primary"}`}>
+                      UGX {loan.outstanding_balance.toLocaleString()}
+                    </span>
+                    {penalty > 0 && (
+                      <div className="text-[9px] text-destructive">+UGX {penalty.toLocaleString()} penalty</div>
+                    )}
+                  </div>
                 </TableCell>
-                <TableCell className="hidden sm:table-cell text-center text-xs">
-                  <TooltipProvider>
-                    <Tooltip>
-                      <TooltipTrigger>
-                        <Badge variant="outline" className="text-[9px]">
-                          {loan.repayment_months || 1} mo
-                        </Badge>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        UGX {monthlyPayment.toLocaleString()}/month
-                      </TooltipContent>
-                    </Tooltip>
-                  </TooltipProvider>
+                <TableCell className="hidden sm:table-cell min-w-[160px]">
+                  <div className="space-y-1">
+                    <div className="flex justify-between text-[10px] text-muted-foreground">
+                      <span>{progress.percent}% repaid</span>
+                      <span>UGX {progress.remaining.toLocaleString()} left</span>
+                    </div>
+                    <Progress value={progress.percent} className={`h-1.5 ${overdue ? "[&>div]:bg-destructive" : "[&>div]:bg-primary"}`} />
+                  </div>
                 </TableCell>
-                <TableCell className="hidden lg:table-cell text-right text-xs">
-                  UGX {loan.total_amount.toLocaleString()}
-                </TableCell>
-                <TableCell className="text-right whitespace-nowrap text-[10px] sm:text-xs font-medium">
-                  UGX {loan.outstanding_balance.toLocaleString()}
+                <TableCell className="hidden lg:table-cell text-xs whitespace-nowrap">
+                  {dueDate ? format(dueDate, "MMM yyyy") : "—"}
                 </TableCell>
                 <TableCell>
                   <Badge variant={statusInfo.variant} className="text-[8px] sm:text-[10px]">
@@ -893,7 +715,17 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
                   </Badge>
                 </TableCell>
                 <TableCell>
-                  <div className="flex justify-center">
+                  <div className="flex justify-center items-center gap-1">
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button size="sm" variant="ghost" onClick={() => openDetailsDialog(loan)} className="h-7 w-7 sm:h-8 sm:w-8 p-0">
+                            <Eye className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>View Details</TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                     {renderLoanActions(loan)}
                   </div>
                 </TableCell>
@@ -912,118 +744,215 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   return (
     <>
       <Card>
-      <CardHeader className="pb-3 sm:pb-4">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div>
-            <CardTitle className="text-base sm:text-lg md:text-xl">Loans Management</CardTitle>
-            <CardDescription className="text-xs sm:text-sm">
-              Disbursed loans stay active until fully repaid
-            </CardDescription>
+        <CardHeader className="pb-3 sm:pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <CardTitle className="text-base sm:text-lg md:text-xl">Loan Management</CardTitle>
+              <CardDescription className="text-xs sm:text-sm">
+                Full loan lifecycle — applications, approvals, disbursement & repayment
+              </CardDescription>
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => { setOverdueResult(null); setOverdueDialogOpen(true); }}
+              className="flex items-center gap-2 shrink-0"
+            >
+              <Zap className="h-4 w-4" />
+              Apply Overdue Charges
+            </Button>
           </div>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => { setOverdueResult(null); setOverdueDialogOpen(true); }}
-            className="flex items-center gap-2 shrink-0"
-          >
-            <Zap className="h-4 w-4" />
-            Apply Overdue Charges
-          </Button>
-        </div>
-      </CardHeader>
-      <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
-        {/* Loan Status Tabs */}
-        <div className="pb-3 sm:pb-4">
-          <Tabs value={statusFilter} onValueChange={setStatusFilter}>
-            <TabsList className="flex flex-wrap h-auto gap-1 p-1 bg-muted/50 rounded-lg w-full justify-start">
-              <TabsTrigger value="all" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
-                All ({loans.length})
-              </TabsTrigger>
-              <TabsTrigger value="pending" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
-                <Clock className="h-3 w-3 mr-1" />
-                Pending ({loans.filter(l => l.status === "pending").length})
-              </TabsTrigger>
-              <TabsTrigger value="approved" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
-                <Check className="h-3 w-3 mr-1 text-blue-500" />
-                Approved ({loans.filter(l => l.status === "approved").length})
-              </TabsTrigger>
-              <TabsTrigger value="active" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
-                <TrendingUp className="h-3 w-3 mr-1 text-green-500" />
-                Active ({loans.filter(l => ["disbursed", "active"].includes(l.status)).length})
-              </TabsTrigger>
-              <TabsTrigger value="completed" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
-                <CheckCircle2 className="h-3 w-3 mr-1 text-purple-500" />
-                Completed ({loans.filter(l => l.status === "completed" || l.status === "fully_paid").length})
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-        {/* Search Bar */}
-        <div className="pb-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by member name or account..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-10"
-            />
+        </CardHeader>
+        <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+          {/* Loan Status Tabs */}
+          <div className="pb-3 sm:pb-4">
+            <Tabs value={statusFilter} onValueChange={setStatusFilter}>
+              <TabsList className="flex flex-wrap h-auto gap-1 p-1 bg-muted/50 rounded-lg w-full justify-start">
+                <TabsTrigger value="all" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                  All ({loans.length})
+                </TabsTrigger>
+                <TabsTrigger value="active" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                  Active ({activeCount})
+                </TabsTrigger>
+                <TabsTrigger value="overdue" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                  Overdue ({overdueCount})
+                </TabsTrigger>
+                <TabsTrigger value="pending" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                  <Clock className="h-3 w-3 mr-1" />
+                  Pending ({loans.filter(l => l.status === "pending").length})
+                </TabsTrigger>
+                <TabsTrigger value="completed" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                  <CheckCircle2 className="h-3 w-3 mr-1" />
+                  Closed ({loans.filter(l => l.status === "completed" || l.status === "fully_paid").length})
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
           </div>
-        </div>
-        <MobileCardList
-          items={filteredLoans}
-          renderCard={renderMobileCard}
-          renderTable={renderTable}
-          emptyMessage="No loan applications found"
-        />
-      </CardContent>
+          {/* Search Bar */}
+          <div className="pb-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search by member name, loan no, or purpose..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+              <span className="text-xs text-muted-foreground whitespace-nowrap">{filteredLoans.length} loans</span>
+            </div>
+          </div>
+          <MobileCardList
+            items={filteredLoans}
+            renderCard={renderMobileCard}
+            renderTable={renderTable}
+            emptyMessage="No loan applications found"
+          />
+        </CardContent>
       </Card>
 
-      {/* Guarantor Management Dialog */}
-    <Dialog open={guarantorDialogOpen} onOpenChange={setGuarantorDialogOpen}>
-      <DialogContent className="max-w-[95vw] sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-base sm:text-lg">Manage Guarantor</DialogTitle>
-          <DialogDescription className="text-xs sm:text-sm">
-            Assign or change guarantor for {selectedLoan?.account.user.full_name}'s loan
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-4">
-          {loadingGuarantors ? (
-            <div className="flex justify-center p-4">
-              <Loader2 className="h-6 w-6 animate-spin" />
-            </div>
-          ) : (
-            <>
-              <div className="space-y-2">
-                <Label>Select Guarantor</Label>
-                <Select value={selectedGuarantor} onValueChange={setSelectedGuarantor}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a guarantor" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {guarantorCandidates.map((candidate) => (
-                      <SelectItem key={candidate.id} value={candidate.id}>
-                        {candidate.full_name} ({candidate.account_number}) - UGX {candidate.total_savings.toLocaleString()}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                {guarantorCandidates.length === 0 && (
-                  <p className="text-xs text-muted-foreground">No eligible guarantors found</p>
+      {/* Loan Details Dialog */}
+      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg">Loan Details</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">Full loan profile and repayment schedule</DialogDescription>
+          </DialogHeader>
+          {selectedLoan && (() => {
+            const progress = getRepaymentProgress(selectedLoan);
+            const overdue = isLoanOverdue(selectedLoan);
+            const penalty = overdue ? calcDailyOverdueInterest(selectedLoan) : 0;
+            const dueDate = getDueDate(selectedLoan);
+            const statusInfo = getLoanStatusBadge(selectedLoan);
+            const loanIndex = loans.indexOf(selectedLoan);
+            const { monthlyPayment } = calculateMonthlyPayment(selectedLoan);
+
+            return (
+              <div className="space-y-4">
+                {/* Loan ID and status */}
+                <div className="flex items-center justify-between">
+                  <span className="text-primary font-semibold text-sm">{getLoanDisplayId(selectedLoan, loans.length - 1 - loanIndex)}</span>
+                  <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
+                </div>
+                
+                {/* Member info */}
+                <div>
+                  <p className="font-semibold text-sm">{selectedLoan.account.user.full_name}</p>
+                  <p className="text-xs text-muted-foreground">{selectedLoan.purpose || "No purpose specified"}</p>
+                </div>
+
+                {/* Key metrics grid */}
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="border rounded-lg p-3">
+                    <p className="text-[10px] text-muted-foreground">Loan Amount</p>
+                    <p className="font-bold text-sm tabular-nums">UGX {selectedLoan.amount.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-3">
+                    <p className="text-[10px] text-muted-foreground">Outstanding</p>
+                    <p className={`font-bold text-sm tabular-nums ${overdue ? "text-destructive" : "text-primary"}`}>
+                      UGX {selectedLoan.outstanding_balance.toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="border rounded-lg p-3">
+                    <p className="text-[10px] text-muted-foreground">Interest Rate</p>
+                    <p className="font-bold text-sm">{selectedLoan.interest_rate}% p.a.</p>
+                  </div>
+                  <div className="border rounded-lg p-3">
+                    <p className="text-[10px] text-muted-foreground">Term</p>
+                    <p className="font-bold text-sm">{selectedLoan.repayment_months || 1} months</p>
+                  </div>
+                  <div className="border rounded-lg p-3">
+                    <p className="text-[10px] text-muted-foreground">Monthly Payment</p>
+                    <p className="font-bold text-sm tabular-nums text-primary">UGX {monthlyPayment.toLocaleString()}</p>
+                  </div>
+                  <div className="border rounded-lg p-3">
+                    <p className="text-[10px] text-muted-foreground">Penalty</p>
+                    <p className="font-bold text-sm">{penalty > 0 ? `UGX ${penalty.toLocaleString()}` : "None"}</p>
+                  </div>
+                </div>
+
+                {/* Progress bar */}
+                <div className="border rounded-lg p-3 space-y-2">
+                  <p className="text-xs font-semibold">Repayment Progress</p>
+                  <div className="flex justify-between text-[10px] text-muted-foreground">
+                    <span>{progress.percent}% repaid</span>
+                    <span>UGX {progress.remaining.toLocaleString()} left</span>
+                  </div>
+                  <Progress value={progress.percent} className={`h-2 ${overdue ? "[&>div]:bg-destructive" : "[&>div]:bg-primary"}`} />
+                  <div className="flex justify-between text-[10px]">
+                    <span className="text-primary">Paid: UGX {progress.repaid.toLocaleString()}</span>
+                    <span className={overdue ? "text-destructive" : "text-muted-foreground"}>Remaining: UGX {progress.remaining.toLocaleString()}</span>
+                  </div>
+                </div>
+
+                {/* Guarantors */}
+                {selectedLoan.guarantor_account && (
+                  <div>
+                    <p className="text-xs font-semibold mb-1">Guarantors</p>
+                    <Badge variant="outline" className="text-[10px]">
+                      {selectedLoan.guarantor_account.user.full_name}
+                    </Badge>
+                  </div>
                 )}
+
+                {/* Dates */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="border rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-muted-foreground">Applied</p>
+                    <p className="font-medium text-xs">{format(new Date(selectedLoan.created_at), "dd MMM yyyy")}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-muted-foreground">Disbursed</p>
+                    <p className="font-medium text-xs">{selectedLoan.disbursed_at ? format(new Date(selectedLoan.disbursed_at), "dd MMM yyyy") : "—"}</p>
+                  </div>
+                  <div className="border rounded-lg p-2 text-center">
+                    <p className="text-[10px] text-muted-foreground">Due Date</p>
+                    <p className="font-medium text-xs">{dueDate ? format(dueDate, "dd MMM yyyy") : "—"}</p>
+                  </div>
+                </div>
               </div>
-              <Button 
-                onClick={handleSetGuarantor} 
-                className="w-full"
-                disabled={!selectedGuarantor}
-              >
-                <Users className="mr-2 h-4 w-4" />
-                Assign Guarantor
-              </Button>
-            </>
-          )}
-        </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* Guarantor Management Dialog */}
+      <Dialog open={guarantorDialogOpen} onOpenChange={setGuarantorDialogOpen}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg">Manage Guarantor</DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm">
+              Assign or change guarantor for {selectedLoan?.account.user.full_name}'s loan
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            {loadingGuarantors ? (
+              <div className="flex justify-center p-4"><Loader2 className="h-6 w-6 animate-spin" /></div>
+            ) : (
+              <>
+                <div className="space-y-2">
+                  <Label>Select Guarantor</Label>
+                  <Select value={selectedGuarantor} onValueChange={setSelectedGuarantor}>
+                    <SelectTrigger><SelectValue placeholder="Choose a guarantor" /></SelectTrigger>
+                    <SelectContent>
+                      {guarantorCandidates.map((candidate) => (
+                        <SelectItem key={candidate.id} value={candidate.id}>
+                          {candidate.full_name} ({candidate.account_number}) - UGX {candidate.total_savings.toLocaleString()}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {guarantorCandidates.length === 0 && (
+                    <p className="text-xs text-muted-foreground">No eligible guarantors found</p>
+                  )}
+                </div>
+                <Button onClick={handleSetGuarantor} className="w-full" disabled={!selectedGuarantor}>
+                  <Users className="mr-2 h-4 w-4" /> Assign Guarantor
+                </Button>
+              </>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
@@ -1046,51 +975,28 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
                 <p><span className="font-medium">Repaid:</span> UGX {(selectedLoan.total_amount - selectedLoan.outstanding_balance).toLocaleString()}</p>
               </div>
               
-              {/* Repayment Duration */}
               <div className="space-y-2">
                 <Label>Repayment Duration (Months)</Label>
-                <Input 
-                  type="number"
-                  min={1}
-                  value={editRepaymentMonths}
-                  onChange={(e) => setEditRepaymentMonths(parseInt(e.target.value) || 1)}
-                />
+                <Input type="number" min={1} value={editRepaymentMonths}
+                  onChange={(e) => setEditRepaymentMonths(parseInt(e.target.value) || 1)} />
                 <p className="text-xs text-muted-foreground">
                   Monthly payment: UGX {((selectedLoan.amount + (selectedLoan.amount * selectedLoan.interest_rate / 100 * editRepaymentMonths)) / editRepaymentMonths).toLocaleString()}
                 </p>
               </div>
               
-              {/* Disbursement Date */}
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Calendar className="h-4 w-4" />
-                  Disbursement Date
-                </Label>
-                <Input 
-                  type="date"
-                  value={editDisbursedAt}
-                  onChange={(e) => setEditDisbursedAt(e.target.value)}
-                />
-                <p className="text-xs text-muted-foreground">
-                  Interest calculation starts from this date
-                </p>
+                <Label className="flex items-center gap-2"><Calendar className="h-4 w-4" /> Disbursement Date</Label>
+                <Input type="date" value={editDisbursedAt} onChange={(e) => setEditDisbursedAt(e.target.value)} />
+                <p className="text-xs text-muted-foreground">Interest calculation starts from this date</p>
               </div>
               
-              {/* Guarantor Assignment */}
               <div className="space-y-2">
-                <Label className="flex items-center gap-2">
-                  <Users className="h-4 w-4" />
-                  Guarantor
-                </Label>
+                <Label className="flex items-center gap-2"><Users className="h-4 w-4" /> Guarantor</Label>
                 {loadingGuarantors ? (
-                  <div className="flex justify-center p-2">
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  </div>
+                  <div className="flex justify-center p-2"><Loader2 className="h-5 w-5 animate-spin" /></div>
                 ) : (
                   <Select value={editGuarantor || "none"} onValueChange={setEditGuarantor}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select guarantor (optional)" />
-                    </SelectTrigger>
+                    <SelectTrigger><SelectValue placeholder="Select guarantor (optional)" /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="none">No guarantor</SelectItem>
                       {guarantorCandidates.map((candidate) => (
@@ -1106,12 +1012,8 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
                 )}
               </div>
               
-              <Button 
-                onClick={handleUpdateLoanDetails} 
-                className="w-full"
-              >
-                <Edit className="mr-2 h-4 w-4" />
-                Update Loan Details
+              <Button onClick={handleUpdateLoanDetails} className="w-full">
+                <Edit className="mr-2 h-4 w-4" /> Update Loan Details
               </Button>
             </div>
           )}
@@ -1149,20 +1051,9 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
             </div>
           ) : (
             <DialogFooter className="flex flex-col sm:flex-row gap-2 pt-2">
-              <Button variant="outline" onClick={() => setOverdueDialogOpen(false)} className="flex-1">
-                Cancel
-              </Button>
-              <Button
-                variant="destructive"
-                onClick={handleApplyOverdueCharges}
-                disabled={applyingOverdue}
-                className="flex-1"
-              >
-                {applyingOverdue ? (
-                  <><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>
-                ) : (
-                  <><Zap className="mr-2 h-4 w-4" />Apply Charges</>
-                )}
+              <Button variant="outline" onClick={() => setOverdueDialogOpen(false)} className="flex-1">Cancel</Button>
+              <Button variant="destructive" onClick={handleApplyOverdueCharges} disabled={applyingOverdue} className="flex-1">
+                {applyingOverdue ? (<><Loader2 className="mr-2 h-4 w-4 animate-spin" />Processing...</>) : (<><Zap className="mr-2 h-4 w-4" />Apply Charges</>)}
               </Button>
             </DialogFooter>
           )}
