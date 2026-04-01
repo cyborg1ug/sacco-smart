@@ -177,6 +177,17 @@ const ReportsGeneration = () => {
     const { profile, memberAccount, periodTxns, allTxns, savings, loans, dateRange } = data;
 
     if (asPdf) {
+      // Filter loans disbursed within the period
+      const periodLoans = (loans || []).filter(l => {
+        if (l.disbursed_at) {
+          const disbDate = new Date(l.disbursed_at);
+          return disbDate >= dateRange.start && disbDate <= dateRange.end;
+        }
+        // Include pending/approved loans created in period
+        const createdDate = new Date(l.created_at);
+        return createdDate >= dateRange.start && createdDate <= dateRange.end;
+      });
+
       generateMemberStatementPDF({
         memberName: profile.full_name,
         email: profile.email,
@@ -185,8 +196,8 @@ const ReportsGeneration = () => {
         accountNumber: memberAccount.account_number,
         balance: Number(memberAccount.balance),
         totalSavings: Number(memberAccount.total_savings),
-        transactions: allTxns || [],
-        loans: loans || [],
+        transactions: (periodTxns || []),
+        loans: periodLoans,
         savings: savings || [],
       });
       toast({ title: "Success", description: "PDF report generated" });
@@ -304,7 +315,7 @@ const ReportsGeneration = () => {
       report += `\n`;
     }
 
-    report += `ALL-TIME TRANSACTION HISTORY\n${"─".repeat(75)}\n`;
+    report += `PERIOD TRANSACTION HISTORY\n${"─".repeat(75)}\n`;
     const colDate = "Date".padEnd(22);
     const colType = "Type".padEnd(24);
     const colAmt = "Amount (UGX)".padStart(14);
@@ -312,7 +323,7 @@ const ReportsGeneration = () => {
     const colStatus = "Status".padEnd(10);
     report += `${colDate}${colType}${colAmt}${colBal}  ${colStatus}\n`;
     report += `${"─".repeat(75)}\n`;
-    (allTxns || []).forEach(t => {
+    (periodTxns || []).forEach(t => {
       report += `${format(new Date(t.created_at), "MMM dd, yyyy HH:mm").padEnd(22)}`;
       report += `${t.transaction_type.replace(/_/g, " ").toUpperCase().padEnd(24)}`;
       report += `${Number(t.amount).toLocaleString().padStart(14)}`;
@@ -378,9 +389,9 @@ const ReportsGeneration = () => {
     const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
     XLSX.utils.book_append_sheet(wb, wsSummary, "Summary");
 
-    // Sheet 2: All Transactions
+    // Sheet 2: Period Transactions
     const txnHeaders = ["Date", "TXN ID", "Type", "Amount (UGX)", "Balance After (UGX)", "Status", "Description"];
-    const txnRows = (allTxns || []).map((t: any) => [
+    const txnRows = (periodTxns || []).map((t: any) => [
       format(new Date(t.created_at), "MMM dd, yyyy HH:mm"),
       t.tnx_id,
       t.transaction_type.replace(/_/g, " ").toUpperCase(),
@@ -390,7 +401,7 @@ const ReportsGeneration = () => {
       t.description || "",
     ]);
     const wsTxns = XLSX.utils.aoa_to_sheet([txnHeaders, ...txnRows]);
-    XLSX.utils.book_append_sheet(wb, wsTxns, "Transactions");
+    XLSX.utils.book_append_sheet(wb, wsTxns, "Period Transactions");
 
     // Sheet 3: Loans
     const loanHeaders = ["Principal (UGX)", "Interest Rate", "Repayment Months", "Total Payable (UGX)", "Total Interest (UGX)", "Amount Repaid (UGX)", "Outstanding (UGX)", "Status", "Disbursed On", "Due Date", "Days Overdue", "Overdue Penalty (UGX)"];
@@ -583,7 +594,33 @@ const ReportsGeneration = () => {
     report += `Completed/Fully Paid:         ${(allLoans || []).filter(l => ["completed", "fully_paid"].includes(l.status)).length}\n`;
     report += `Rejected:                     ${(allLoans || []).filter(l => l.status === "rejected").length}\n\n`;
 
-    report += `DISBURSED LOANS PER MEMBER\n${"─".repeat(75)}\n`;
+    // Filter loans disbursed within the period for the period section
+    const periodDisbursedLoans = activeLoans.filter(l => {
+      if (!l.disbursed_at) return false;
+      const disbDate = new Date(l.disbursed_at);
+      return disbDate >= dateRange.start && disbDate <= dateRange.end;
+    });
+
+    if (periodDisbursedLoans.length > 0) {
+      report += `LOANS DISBURSED IN PERIOD\n${"─".repeat(75)}\n`;
+      periodDisbursedLoans.forEach(l => {
+        const acc = accounts?.find(a => a.id === l.account_id);
+        const memberName = acc ? getMemberName(acc) : "Unknown";
+        const disbDate = l.disbursed_at ? format(new Date(l.disbursed_at), "MMM dd, yyyy") : "N/A";
+        const amountRepaid = Number(l.total_amount) - Number(l.outstanding_balance);
+        const overdue = isLoanOverdue(l);
+        const days = getDaysOverdue(l);
+        const penalty = calcDailyOverdueInterest(l);
+        const totalInterest = Number(l.amount) * (Number(l.interest_rate) / 100) * (l.repayment_months || 1);
+        report += `${memberName.padEnd(30)} | Acc: ${acc?.account_number || "N/A"}\n`;
+        report += `  Principal:   UGX ${Number(l.amount).toLocaleString().padStart(12)} | Disbursed: ${disbDate}\n`;
+        report += `  Total Int.:  UGX ${totalInterest.toLocaleString().padStart(12)} | Rate: ${l.interest_rate}%/mo × ${l.repayment_months}mo\n`;
+        report += `  Repaid:      UGX ${amountRepaid.toLocaleString().padStart(12)} | Outstanding: UGX ${Number(l.outstanding_balance).toLocaleString()}\n`;
+        report += `  Status: ${overdue ? `⚠ OVERDUE (${days} days) | Penalty: UGX ${penalty.toLocaleString()}` : "Active"}\n\n`;
+      });
+    }
+
+    report += `ALL ACTIVE LOANS\n${"─".repeat(75)}\n`;
     activeLoans.forEach(l => {
       const acc = accounts?.find(a => a.id === l.account_id);
       const memberName = acc ? getMemberName(acc) : "Unknown";

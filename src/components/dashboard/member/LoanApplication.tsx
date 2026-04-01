@@ -67,6 +67,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
   const [members, setMembers] = useState<MemberOption[]>([]);
   const [selectedGuarantor, setSelectedGuarantor] = useState("");
   const [loanAmount, setLoanAmount] = useState("");
+  const [loanPurpose, setLoanPurpose] = useState("");
   const [repaymentMonths, setRepaymentMonths] = useState("1");
   const [guarantorError, setGuarantorError] = useState("");
 
@@ -248,6 +249,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
       guarantor_status: "pending",
       max_loan_amount: eligibility.max_loan_amount,
       repayment_months: months,
+      purpose: loanPurpose.trim() || null,
     } as any);
 
     if (error) {
@@ -256,6 +258,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
       toast({ title: "Success", description: "Loan application submitted. Waiting for guarantor approval." });
       onApplicationSubmitted();
       setLoanAmount("");
+      setLoanPurpose("");
       setRepaymentMonths("1");
       setSelectedGuarantor("");
       setAiEligibility(null);
@@ -340,6 +343,19 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
                   />
                   <p className="text-sm text-muted-foreground">
                     Interest Rate: 2% per month | Maximum: UGX {eligibility.max_loan_amount.toLocaleString()}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Purpose</Label>
+                  <Input
+                    type="text"
+                    placeholder="e.g. Business Capital, School Fees, Medical..."
+                    value={loanPurpose}
+                    onChange={(e) => setLoanPurpose(e.target.value)}
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Optional — describe what the loan is for
                   </p>
                 </div>
 
