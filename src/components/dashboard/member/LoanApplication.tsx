@@ -347,6 +347,19 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
                 </div>
 
                 <div className="space-y-2">
+                  <Label>Purpose</Label>
+                  <Input
+                    type="text"
+                    placeholder="e.g. Business Capital, School Fees, Medical..."
+                    value={loanPurpose}
+                    onChange={(e) => setLoanPurpose(e.target.value)}
+                  />
+                  <p className="text-sm text-muted-foreground">
+                    Optional — describe what the loan is for
+                  </p>
+                </div>
+
+                <div className="space-y-2">
                   <Label>Repayment Plan (Months)</Label>
                   <Select value={repaymentMonths} onValueChange={setRepaymentMonths}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
