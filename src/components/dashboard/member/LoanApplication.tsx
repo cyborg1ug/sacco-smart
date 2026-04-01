@@ -258,6 +258,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
       toast({ title: "Success", description: "Loan application submitted. Waiting for guarantor approval." });
       onApplicationSubmitted();
       setLoanAmount("");
+      setLoanPurpose("");
       setRepaymentMonths("1");
       setSelectedGuarantor("");
       setAiEligibility(null);
