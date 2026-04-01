@@ -249,6 +249,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
       guarantor_status: "pending",
       max_loan_amount: eligibility.max_loan_amount,
       repayment_months: months,
+      purpose: loanPurpose.trim() || null,
     } as any);
 
     if (error) {
