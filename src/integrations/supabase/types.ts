@@ -72,6 +72,7 @@ export type Database = {
           interest_rate: number
           max_loan_amount: number | null
           outstanding_balance: number
+          purpose: string | null
           repayment_months: number | null
           status: string
           total_amount: number
@@ -90,6 +91,7 @@ export type Database = {
           interest_rate?: number
           max_loan_amount?: number | null
           outstanding_balance: number
+          purpose?: string | null
           repayment_months?: number | null
           status?: string
           total_amount: number
@@ -108,6 +110,7 @@ export type Database = {
           interest_rate?: number
           max_loan_amount?: number | null
           outstanding_balance?: number
+          purpose?: string | null
           repayment_months?: number | null
           status?: string
           total_amount?: number

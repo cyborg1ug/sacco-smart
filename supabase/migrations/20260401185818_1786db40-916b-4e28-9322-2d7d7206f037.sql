@@ -1,0 +1,1 @@
+ALTER TABLE public.loans ADD COLUMN purpose text;
