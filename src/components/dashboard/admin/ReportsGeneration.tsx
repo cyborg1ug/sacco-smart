@@ -315,7 +315,7 @@ const ReportsGeneration = () => {
       report += `\n`;
     }
 
-    report += `ALL-TIME TRANSACTION HISTORY\n${"─".repeat(75)}\n`;
+    report += `PERIOD TRANSACTION HISTORY\n${"─".repeat(75)}\n`;
     const colDate = "Date".padEnd(22);
     const colType = "Type".padEnd(24);
     const colAmt = "Amount (UGX)".padStart(14);
@@ -323,7 +323,7 @@ const ReportsGeneration = () => {
     const colStatus = "Status".padEnd(10);
     report += `${colDate}${colType}${colAmt}${colBal}  ${colStatus}\n`;
     report += `${"─".repeat(75)}\n`;
-    (allTxns || []).forEach(t => {
+    (periodTxns || []).forEach(t => {
       report += `${format(new Date(t.created_at), "MMM dd, yyyy HH:mm").padEnd(22)}`;
       report += `${t.transaction_type.replace(/_/g, " ").toUpperCase().padEnd(24)}`;
       report += `${Number(t.amount).toLocaleString().padStart(14)}`;
