@@ -212,6 +212,13 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
+    // Require purpose
+    const finalPurpose = loanPurpose === "Other" ? customPurpose.trim() : loanPurpose;
+    if (!finalPurpose) {
+      toast({ title: "Purpose Required", description: "Please select or specify the purpose of the loan", variant: "destructive" });
+      return;
+    }
+
     // Block submission if AI says not eligible
     if (aiEligibility && !aiEligibility.overall_eligible) {
       toast({
@@ -250,7 +257,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
       guarantor_status: "pending",
       max_loan_amount: eligibility.max_loan_amount,
       repayment_months: months,
-      purpose: loanPurpose.trim() || null,
+      purpose: finalPurpose,
     } as any);
 
     if (error) {
@@ -260,6 +267,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
       onApplicationSubmitted();
       setLoanAmount("");
       setLoanPurpose("");
+      setCustomPurpose("");
       setRepaymentMonths("1");
       setSelectedGuarantor("");
       setAiEligibility(null);
