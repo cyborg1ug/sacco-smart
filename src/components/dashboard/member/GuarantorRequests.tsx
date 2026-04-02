@@ -48,7 +48,7 @@ const GuarantorRequests = () => {
         // Get loan requests where any of my accounts is the guarantor
         const { data: loans, error } = await (supabase
           .from("loans")
-          .select(`id, amount, total_amount, created_at, account_id`) as any)
+          .select(`id, amount, total_amount, created_at, account_id, purpose`) as any)
           .in("guarantor_account_id", myAccountIds)
           .eq("guarantor_status", "pending");
 
