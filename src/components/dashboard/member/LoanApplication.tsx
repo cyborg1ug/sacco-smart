@@ -514,8 +514,8 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
           <ul className="list-disc list-inside space-y-1 text-xs text-muted-foreground">
             <li>The applying account must have savings</li>
             <li>Maximum loan: 3× the account's total savings</li>
-            <li>Guarantor's savings must be ≥ applying account's savings</li>
-            <li>Guarantor may only guarantee one active loan at a time</li>
+            <li>Guarantor's savings must be ≥ the loan amount being applied for</li>
+            <li>A loan purpose must be specified</li>
             <li>Guarantor must approve your request before processing</li>
             <li>Interest rate: 2% per month flat</li>
             <li>Repayment period: 1–12 months</li>
