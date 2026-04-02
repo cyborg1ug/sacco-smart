@@ -149,7 +149,7 @@ const Auth = () => {
       email,
       password,
       options: {
-        emailRedirectTo: `${window.location.origin}/`,
+        emailRedirectTo: `${window.location.origin}/auth?mode=login`,
         data: {
           full_name: fullName,
         },
@@ -166,19 +166,12 @@ const Auth = () => {
       return;
     }
 
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      await supabase.from("profiles").update({
-        phone_number: phoneNumber,
-        national_id: nationalId,
-        occupation,
-        address,
-      }).eq("id", user.id);
-    }
+    // Note: profile update happens via trigger on user creation
+    // Additional fields need to be updated after email verification
 
     toast({
-      title: "Success",
-      description: "Account created successfully!",
+      title: "Verify Your Email",
+      description: "A verification link has been sent to your email. Please check your inbox and verify your email before signing in.",
     });
 
     setLoading(false);
@@ -196,42 +189,43 @@ const Auth = () => {
     const occupation = formData.get("occupation") as string;
     const address = formData.get("address") as string;
 
-    const generatedEmail = `${phone.replace(/[^0-9]/g, "")}@kinoni-sacco.local`;
+    try {
+      const { data, error } = await supabase.functions.invoke("signup-phone", {
+        body: { phone, password, fullName, nationalId, occupation, address },
+      });
 
-    const { error, data } = await supabase.auth.signUp({
-      email: generatedEmail,
-      password,
-      options: {
-        emailRedirectTo: `${window.location.origin}/`,
-        data: {
-          full_name: fullName,
-        },
-      },
-    });
+      if (error) throw error;
+      if (data?.error) {
+        toast({ title: "Error", description: data.error, variant: "destructive" });
+        setLoading(false);
+        return;
+      }
 
-    if (error) {
+      // Auto-sign in with the generated email
+      const generatedEmail = data?.data?.email;
+      if (generatedEmail) {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: generatedEmail,
+          password,
+        });
+
+        if (signInError) {
+          toast({
+            title: "Account Created",
+            description: "Account created successfully! You can now sign in with your phone number.",
+          });
+        } else {
+          toast({ title: "Success", description: "Account created and signed in!" });
+          navigate("/dashboard");
+        }
+      }
+    } catch (err: any) {
       toast({
         title: "Error",
-        description: error.message,
+        description: err.message || "Failed to create account",
         variant: "destructive",
       });
-      setLoading(false);
-      return;
     }
-
-    if (data.user) {
-      await supabase.from("profiles").update({
-        phone_number: phone,
-        national_id: nationalId,
-        occupation,
-        address,
-      }).eq("id", data.user.id);
-    }
-
-    toast({
-      title: "Success",
-      description: "Account created successfully! You can now login with your phone number.",
-    });
 
     setLoading(false);
   };

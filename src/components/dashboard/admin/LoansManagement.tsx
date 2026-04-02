@@ -11,11 +11,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Send, Loader2, Users, UserPlus, CheckCircle, Edit, Clock, CheckCircle2, TrendingUp, Search, Calendar, AlertTriangle, Zap, Eye } from "lucide-react";
+import { Check, X, Send, Loader2, Users, UserPlus, CheckCircle, Edit, Clock, CheckCircle2, TrendingUp, Search, Calendar, AlertTriangle, Zap, Eye, Target, PieChart as PieChartIcon } from "lucide-react";
 import { format, differenceInMonths, differenceInDays } from "date-fns";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MobileCardList, MobileCard } from "@/components/ui/MobileCardList";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip as RechartsTooltip } from "recharts";
 
 interface Loan {
   id: string;
@@ -108,9 +109,10 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
         const overdue = isLoanOverdue(loan);
         if (statusFilter === "overdue" && !overdue) return false;
         if (statusFilter === "pending" && loan.status !== "pending") return false;
-        if (statusFilter === "approved" && loan.status !== "approved") return false;
-        if (statusFilter === "active" && (!["disbursed", "active"].includes(loan.status) || overdue)) return false;
+        if (statusFilter === "approved" && loan.status !== "approved" && !(loan.status === "active" && !loan.disbursed_at)) return false;
+        if (statusFilter === "active" && (!["disbursed", "active"].includes(loan.status) || !loan.disbursed_at || overdue)) return false;
         if (statusFilter === "completed" && loan.status !== "completed" && loan.status !== "fully_paid") return false;
+        if (statusFilter === "rejected" && loan.status !== "rejected") return false;
       }
       
       if (searchQuery.trim()) {
@@ -128,7 +130,37 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   }, [loans, statusFilter, searchQuery]);
 
   const overdueCount = useMemo(() => loans.filter(l => isLoanOverdue(l)).length, [loans]);
-  const activeCount = useMemo(() => loans.filter(l => ["disbursed", "active"].includes(l.status) && !isLoanOverdue(l)).length, [loans]);
+  const activeCount = useMemo(() => loans.filter(l => ["disbursed", "active"].includes(l.status) && l.disbursed_at && !isLoanOverdue(l)).length, [loans]);
+  const approvedCount = useMemo(() => loans.filter(l => l.status === "approved" || (l.status === "active" && !l.disbursed_at)).length, [loans]);
+  const rejectedCount = useMemo(() => loans.filter(l => l.status === "rejected").length, [loans]);
+
+  // Metrics calculations
+  const CHART_COLORS = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--accent))", "#8884d8", "#ffc658", "#82ca9d"];
+
+  const loanRepaymentIndex = useMemo(() => {
+    const repayableLoans = loans.filter(l => ["disbursed", "active", "fully_paid", "completed"].includes(l.status));
+    if (repayableLoans.length === 0) return 0;
+    const totalExpected = repayableLoans.reduce((s, l) => s + Number(l.total_amount), 0);
+    const totalRepaid = repayableLoans.reduce((s, l) => s + (Number(l.total_amount) - Number(l.outstanding_balance)), 0);
+    return totalExpected > 0 ? Math.round((totalRepaid / totalExpected) * 100) : 0;
+  }, [loans]);
+
+  const savingsReliabilityIndex = useMemo(() => {
+    // Based on how many active/completed loans vs overdue/defaulted
+    const activeLoanCount = loans.filter(l => ["disbursed", "active", "fully_paid", "completed"].includes(l.status)).length;
+    if (activeLoanCount === 0) return 100;
+    const goodLoans = loans.filter(l => ["fully_paid", "completed"].includes(l.status) || (["disbursed", "active"].includes(l.status) && !isLoanOverdue(l))).length;
+    return Math.round((goodLoans / activeLoanCount) * 100);
+  }, [loans]);
+
+  const purposeDistribution = useMemo(() => {
+    const purposeMap = new Map<string, number>();
+    loans.forEach(loan => {
+      const purpose = loan.purpose || "Unspecified";
+      purposeMap.set(purpose, (purposeMap.get(purpose) || 0) + 1);
+    });
+    return Array.from(purposeMap.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  }, [loans]);
 
   // Setup real-time subscription
   useEffect(() => {
@@ -764,6 +796,64 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
           </div>
         </CardHeader>
         <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+          {/* Metrics Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+            <div className="border rounded-lg p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-primary" />
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Repayment Index</p>
+              </div>
+              <p className="text-xl font-bold tabular-nums text-primary">{loanRepaymentIndex}%</p>
+              <Progress value={loanRepaymentIndex} className="h-1.5 [&>div]:bg-primary" />
+            </div>
+            <div className="border rounded-lg p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-chart-2" />
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Savings Reliability</p>
+              </div>
+              <p className="text-xl font-bold tabular-nums" style={{ color: "hsl(var(--chart-2))" }}>{savingsReliabilityIndex}%</p>
+              <Progress value={savingsReliabilityIndex} className="h-1.5 [&>div]:bg-chart-2" />
+            </div>
+            <div className="border rounded-lg p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Overdue Loans</p>
+              </div>
+              <p className="text-xl font-bold tabular-nums text-destructive">{overdueCount}</p>
+              <p className="text-[10px] text-muted-foreground">of {loans.filter(l => ["disbursed", "active"].includes(l.status)).length} active</p>
+            </div>
+            <div className="border rounded-lg p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <PieChartIcon className="h-4 w-4 text-chart-4" />
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Total Portfolio</p>
+              </div>
+              <p className="text-xl font-bold tabular-nums">
+                {loans.length}
+              </p>
+              <p className="text-[10px] text-muted-foreground">{loans.filter(l => l.status === "pending").length} pending</p>
+            </div>
+          </div>
+
+          {/* Purpose Distribution Chart */}
+          {purposeDistribution.length > 0 && (
+            <div className="border rounded-lg p-3 mb-4">
+              <p className="text-xs font-semibold mb-2">Loan Distribution by Purpose</p>
+              <div className="h-[200px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={purposeDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`} labelLine={false} fontSize={10}>
+                      {purposeDistribution.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip formatter={(value: number) => [`${value} loan(s)`, "Count"]} />
+                    <Legend wrapperStyle={{ fontSize: "10px" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
           {/* Loan Status Tabs */}
           <div className="pb-3 sm:pb-4">
             <Tabs value={statusFilter} onValueChange={setStatusFilter}>
@@ -781,9 +871,15 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
                   <Clock className="h-3 w-3 mr-1" />
                   Pending ({loans.filter(l => l.status === "pending").length})
                 </TabsTrigger>
+                <TabsTrigger value="approved" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                  Approved ({approvedCount})
+                </TabsTrigger>
                 <TabsTrigger value="completed" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
                   <CheckCircle2 className="h-3 w-3 mr-1" />
                   Closed ({loans.filter(l => l.status === "completed" || l.status === "fully_paid").length})
+                </TabsTrigger>
+                <TabsTrigger value="rejected" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                  Rejected ({rejectedCount})
                 </TabsTrigger>
               </TabsList>
             </Tabs>

@@ -68,6 +68,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
   const [selectedGuarantor, setSelectedGuarantor] = useState("");
   const [loanAmount, setLoanAmount] = useState("");
   const [loanPurpose, setLoanPurpose] = useState("");
+  const [customPurpose, setCustomPurpose] = useState("");
   const [repaymentMonths, setRepaymentMonths] = useState("1");
   const [guarantorError, setGuarantorError] = useState("");
 
@@ -211,6 +212,13 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
+    // Require purpose
+    const finalPurpose = loanPurpose === "Other" ? customPurpose.trim() : loanPurpose;
+    if (!finalPurpose) {
+      toast({ title: "Purpose Required", description: "Please select or specify the purpose of the loan", variant: "destructive" });
+      return;
+    }
+
     // Block submission if AI says not eligible
     if (aiEligibility && !aiEligibility.overall_eligible) {
       toast({
@@ -249,7 +257,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
       guarantor_status: "pending",
       max_loan_amount: eligibility.max_loan_amount,
       repayment_months: months,
-      purpose: loanPurpose.trim() || null,
+      purpose: finalPurpose,
     } as any);
 
     if (error) {
@@ -259,6 +267,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
       onApplicationSubmitted();
       setLoanAmount("");
       setLoanPurpose("");
+      setCustomPurpose("");
       setRepaymentMonths("1");
       setSelectedGuarantor("");
       setAiEligibility(null);
@@ -347,16 +356,24 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Purpose</Label>
-                  <Input
-                    type="text"
-                    placeholder="e.g. Business Capital, School Fees, Medical..."
-                    value={loanPurpose}
-                    onChange={(e) => setLoanPurpose(e.target.value)}
-                  />
-                  <p className="text-sm text-muted-foreground">
-                    Optional — describe what the loan is for
-                  </p>
+                  <Label>Purpose <span className="text-destructive">*</span></Label>
+                  <Select value={loanPurpose} onValueChange={(v) => { setLoanPurpose(v); if (v !== "Other") setCustomPurpose(""); }}>
+                    <SelectTrigger><SelectValue placeholder="Select loan purpose" /></SelectTrigger>
+                    <SelectContent>
+                      {["Business Capital", "School Fees / Education", "Medical / Health", "Agriculture / Farming", "Home Construction / Renovation", "Emergency", "Asset Purchase", "Personal / Household", "Debt Consolidation", "Other"].map(p => (
+                        <SelectItem key={p} value={p}>{p}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {loanPurpose === "Other" && (
+                    <Input
+                      type="text"
+                      placeholder="Please specify the loan purpose"
+                      value={customPurpose}
+                      onChange={(e) => setCustomPurpose(e.target.value)}
+                      required
+                    />
+                  )}
                 </div>
 
                 <div className="space-y-2">
@@ -497,8 +514,8 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
           <ul className="list-disc list-inside space-y-1 text-xs text-muted-foreground">
             <li>The applying account must have savings</li>
             <li>Maximum loan: 3× the account's total savings</li>
-            <li>Guarantor's savings must be ≥ applying account's savings</li>
-            <li>Guarantor may only guarantee one active loan at a time</li>
+            <li>Guarantor's savings must be ≥ the loan amount being applied for</li>
+            <li>A loan purpose must be specified</li>
             <li>Guarantor must approve your request before processing</li>
             <li>Interest rate: 2% per month flat</li>
             <li>Repayment period: 1–12 months</li>
