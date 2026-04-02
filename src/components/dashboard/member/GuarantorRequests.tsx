@@ -14,6 +14,7 @@ interface LoanRequest {
   total_amount: number;
   created_at: string;
   guarantor_status: string;
+  purpose: string | null;
   accounts: {
     account_number: string;
     user_id: string;
