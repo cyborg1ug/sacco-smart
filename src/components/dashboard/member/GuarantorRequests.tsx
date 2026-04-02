@@ -208,6 +208,7 @@ const GuarantorRequests = () => {
                       </p>
                     </div>
                   </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{request.purpose || "—"}</TableCell>
                   <TableCell>{request.accounts.account_number}</TableCell>
                   <TableCell>UGX {request.amount.toLocaleString()}</TableCell>
                   <TableCell>UGX {request.total_amount.toLocaleString()}</TableCell>
