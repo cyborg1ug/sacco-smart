@@ -796,6 +796,64 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
           </div>
         </CardHeader>
         <CardContent className="p-3 sm:p-4 md:p-6 pt-0">
+          {/* Metrics Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+            <div className="border rounded-lg p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <Target className="h-4 w-4 text-primary" />
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Repayment Index</p>
+              </div>
+              <p className="text-xl font-bold tabular-nums text-primary">{loanRepaymentIndex}%</p>
+              <Progress value={loanRepaymentIndex} className="h-1.5 [&>div]:bg-primary" />
+            </div>
+            <div className="border rounded-lg p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <TrendingUp className="h-4 w-4 text-chart-2" />
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Savings Reliability</p>
+              </div>
+              <p className="text-xl font-bold tabular-nums" style={{ color: "hsl(var(--chart-2))" }}>{savingsReliabilityIndex}%</p>
+              <Progress value={savingsReliabilityIndex} className="h-1.5 [&>div]:bg-chart-2" />
+            </div>
+            <div className="border rounded-lg p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Overdue Loans</p>
+              </div>
+              <p className="text-xl font-bold tabular-nums text-destructive">{overdueCount}</p>
+              <p className="text-[10px] text-muted-foreground">of {loans.filter(l => ["disbursed", "active"].includes(l.status)).length} active</p>
+            </div>
+            <div className="border rounded-lg p-3 space-y-1">
+              <div className="flex items-center gap-2">
+                <PieChartIcon className="h-4 w-4 text-chart-4" />
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground font-medium">Total Portfolio</p>
+              </div>
+              <p className="text-xl font-bold tabular-nums">
+                {loans.length}
+              </p>
+              <p className="text-[10px] text-muted-foreground">{loans.filter(l => l.status === "pending").length} pending</p>
+            </div>
+          </div>
+
+          {/* Purpose Distribution Chart */}
+          {purposeDistribution.length > 0 && (
+            <div className="border rounded-lg p-3 mb-4">
+              <p className="text-xs font-semibold mb-2">Loan Distribution by Purpose</p>
+              <div className="h-[200px]">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie data={purposeDistribution} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70} label={({ name, percent }) => `${name} (${(percent * 100).toFixed(0)}%)`} labelLine={false} fontSize={10}>
+                      {purposeDistribution.map((_, index) => (
+                        <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <RechartsTooltip formatter={(value: number) => [`${value} loan(s)`, "Count"]} />
+                    <Legend wrapperStyle={{ fontSize: "10px" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
+
           {/* Loan Status Tabs */}
           <div className="pb-3 sm:pb-4">
             <Tabs value={statusFilter} onValueChange={setStatusFilter}>
@@ -813,9 +871,15 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
                   <Clock className="h-3 w-3 mr-1" />
                   Pending ({loans.filter(l => l.status === "pending").length})
                 </TabsTrigger>
+                <TabsTrigger value="approved" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                  Approved ({approvedCount})
+                </TabsTrigger>
                 <TabsTrigger value="completed" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
                   <CheckCircle2 className="h-3 w-3 mr-1" />
                   Closed ({loans.filter(l => l.status === "completed" || l.status === "fully_paid").length})
+                </TabsTrigger>
+                <TabsTrigger value="rejected" className="text-[10px] sm:text-xs px-2 sm:px-3 h-7 sm:h-8 data-[state=active]:bg-background">
+                  Rejected ({rejectedCount})
                 </TabsTrigger>
               </TabsList>
             </Tabs>
