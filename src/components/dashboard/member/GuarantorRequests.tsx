@@ -187,6 +187,7 @@ const GuarantorRequests = () => {
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Applicant</TableHead>
+                <TableHead>Purpose</TableHead>
                 <TableHead>Account</TableHead>
                 <TableHead>Loan Amount</TableHead>
                 <TableHead>Total (with interest)</TableHead>
