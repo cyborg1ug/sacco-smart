@@ -16,6 +16,7 @@ interface ActiveLoan {
   disbursed_at: string | null;
   created_at: string;
   status: string;
+  purpose: string | null;
 }
 
 interface ScheduleEntry {
