@@ -16,6 +16,7 @@ interface ActiveLoan {
   disbursed_at: string | null;
   created_at: string;
   status: string;
+  purpose: string | null;
 }
 
 interface ScheduleEntry {
@@ -135,6 +136,7 @@ const LoanRepaymentSchedule = ({ accountIds }: LoanRepaymentScheduleProps) => {
                     Repayment Schedule
                   </CardTitle>
                   <CardDescription>
+                    {loan.purpose && <span className="font-medium text-foreground">{loan.purpose} · </span>}
                     {loan.repayment_months} month(s) at {loan.interest_rate}% monthly interest
                   </CardDescription>
                 </div>

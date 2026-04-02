@@ -14,6 +14,7 @@ interface LoanRequest {
   total_amount: number;
   created_at: string;
   guarantor_status: string;
+  purpose: string | null;
   accounts: {
     account_number: string;
     user_id: string;
@@ -48,7 +49,7 @@ const GuarantorRequests = () => {
         // Get loan requests where any of my accounts is the guarantor
         const { data: loans, error } = await (supabase
           .from("loans")
-          .select(`id, amount, total_amount, created_at, account_id`) as any)
+          .select(`id, amount, total_amount, created_at, account_id, purpose`) as any)
           .in("guarantor_account_id", myAccountIds)
           .eq("guarantor_status", "pending");
 
@@ -186,6 +187,7 @@ const GuarantorRequests = () => {
               <TableRow>
                 <TableHead>Date</TableHead>
                 <TableHead>Applicant</TableHead>
+                <TableHead>Purpose</TableHead>
                 <TableHead>Account</TableHead>
                 <TableHead>Loan Amount</TableHead>
                 <TableHead>Total (with interest)</TableHead>
@@ -206,6 +208,7 @@ const GuarantorRequests = () => {
                       </p>
                     </div>
                   </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{request.purpose || "—"}</TableCell>
                   <TableCell>{request.accounts.account_number}</TableCell>
                   <TableCell>UGX {request.amount.toLocaleString()}</TableCell>
                   <TableCell>UGX {request.total_amount.toLocaleString()}</TableCell>
