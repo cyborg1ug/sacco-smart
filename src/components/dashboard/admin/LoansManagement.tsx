@@ -109,9 +109,10 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
         const overdue = isLoanOverdue(loan);
         if (statusFilter === "overdue" && !overdue) return false;
         if (statusFilter === "pending" && loan.status !== "pending") return false;
-        if (statusFilter === "approved" && loan.status !== "approved") return false;
-        if (statusFilter === "active" && (!["disbursed", "active"].includes(loan.status) || overdue)) return false;
+        if (statusFilter === "approved" && loan.status !== "approved" && !(loan.status === "active" && !loan.disbursed_at)) return false;
+        if (statusFilter === "active" && (!["disbursed", "active"].includes(loan.status) || !loan.disbursed_at || overdue)) return false;
         if (statusFilter === "completed" && loan.status !== "completed" && loan.status !== "fully_paid") return false;
+        if (statusFilter === "rejected" && loan.status !== "rejected") return false;
       }
       
       if (searchQuery.trim()) {
@@ -129,7 +130,37 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   }, [loans, statusFilter, searchQuery]);
 
   const overdueCount = useMemo(() => loans.filter(l => isLoanOverdue(l)).length, [loans]);
-  const activeCount = useMemo(() => loans.filter(l => ["disbursed", "active"].includes(l.status) && !isLoanOverdue(l)).length, [loans]);
+  const activeCount = useMemo(() => loans.filter(l => ["disbursed", "active"].includes(l.status) && l.disbursed_at && !isLoanOverdue(l)).length, [loans]);
+  const approvedCount = useMemo(() => loans.filter(l => l.status === "approved" || (l.status === "active" && !l.disbursed_at)).length, [loans]);
+  const rejectedCount = useMemo(() => loans.filter(l => l.status === "rejected").length, [loans]);
+
+  // Metrics calculations
+  const CHART_COLORS = ["hsl(var(--primary))", "hsl(var(--chart-2))", "hsl(var(--chart-3))", "hsl(var(--chart-4))", "hsl(var(--chart-5))", "hsl(var(--accent))", "#8884d8", "#ffc658", "#82ca9d"];
+
+  const loanRepaymentIndex = useMemo(() => {
+    const repayableLoans = loans.filter(l => ["disbursed", "active", "fully_paid", "completed"].includes(l.status));
+    if (repayableLoans.length === 0) return 0;
+    const totalExpected = repayableLoans.reduce((s, l) => s + Number(l.total_amount), 0);
+    const totalRepaid = repayableLoans.reduce((s, l) => s + (Number(l.total_amount) - Number(l.outstanding_balance)), 0);
+    return totalExpected > 0 ? Math.round((totalRepaid / totalExpected) * 100) : 0;
+  }, [loans]);
+
+  const savingsReliabilityIndex = useMemo(() => {
+    // Based on how many active/completed loans vs overdue/defaulted
+    const activeLoanCount = loans.filter(l => ["disbursed", "active", "fully_paid", "completed"].includes(l.status)).length;
+    if (activeLoanCount === 0) return 100;
+    const goodLoans = loans.filter(l => ["fully_paid", "completed"].includes(l.status) || (["disbursed", "active"].includes(l.status) && !isLoanOverdue(l))).length;
+    return Math.round((goodLoans / activeLoanCount) * 100);
+  }, [loans]);
+
+  const purposeDistribution = useMemo(() => {
+    const purposeMap = new Map<string, number>();
+    loans.forEach(loan => {
+      const purpose = loan.purpose || "Unspecified";
+      purposeMap.set(purpose, (purposeMap.get(purpose) || 0) + 1);
+    });
+    return Array.from(purposeMap.entries()).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+  }, [loans]);
 
   // Setup real-time subscription
   useEffect(() => {
