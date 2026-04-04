@@ -110,7 +110,8 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
         if (statusFilter === "overdue" && !overdue) return false;
         if (statusFilter === "pending" && loan.status !== "pending") return false;
         if (statusFilter === "approved" && loan.status !== "approved" && !(loan.status === "active" && !loan.disbursed_at)) return false;
-        if (statusFilter === "active" && (!["disbursed", "active"].includes(loan.status) || !loan.disbursed_at || overdue)) return false;
+        // Active: show disbursed/active loans INCLUDING overdue (overdue tab is a subset)
+        if (statusFilter === "active" && (!["disbursed", "active"].includes(loan.status) || !loan.disbursed_at || loan.outstanding_balance <= 0)) return false;
         if (statusFilter === "completed" && loan.status !== "completed" && loan.status !== "fully_paid") return false;
         if (statusFilter === "rejected" && loan.status !== "rejected") return false;
       }
@@ -130,7 +131,7 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   }, [loans, statusFilter, searchQuery]);
 
   const overdueCount = useMemo(() => loans.filter(l => isLoanOverdue(l)).length, [loans]);
-  const activeCount = useMemo(() => loans.filter(l => ["disbursed", "active"].includes(l.status) && l.disbursed_at && !isLoanOverdue(l)).length, [loans]);
+  const activeCount = useMemo(() => loans.filter(l => ["disbursed", "active"].includes(l.status) && l.disbursed_at && l.outstanding_balance > 0).length, [loans]);
   const approvedCount = useMemo(() => loans.filter(l => l.status === "approved" || (l.status === "active" && !l.disbursed_at)).length, [loans]);
   const rejectedCount = useMemo(() => loans.filter(l => l.status === "rejected").length, [loans]);
 
@@ -265,7 +266,8 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     );
 
     const loanAccount = accountsData.find(a => a.id === loanAccountId);
-    const minSavings = loanAccount?.total_savings || 0;
+    // Guarantor must have savings >= 50% of the applicant's loan amount
+    const minSavings = (selectedLoan?.amount || 0) * 0.5;
 
     const eligibleAccounts = accountsData.filter(a => 
       a.id !== loanAccountId && 

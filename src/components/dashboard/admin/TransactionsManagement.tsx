@@ -280,7 +280,7 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
       }
     }
 
-    // If this is a loan repayment, handle monthly interest split + reduce outstanding balance
+    // If this is a loan repayment, handle interest split + reduce outstanding balance
     if (type === "loan_repayment" && loanId) {
       const { data: loan } = await supabase
         .from("loans")
@@ -292,11 +292,6 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
         const now = new Date();
         const monthlyInterest = loan.amount * (loan.interest_rate / 100);
 
-        // NOTE: Overdue penalty interest (2%/30 daily accrual) is handled exclusively by the
-        // scheduled daily cron job (apply-overdue-interest). Do NOT apply it here to avoid
-        // double-counting. The outstanding balance already reflects any accrued daily penalties.
-
-        // Monthly regular interest: record once per month, only for non-overdue period
         const isOverdue = loan.disbursed_at && loan.repayment_months
           ? (() => {
               const dueDate = new Date(loan.disbursed_at);
@@ -305,8 +300,48 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
             })()
           : false;
 
-        if (!isOverdue) {
-          // Only apply monthly interest split for loans still within repayment period
+        if (isOverdue) {
+          // For overdue loans: deduct accrued overdue interest FIRST from the repayment
+          // Fetch total overdue interest accrued and total repayments already made
+          const { data: overdueInterestTxns } = await supabase
+            .from("transactions")
+            .select("amount")
+            .eq("loan_id", loanId)
+            .eq("transaction_type", "overdue_interest")
+            .eq("status", "approved");
+
+          const { data: interestReceivedTxns } = await supabase
+            .from("transactions")
+            .select("amount")
+            .eq("loan_id", loanId)
+            .eq("transaction_type", "interest_received")
+            .eq("status", "approved");
+
+          const totalOverdueAccrued = (overdueInterestTxns || []).reduce((s, t) => s + Number(t.amount), 0);
+          const totalInterestAlreadyPaid = (interestReceivedTxns || []).reduce((s, t) => s + Number(t.amount), 0);
+          const outstandingInterest = Math.max(0, totalOverdueAccrued - totalInterestAlreadyPaid);
+
+          if (outstandingInterest > 0) {
+            const interestPortion = Math.min(outstandingInterest, amount);
+            if (interestPortion > 0) {
+              const { data: tnxIdData } = await supabase.rpc("generate_tnx_id");
+              await supabase.from("transactions").insert({
+                account_id: accountId,
+                transaction_type: "interest_received",
+                amount: interestPortion,
+                balance_after: 0,
+                description: `Overdue interest payment on loan ${loanId.substring(0, 8)}`,
+                status: "approved",
+                approved_by: user?.id,
+                approved_at: now.toISOString(),
+                loan_id: loanId,
+                tnx_id: tnxIdData,
+              } as any);
+              toast({ title: "Overdue Interest Deducted", description: `UGX ${interestPortion.toLocaleString()} applied to outstanding overdue interest first.` });
+            }
+          }
+        } else {
+          // Non-overdue: record monthly interest split once per month
           const { data: monthInterest } = await supabase
             .from("transactions")
             .select("id, created_at")

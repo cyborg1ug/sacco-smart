@@ -7,10 +7,11 @@ import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useToast } from "@/hooks/use-toast";
 import {
   ShieldCheck, AlertTriangle, XCircle, Loader2, RefreshCw,
   TrendingUp, TrendingDown, Wallet, PiggyBank, CreditCard, Banknote,
-  CheckCircle2, Bot,
+  CheckCircle2, Bot, Wrench,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -103,7 +104,9 @@ const HealthBadge = ({ discrepancies }: { discrepancies: number }) => {
 };
 
 export default function FinancialIntegrityChecker() {
+  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [fixing, setFixing] = useState(false);
   const [result, setResult] = useState<IntegrityResult | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -140,6 +143,67 @@ export default function FinancialIntegrityChecker() {
     }
   };
 
+  const handleFixErrors = async () => {
+    if (!result) return;
+    setFixing(true);
+
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error("Not authenticated");
+
+      const fixes: Array<{ type: string; id: string; correct_value: number }> = [];
+
+      // Collect account balance discrepancies
+      for (const acc of result.account_reports) {
+        if (Math.abs(acc.balance_discrepancy) > 0.01) {
+          fixes.push({ type: "account_balance", id: acc.account_id, correct_value: acc.calculated_balance });
+        }
+      }
+
+      // Collect loan outstanding discrepancies
+      for (const loan of result.loan_reports) {
+        if (Math.abs(loan.discrepancy) > 0.01) {
+          fixes.push({ type: "loan_outstanding", id: loan.loan_id, correct_value: loan.calculated_outstanding });
+        }
+      }
+
+      if (fixes.length === 0) {
+        toast({ title: "No Fixes Needed", description: "All values already match." });
+        setFixing(false);
+        return;
+      }
+
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const res = await fetch(`${supabaseUrl}/functions/v1/fix-integrity-errors`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+        },
+        body: JSON.stringify({ fixes }),
+      });
+
+      if (!res.ok) {
+        const body = await res.json();
+        throw new Error(body.error ?? `HTTP ${res.status}`);
+      }
+
+      const fixResult = await res.json();
+      toast({
+        title: "Fixes Applied",
+        description: fixResult.message,
+      });
+
+      // Re-run the integrity check to verify
+      await runCheck();
+    } catch (e) {
+      toast({ title: "Fix Failed", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setFixing(false);
+    }
+  };
+
   const totalDiscrepancies = (result?.summary.account_discrepancies ?? 0) + (result?.summary.loan_discrepancies ?? 0);
 
   return (
@@ -159,9 +223,15 @@ export default function FinancialIntegrityChecker() {
                 </CardDescription>
               </div>
             </div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 flex-wrap">
               {result && (
                 <HealthBadge discrepancies={totalDiscrepancies} />
+              )}
+              {result && totalDiscrepancies > 0 && (
+                <Button onClick={handleFixErrors} disabled={fixing} variant="destructive" className="gap-2">
+                  {fixing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wrench className="w-4 h-4" />}
+                  {fixing ? "Fixing…" : `Fix ${totalDiscrepancies} Error${totalDiscrepancies > 1 ? "s" : ""}`}
+                </Button>
               )}
               <Button onClick={runCheck} disabled={loading} className="gap-2">
                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
@@ -295,6 +365,15 @@ export default function FinancialIntegrityChecker() {
                 <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                 <AlertDescription className="text-emerald-700 dark:text-emerald-400">
                   All {result.summary.total_accounts} accounts and {result.summary.total_loans} loans passed integrity checks. No discrepancies found.
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {totalDiscrepancies > 0 && (
+              <Alert className="border-destructive/30 bg-destructive/5">
+                <AlertTriangle className="w-4 h-4 text-destructive" />
+                <AlertDescription className="text-destructive">
+                  {totalDiscrepancies} discrepanc{totalDiscrepancies > 1 ? "ies" : "y"} detected. Click the <strong>"Fix Errors"</strong> button above to automatically correct stored values to match recalculated transaction totals.
                 </AlertDescription>
               </Alert>
             )}
