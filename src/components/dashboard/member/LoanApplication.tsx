@@ -410,7 +410,7 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
                     </SelectContent>
                   </Select>
                   {eligibleGuarantors.length === 0 && (
-                    <p className="text-sm text-destructive">No eligible guarantors found. A guarantor must have savings ≥ the loan amount being applied for.</p>
+                    <p className="text-sm text-destructive">No eligible guarantors found. A guarantor must have savings ≥ 50% of the loan amount and must not be guaranteeing another active loan.</p>
                   )}
                   {guarantorError && <p className="text-sm text-destructive">{guarantorError}</p>}
                   {selectedMember && (

@@ -265,7 +265,8 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     );
 
     const loanAccount = accountsData.find(a => a.id === loanAccountId);
-    const minSavings = loanAccount?.total_savings || 0;
+    // Guarantor must have savings >= 50% of the applicant's loan amount
+    const minSavings = (selectedLoan?.amount || 0) * 0.5;
 
     const eligibleAccounts = accountsData.filter(a => 
       a.id !== loanAccountId && 
