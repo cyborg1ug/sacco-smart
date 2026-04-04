@@ -110,7 +110,8 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
         if (statusFilter === "overdue" && !overdue) return false;
         if (statusFilter === "pending" && loan.status !== "pending") return false;
         if (statusFilter === "approved" && loan.status !== "approved" && !(loan.status === "active" && !loan.disbursed_at)) return false;
-        if (statusFilter === "active" && (!["disbursed", "active"].includes(loan.status) || !loan.disbursed_at || overdue)) return false;
+        // Active: show disbursed/active loans INCLUDING overdue (overdue tab is a subset)
+        if (statusFilter === "active" && (!["disbursed", "active"].includes(loan.status) || !loan.disbursed_at || loan.outstanding_balance <= 0)) return false;
         if (statusFilter === "completed" && loan.status !== "completed" && loan.status !== "fully_paid") return false;
         if (statusFilter === "rejected" && loan.status !== "rejected") return false;
       }
