@@ -131,7 +131,7 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   }, [loans, statusFilter, searchQuery]);
 
   const overdueCount = useMemo(() => loans.filter(l => isLoanOverdue(l)).length, [loans]);
-  const activeCount = useMemo(() => loans.filter(l => ["disbursed", "active"].includes(l.status) && l.disbursed_at && !isLoanOverdue(l)).length, [loans]);
+  const activeCount = useMemo(() => loans.filter(l => ["disbursed", "active"].includes(l.status) && l.disbursed_at && l.outstanding_balance > 0).length, [loans]);
   const approvedCount = useMemo(() => loans.filter(l => l.status === "approved" || (l.status === "active" && !l.disbursed_at)).length, [loans]);
   const rejectedCount = useMemo(() => loans.filter(l => l.status === "rejected").length, [loans]);
 
