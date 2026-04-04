@@ -199,10 +199,11 @@ const LoanApplication = ({ onApplicationSubmitted }: LoanApplicationProps) => {
   const validateGuarantor = (guarantorId: string) => {
     if (!guarantorId) { setGuarantorError("Please select a guarantor"); return false; }
     const amount = parseFloat(loanAmount) || 0;
+    const minRequired = amount * 0.5;
     const guarantor = members.find(m => m.id === guarantorId);
     if (guarantorId === selectedAccountId) { setGuarantorError("You cannot be your own guarantor"); return false; }
-    if (!guarantor || guarantor.total_savings < amount) {
-      setGuarantorError(`Selected member's savings must be equal to or greater than the loan amount (UGX ${amount.toLocaleString()})`);
+    if (!guarantor || guarantor.total_savings < minRequired) {
+      setGuarantorError(`Selected member's savings must be at least 50% of the loan amount (UGX ${minRequired.toLocaleString()})`);
       return false;
     }
     setGuarantorError("");
