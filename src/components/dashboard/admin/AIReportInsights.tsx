@@ -380,7 +380,7 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
   };
 
   // ── Download helpers ─────────────────────────────────────────────────
-  const downloadPDF = () => {
+  const downloadPDF = async () => {
     if (!reportData) return;
     const d = reportData.rawData;
 
@@ -393,6 +393,55 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
         allTxns: d.allTxns || [], periodTxns: d.periodTxns || [],
         loans: d.loans || [], aiAnalysis: aiText || undefined,
       });
+    } else if (reportData.type === "audit") {
+      const ai = reportData.aiPayload;
+      const { default: jsPDF } = await import("jspdf");
+      const autoTable = (await import("jspdf-autotable")).default;
+      const doc = new jsPDF();
+      doc.setFontSize(16); doc.setFont("helvetica", "bold");
+      doc.text("KINONI SACCO — AUDIT REPORT", 14, 18);
+      doc.setFontSize(11); doc.setFont("helvetica", "normal");
+      doc.text(`Entry Type: ${ai.entryTypeLabel}`, 14, 26);
+      doc.text(`Period: ${ai.period}`, 14, 32);
+      doc.text(`Generated: ${ai.generatedAt}`, 14, 38);
+
+      autoTable(doc, {
+        startY: 44,
+        head: [["Metric", "Value"]],
+        body: [
+          ["Records in Period", String(ai.recordCount)],
+          ["Period Total (UGX)", Number(ai.periodTotal).toLocaleString()],
+          ["All-Time Records", String(ai.allTimeCount)],
+          ["All-Time Total (UGX)", Number(ai.allTimeTotal).toLocaleString()],
+          ["Average (UGX)", Number(ai.avgAmount).toLocaleString()],
+          ["Largest (UGX)", Number(ai.maxAmount).toLocaleString()],
+          ["Smallest (UGX)", Number(ai.minAmount).toLocaleString()],
+          ["Unique Members", String(ai.uniqueMembers)],
+        ],
+        theme: "grid",
+        headStyles: { fillColor: [30, 41, 59] },
+      });
+
+      if ((ai.memberBreakdown || []).length) {
+        autoTable(doc, {
+          head: [["Member", "Account", "Count", "Total (UGX)"]],
+          body: ai.memberBreakdown.slice(0, 30).map((m: any) =>
+            [m.name, m.accountNumber, String(m.count), Number(m.total).toLocaleString()]),
+          theme: "striped",
+          headStyles: { fillColor: [30, 41, 59] },
+        });
+      }
+
+      if (aiText) {
+        doc.addPage();
+        doc.setFontSize(13); doc.setFont("helvetica", "bold");
+        doc.text("AI AUDIT REMARKS & RECOMMENDATIONS", 14, 18);
+        doc.setFontSize(9); doc.setFont("helvetica", "normal");
+        const lines = doc.splitTextToSize(aiText, 180);
+        doc.text(lines, 14, 26);
+      }
+
+      doc.save(`KINONI_SACCO_audit_${ai.entryType}_${format(new Date(), "yyyyMMdd")}.pdf`);
     } else {
       const ai = reportData.aiPayload;
       generateBankGroupPDF({
