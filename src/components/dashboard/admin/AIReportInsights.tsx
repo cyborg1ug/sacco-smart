@@ -472,7 +472,25 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
 
     let sections: { heading: string; rows: [string, string][] }[] = [];
 
-    if (reportData.type === "group") {
+    if (reportData.type === "audit") {
+      sections = [
+        { heading: `Audit Scope — ${ai.entryTypeLabel}`, rows: [
+          ["Period", ai.period],
+          ["Records in Period", String(ai.recordCount)],
+          ["Unique Members", String(ai.uniqueMembers)],
+        ]},
+        { heading: "Period Aggregates", rows: [
+          ["Period Total", `UGX ${Number(ai.periodTotal).toLocaleString()}`],
+          ["Average Amount", `UGX ${Number(ai.avgAmount).toLocaleString()}`],
+          ["Largest Entry", `UGX ${Number(ai.maxAmount).toLocaleString()}`],
+          ["Smallest Entry", `UGX ${Number(ai.minAmount).toLocaleString()}`],
+        ]},
+        { heading: "All-Time Totals", rows: [
+          ["All-Time Records", String(ai.allTimeCount)],
+          ["All-Time Total", `UGX ${Number(ai.allTimeTotal).toLocaleString()}`],
+        ]},
+      ];
+    } else if (reportData.type === "group") {
       sections = [
         { heading: "Organisation Overview", rows: [
           ["Total Members", String(ai.totalMembers)],
