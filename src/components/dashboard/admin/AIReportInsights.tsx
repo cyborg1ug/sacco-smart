@@ -682,6 +682,7 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
                 <SelectContent>
                   <SelectItem value="group">🏦 Group (All Members)</SelectItem>
                   <SelectItem value="member">👤 Individual Member</SelectItem>
+                  <SelectItem value="audit">🔍 Audit by Entry Type</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -694,6 +695,25 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
                     {members.map(m => (
                       <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {reportType === "audit" && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Entry Type</label>
+                <Select value={entryType} onValueChange={(v) => { setEntryType(v as EntryType); setAiText(""); setReportData(null); }}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="deposit">💰 Deposits</SelectItem>
+                    <SelectItem value="withdrawal">💸 Withdrawals</SelectItem>
+                    <SelectItem value="loan_disbursement">📤 Loan Disbursements</SelectItem>
+                    <SelectItem value="loan_repayment">📥 Loan Repayments</SelectItem>
+                    <SelectItem value="interest_received">📈 Interest Received</SelectItem>
+                    <SelectItem value="savings">🏦 Weekly Savings</SelectItem>
+                    <SelectItem value="welfare">🤝 Welfare Contributions</SelectItem>
+                    <SelectItem value="loans_active">📋 Active Loans Portfolio</SelectItem>
+                    <SelectItem value="loans_overdue">⚠️ Overdue Loans</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
