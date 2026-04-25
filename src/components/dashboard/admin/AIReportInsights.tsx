@@ -127,8 +127,6 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
 
     // Audit by Entry Type
     if (reportType === "audit") {
-      const [{ data: accounts: aAcc }, { data: profiles: aProf }, { data: subProfiles: aSub }] = [null,null,null] as any;
-      void aAcc; void aProf; void aSub;
       const accountsRes = await supabase.from("accounts").select("*");
       const profilesRes = await supabase.from("profiles").select("id, full_name");
       const subProfilesRes = await supabase.from("sub_account_profiles").select("account_id, full_name");
