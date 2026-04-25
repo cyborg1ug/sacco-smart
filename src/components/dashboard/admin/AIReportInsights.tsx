@@ -125,6 +125,124 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
       };
     }
 
+    // Audit by Entry Type
+    if (reportType === "audit") {
+      const [{ data: accounts: aAcc }, { data: profiles: aProf }, { data: subProfiles: aSub }] = [null,null,null] as any;
+      void aAcc; void aProf; void aSub;
+      const accountsRes = await supabase.from("accounts").select("*");
+      const profilesRes = await supabase.from("profiles").select("id, full_name");
+      const subProfilesRes = await supabase.from("sub_account_profiles").select("account_id, full_name");
+      const auditAccounts = accountsRes.data || [];
+      const auditProfiles = profilesRes.data || [];
+      const auditSubProfiles = subProfilesRes.data || [];
+
+      const accMap = new Map<string, any>(auditAccounts.map((a: any) => [a.id, a]));
+      const getMemberName = (acc: any) => {
+        if (!acc) return "Unknown";
+        if (acc.account_type === "sub") return auditSubProfiles.find((p: any) => p.account_id === acc.id)?.full_name || "Unknown (Sub)";
+        return auditProfiles.find((p: any) => p.id === acc.user_id)?.full_name || "Unknown";
+      };
+
+      let records: any[] = [];
+      let allTimeRecords: any[] = [];
+      let extraMetrics = "";
+
+      if (entryType === "savings") {
+        const pSav = (await supabase.from("savings").select("*").gte("week_start", dr.start.toISOString()).lte("week_end", dr.end.toISOString())).data || [];
+        const allSav = (await supabase.from("savings").select("*")).data || [];
+        records = pSav.map((s: any) => ({
+          amount: Number(s.amount), accountId: s.account_id,
+          label: `${getMemberName(accMap.get(s.account_id))} — week ${format(new Date(s.week_start), "dd MMM")}`,
+          extra: `${format(new Date(s.week_start), "dd MMM")}–${format(new Date(s.week_end), "dd MMM yyyy")}`,
+        }));
+        allTimeRecords = allSav.map((s: any) => ({ amount: Number(s.amount), accountId: s.account_id }));
+      } else if (entryType === "welfare") {
+        const pW = (await supabase.from("welfare").select("*").gte("week_date", dr.start.toISOString().slice(0, 10)).lte("week_date", dr.end.toISOString().slice(0, 10))).data || [];
+        const allW = (await supabase.from("welfare").select("*")).data || [];
+        records = pW.map((w: any) => ({
+          amount: Number(w.amount), accountId: w.account_id,
+          label: `${getMemberName(accMap.get(w.account_id))} — ${format(new Date(w.week_date), "dd MMM yyyy")}`,
+          extra: w.description || "Weekly welfare",
+        }));
+        allTimeRecords = allW.map((w: any) => ({ amount: Number(w.amount), accountId: w.account_id }));
+      } else if (entryType === "loans_active" || entryType === "loans_overdue") {
+        const allLoans = (await supabase.from("loans").select("*")).data || [];
+        const active = allLoans.filter((l: any) => ["disbursed", "active"].includes(l.status) && Number(l.outstanding_balance) > 0);
+        const filtered = entryType === "loans_overdue" ? active.filter((l: any) => isOverdue(l)) : active;
+        const inPeriod = filtered.filter((l: any) => {
+          if (!l.disbursed_at) return false;
+          const t = new Date(l.disbursed_at).getTime();
+          return t >= dr.start.getTime() && t <= dr.end.getTime();
+        });
+        records = inPeriod.map((l: any) => ({
+          amount: Number(l.outstanding_balance), accountId: l.account_id,
+          label: `${getMemberName(accMap.get(l.account_id))} — Loan UGX ${Number(l.amount).toLocaleString()}`,
+          extra: entryType === "loans_overdue"
+            ? `${daysOverdue(l)} days overdue, ${l.repayment_months}m term`
+            : `${l.repayment_months}m term, ${l.purpose || "no purpose"}`,
+        }));
+        allTimeRecords = filtered.map((l: any) => ({ amount: Number(l.outstanding_balance), accountId: l.account_id }));
+
+        if (entryType === "loans_overdue") {
+          const totalPenalty = filtered.reduce((s: number, l: any) => {
+            const days = daysOverdue(l);
+            return s + Math.round(Number(l.amount) * (Number(l.interest_rate || 2) / 100 / 30) * days);
+          }, 0);
+          const avgDays = filtered.length ? Math.round(filtered.reduce((s: number, l: any) => s + daysOverdue(l), 0) / filtered.length) : 0;
+          extraMetrics = `- Average Days Overdue: ${avgDays}\n- Estimated Accrued Penalty: UGX ${totalPenalty.toLocaleString()}\n- Loans > 90 days overdue: ${filtered.filter((l: any) => daysOverdue(l) > 90).length}`;
+        } else {
+          const purposeCounts: Record<string, number> = {};
+          filtered.forEach((l: any) => { const p = l.purpose || "Unspecified"; purposeCounts[p] = (purposeCounts[p] || 0) + 1; });
+          const purposeBreak = Object.entries(purposeCounts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([p, c]) => `  • ${p}: ${c}`).join("\n");
+          extraMetrics = `Loan Purpose Distribution:\n${purposeBreak || "  • No purpose data"}`;
+        }
+      } else {
+        const pTxn = (await supabase.from("transactions").select("*").eq("transaction_type", entryType).eq("status", "approved")
+          .gte("created_at", dr.start.toISOString()).lte("created_at", dr.end.toISOString())).data || [];
+        const allTxn = (await supabase.from("transactions").select("*").eq("transaction_type", entryType).eq("status", "approved")).data || [];
+        records = pTxn.map((t: any) => ({
+          amount: Number(t.amount), accountId: t.account_id,
+          label: `${getMemberName(accMap.get(t.account_id))} — ${format(new Date(t.created_at), "dd MMM yyyy")}`,
+          extra: t.tnx_id ? `TNX ${t.tnx_id}` : (t.description || ""),
+        }));
+        allTimeRecords = allTxn.map((t: any) => ({ amount: Number(t.amount), accountId: t.account_id }));
+      }
+
+      const amounts = records.map(r => r.amount).filter(n => !isNaN(n));
+      const periodTotal = amounts.reduce((s, n) => s + n, 0);
+      const allTimeTotal = allTimeRecords.reduce((s, r) => s + Number(r.amount || 0), 0);
+      const uniqueMembersSet = new Set<string>();
+      records.forEach(r => { const acc = accMap.get(r.accountId); if (acc) uniqueMembersSet.add(acc.user_id || acc.id); });
+
+      const memberAgg = new Map<string, { name: string; accountNumber: string; count: number; total: number }>();
+      records.forEach(r => {
+        const acc = accMap.get(r.accountId);
+        const name = getMemberName(acc); const accNo = acc?.account_number || "—";
+        const key = `${name}|${accNo}`;
+        const cur = memberAgg.get(key) || { name, accountNumber: accNo, count: 0, total: 0 };
+        cur.count += 1; cur.total += r.amount;
+        memberAgg.set(key, cur);
+      });
+      const memberBreakdown = Array.from(memberAgg.values()).sort((a, b) => b.total - a.total);
+      const topRecords = [...records].sort((a, b) => b.amount - a.amount);
+
+      const aiPayload = {
+        entryType,
+        entryTypeLabel: ENTRY_TYPE_LABELS[entryType],
+        period: `${format(dr.start, "dd MMM yyyy")} — ${format(dr.end, "dd MMM yyyy")}`,
+        generatedAt: format(new Date(), "dd MMM yyyy HH:mm"),
+        recordCount: records.length,
+        periodTotal, allTimeCount: allTimeRecords.length, allTimeTotal,
+        avgAmount: amounts.length ? Math.round(periodTotal / amounts.length) : 0,
+        maxAmount: amounts.length ? Math.max(...amounts) : 0,
+        minAmount: amounts.length ? Math.min(...amounts) : 0,
+        uniqueMembers: uniqueMembersSet.size,
+        topRecords, memberBreakdown, extraMetrics,
+      };
+
+      return { type: "audit", aiPayload, rawData: { dr, records, memberBreakdown, topRecords } };
+    }
+
     // ── Group ─────────────────────────────────────────────────────────
     const [{ data: accounts }, { data: profiles }, { data: subProfiles },
            { data: allTxns }, { data: periodTxns }, { data: allLoans }, { data: savings }] = await Promise.all([
