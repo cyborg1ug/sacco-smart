@@ -14,11 +14,36 @@ interface AIReportInsightsProps {
   members: { id: string; full_name: string; accounts: any[] }[];
 }
 
+type ReportScope = "member" | "group" | "audit";
+type EntryType =
+  | "deposit"
+  | "withdrawal"
+  | "loan_disbursement"
+  | "loan_repayment"
+  | "interest_received"
+  | "savings"
+  | "welfare"
+  | "loans_overdue"
+  | "loans_active";
+
+const ENTRY_TYPE_LABELS: Record<EntryType, string> = {
+  deposit: "Deposits",
+  withdrawal: "Withdrawals",
+  loan_disbursement: "Loan Disbursements",
+  loan_repayment: "Loan Repayments",
+  interest_received: "Interest Received",
+  savings: "Weekly Savings",
+  welfare: "Welfare Contributions",
+  loans_overdue: "Overdue Loans",
+  loans_active: "Active Loans Portfolio",
+};
+
 export default function AIReportInsights({ members }: AIReportInsightsProps) {
   const { toast } = useToast();
-  const [reportType, setReportType]     = useState<"member" | "group">("group");
+  const [reportType, setReportType]     = useState<ReportScope>("group");
   const [selectedMember, setSelectedMember] = useState("");
   const [reportPeriod, setReportPeriod] = useState("current");
+  const [entryType, setEntryType]       = useState<EntryType>("deposit");
   const [streaming, setStreaming]       = useState(false);
   const [aiText, setAiText]             = useState("");
   const [reportData, setReportData]     = useState<any>(null);
