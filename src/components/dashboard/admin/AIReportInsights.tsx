@@ -548,7 +548,34 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
     const ai = reportData.aiPayload;
     const d  = reportData.rawData;
 
-    const sheets = reportData.type === "group"
+    const sheets = reportData.type === "audit"
+      ? [
+          { name: "Audit Summary", data: [
+            ["KINONI SACCO — AUDIT REPORT"],
+            [`Entry Type: ${ai.entryTypeLabel}`],
+            [`Period: ${ai.period}`],
+            [`Generated: ${ai.generatedAt}`],
+            [],
+            ["AGGREGATES"],
+            ["Records in Period", ai.recordCount],
+            ["Period Total (UGX)", ai.periodTotal],
+            ["All-Time Records", ai.allTimeCount],
+            ["All-Time Total (UGX)", ai.allTimeTotal],
+            ["Average (UGX)", ai.avgAmount],
+            ["Largest (UGX)", ai.maxAmount],
+            ["Smallest (UGX)", ai.minAmount],
+            ["Unique Members", ai.uniqueMembers],
+          ]},
+          { name: "Member Breakdown", data: [
+            ["Member", "Account No.", "Count", "Total (UGX)"],
+            ...(ai.memberBreakdown || []).map((m: any) => [m.name, m.accountNumber, m.count, m.total]),
+          ]},
+          { name: "Top Entries", data: [
+            ["Description", "Amount (UGX)", "Notes"],
+            ...(ai.topRecords || []).slice(0, 100).map((r: any) => [r.label, r.amount, r.extra || ""]),
+          ]},
+        ]
+      : reportData.type === "group"
       ? [
           { name: "Summary", data: [
             ["KINONI SACCO — GROUP FINANCIAL REPORT"],
