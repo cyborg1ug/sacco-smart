@@ -14,11 +14,36 @@ interface AIReportInsightsProps {
   members: { id: string; full_name: string; accounts: any[] }[];
 }
 
+type ReportScope = "member" | "group" | "audit";
+type EntryType =
+  | "deposit"
+  | "withdrawal"
+  | "loan_disbursement"
+  | "loan_repayment"
+  | "interest_received"
+  | "savings"
+  | "welfare"
+  | "loans_overdue"
+  | "loans_active";
+
+const ENTRY_TYPE_LABELS: Record<EntryType, string> = {
+  deposit: "Deposits",
+  withdrawal: "Withdrawals",
+  loan_disbursement: "Loan Disbursements",
+  loan_repayment: "Loan Repayments",
+  interest_received: "Interest Received",
+  savings: "Weekly Savings",
+  welfare: "Welfare Contributions",
+  loans_overdue: "Overdue Loans",
+  loans_active: "Active Loans Portfolio",
+};
+
 export default function AIReportInsights({ members }: AIReportInsightsProps) {
   const { toast } = useToast();
-  const [reportType, setReportType]     = useState<"member" | "group">("group");
+  const [reportType, setReportType]     = useState<ReportScope>("group");
   const [selectedMember, setSelectedMember] = useState("");
   const [reportPeriod, setReportPeriod] = useState("current");
+  const [entryType, setEntryType]       = useState<EntryType>("deposit");
   const [streaming, setStreaming]       = useState(false);
   const [aiText, setAiText]             = useState("");
   const [reportData, setReportData]     = useState<any>(null);
@@ -98,6 +123,122 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
         aiPayload,
         rawData: { profile, acc, allTxns, periodTxns, loans, savings, dr },
       };
+    }
+
+    // Audit by Entry Type
+    if (reportType === "audit") {
+      const accountsRes = await supabase.from("accounts").select("*");
+      const profilesRes = await supabase.from("profiles").select("id, full_name");
+      const subProfilesRes = await supabase.from("sub_account_profiles").select("account_id, full_name");
+      const auditAccounts = accountsRes.data || [];
+      const auditProfiles = profilesRes.data || [];
+      const auditSubProfiles = subProfilesRes.data || [];
+
+      const accMap = new Map<string, any>(auditAccounts.map((a: any) => [a.id, a]));
+      const getMemberName = (acc: any) => {
+        if (!acc) return "Unknown";
+        if (acc.account_type === "sub") return auditSubProfiles.find((p: any) => p.account_id === acc.id)?.full_name || "Unknown (Sub)";
+        return auditProfiles.find((p: any) => p.id === acc.user_id)?.full_name || "Unknown";
+      };
+
+      let records: any[] = [];
+      let allTimeRecords: any[] = [];
+      let extraMetrics = "";
+
+      if (entryType === "savings") {
+        const pSav = (await supabase.from("savings").select("*").gte("week_start", dr.start.toISOString()).lte("week_end", dr.end.toISOString())).data || [];
+        const allSav = (await supabase.from("savings").select("*")).data || [];
+        records = pSav.map((s: any) => ({
+          amount: Number(s.amount), accountId: s.account_id,
+          label: `${getMemberName(accMap.get(s.account_id))} — week ${format(new Date(s.week_start), "dd MMM")}`,
+          extra: `${format(new Date(s.week_start), "dd MMM")}–${format(new Date(s.week_end), "dd MMM yyyy")}`,
+        }));
+        allTimeRecords = allSav.map((s: any) => ({ amount: Number(s.amount), accountId: s.account_id }));
+      } else if (entryType === "welfare") {
+        const pW = (await supabase.from("welfare").select("*").gte("week_date", dr.start.toISOString().slice(0, 10)).lte("week_date", dr.end.toISOString().slice(0, 10))).data || [];
+        const allW = (await supabase.from("welfare").select("*")).data || [];
+        records = pW.map((w: any) => ({
+          amount: Number(w.amount), accountId: w.account_id,
+          label: `${getMemberName(accMap.get(w.account_id))} — ${format(new Date(w.week_date), "dd MMM yyyy")}`,
+          extra: w.description || "Weekly welfare",
+        }));
+        allTimeRecords = allW.map((w: any) => ({ amount: Number(w.amount), accountId: w.account_id }));
+      } else if (entryType === "loans_active" || entryType === "loans_overdue") {
+        const allLoans = (await supabase.from("loans").select("*")).data || [];
+        const active = allLoans.filter((l: any) => ["disbursed", "active"].includes(l.status) && Number(l.outstanding_balance) > 0);
+        const filtered = entryType === "loans_overdue" ? active.filter((l: any) => isOverdue(l)) : active;
+        const inPeriod = filtered.filter((l: any) => {
+          if (!l.disbursed_at) return false;
+          const t = new Date(l.disbursed_at).getTime();
+          return t >= dr.start.getTime() && t <= dr.end.getTime();
+        });
+        records = inPeriod.map((l: any) => ({
+          amount: Number(l.outstanding_balance), accountId: l.account_id,
+          label: `${getMemberName(accMap.get(l.account_id))} — Loan UGX ${Number(l.amount).toLocaleString()}`,
+          extra: entryType === "loans_overdue"
+            ? `${daysOverdue(l)} days overdue, ${l.repayment_months}m term`
+            : `${l.repayment_months}m term, ${l.purpose || "no purpose"}`,
+        }));
+        allTimeRecords = filtered.map((l: any) => ({ amount: Number(l.outstanding_balance), accountId: l.account_id }));
+
+        if (entryType === "loans_overdue") {
+          const totalPenalty = filtered.reduce((s: number, l: any) => {
+            const days = daysOverdue(l);
+            return s + Math.round(Number(l.amount) * (Number(l.interest_rate || 2) / 100 / 30) * days);
+          }, 0);
+          const avgDays = filtered.length ? Math.round(filtered.reduce((s: number, l: any) => s + daysOverdue(l), 0) / filtered.length) : 0;
+          extraMetrics = `- Average Days Overdue: ${avgDays}\n- Estimated Accrued Penalty: UGX ${totalPenalty.toLocaleString()}\n- Loans > 90 days overdue: ${filtered.filter((l: any) => daysOverdue(l) > 90).length}`;
+        } else {
+          const purposeCounts: Record<string, number> = {};
+          filtered.forEach((l: any) => { const p = l.purpose || "Unspecified"; purposeCounts[p] = (purposeCounts[p] || 0) + 1; });
+          const purposeBreak = Object.entries(purposeCounts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([p, c]) => `  • ${p}: ${c}`).join("\n");
+          extraMetrics = `Loan Purpose Distribution:\n${purposeBreak || "  • No purpose data"}`;
+        }
+      } else {
+        const pTxn = (await supabase.from("transactions").select("*").eq("transaction_type", entryType).eq("status", "approved")
+          .gte("created_at", dr.start.toISOString()).lte("created_at", dr.end.toISOString())).data || [];
+        const allTxn = (await supabase.from("transactions").select("*").eq("transaction_type", entryType).eq("status", "approved")).data || [];
+        records = pTxn.map((t: any) => ({
+          amount: Number(t.amount), accountId: t.account_id,
+          label: `${getMemberName(accMap.get(t.account_id))} — ${format(new Date(t.created_at), "dd MMM yyyy")}`,
+          extra: t.tnx_id ? `TNX ${t.tnx_id}` : (t.description || ""),
+        }));
+        allTimeRecords = allTxn.map((t: any) => ({ amount: Number(t.amount), accountId: t.account_id }));
+      }
+
+      const amounts = records.map(r => r.amount).filter(n => !isNaN(n));
+      const periodTotal = amounts.reduce((s, n) => s + n, 0);
+      const allTimeTotal = allTimeRecords.reduce((s, r) => s + Number(r.amount || 0), 0);
+      const uniqueMembersSet = new Set<string>();
+      records.forEach(r => { const acc = accMap.get(r.accountId); if (acc) uniqueMembersSet.add(acc.user_id || acc.id); });
+
+      const memberAgg = new Map<string, { name: string; accountNumber: string; count: number; total: number }>();
+      records.forEach(r => {
+        const acc = accMap.get(r.accountId);
+        const name = getMemberName(acc); const accNo = acc?.account_number || "—";
+        const key = `${name}|${accNo}`;
+        const cur = memberAgg.get(key) || { name, accountNumber: accNo, count: 0, total: 0 };
+        cur.count += 1; cur.total += r.amount;
+        memberAgg.set(key, cur);
+      });
+      const memberBreakdown = Array.from(memberAgg.values()).sort((a, b) => b.total - a.total);
+      const topRecords = [...records].sort((a, b) => b.amount - a.amount);
+
+      const aiPayload = {
+        entryType,
+        entryTypeLabel: ENTRY_TYPE_LABELS[entryType],
+        period: `${format(dr.start, "dd MMM yyyy")} — ${format(dr.end, "dd MMM yyyy")}`,
+        generatedAt: format(new Date(), "dd MMM yyyy HH:mm"),
+        recordCount: records.length,
+        periodTotal, allTimeCount: allTimeRecords.length, allTimeTotal,
+        avgAmount: amounts.length ? Math.round(periodTotal / amounts.length) : 0,
+        maxAmount: amounts.length ? Math.max(...amounts) : 0,
+        minAmount: amounts.length ? Math.min(...amounts) : 0,
+        uniqueMembers: uniqueMembersSet.size,
+        topRecords, memberBreakdown, extraMetrics,
+      };
+
+      return { type: "audit", aiPayload, rawData: { dr, records, memberBreakdown, topRecords } };
     }
 
     // ── Group ─────────────────────────────────────────────────────────
@@ -239,7 +380,7 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
   };
 
   // ── Download helpers ─────────────────────────────────────────────────
-  const downloadPDF = () => {
+  const downloadPDF = async () => {
     if (!reportData) return;
     const d = reportData.rawData;
 
@@ -252,6 +393,55 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
         allTxns: d.allTxns || [], periodTxns: d.periodTxns || [],
         loans: d.loans || [], aiAnalysis: aiText || undefined,
       });
+    } else if (reportData.type === "audit") {
+      const ai = reportData.aiPayload;
+      const { default: jsPDF } = await import("jspdf");
+      const autoTable = (await import("jspdf-autotable")).default;
+      const doc = new jsPDF();
+      doc.setFontSize(16); doc.setFont("helvetica", "bold");
+      doc.text("KINONI SACCO — AUDIT REPORT", 14, 18);
+      doc.setFontSize(11); doc.setFont("helvetica", "normal");
+      doc.text(`Entry Type: ${ai.entryTypeLabel}`, 14, 26);
+      doc.text(`Period: ${ai.period}`, 14, 32);
+      doc.text(`Generated: ${ai.generatedAt}`, 14, 38);
+
+      autoTable(doc, {
+        startY: 44,
+        head: [["Metric", "Value"]],
+        body: [
+          ["Records in Period", String(ai.recordCount)],
+          ["Period Total (UGX)", Number(ai.periodTotal).toLocaleString()],
+          ["All-Time Records", String(ai.allTimeCount)],
+          ["All-Time Total (UGX)", Number(ai.allTimeTotal).toLocaleString()],
+          ["Average (UGX)", Number(ai.avgAmount).toLocaleString()],
+          ["Largest (UGX)", Number(ai.maxAmount).toLocaleString()],
+          ["Smallest (UGX)", Number(ai.minAmount).toLocaleString()],
+          ["Unique Members", String(ai.uniqueMembers)],
+        ],
+        theme: "grid",
+        headStyles: { fillColor: [30, 41, 59] },
+      });
+
+      if ((ai.memberBreakdown || []).length) {
+        autoTable(doc, {
+          head: [["Member", "Account", "Count", "Total (UGX)"]],
+          body: ai.memberBreakdown.slice(0, 30).map((m: any) =>
+            [m.name, m.accountNumber, String(m.count), Number(m.total).toLocaleString()]),
+          theme: "striped",
+          headStyles: { fillColor: [30, 41, 59] },
+        });
+      }
+
+      if (aiText) {
+        doc.addPage();
+        doc.setFontSize(13); doc.setFont("helvetica", "bold");
+        doc.text("AI AUDIT REMARKS & RECOMMENDATIONS", 14, 18);
+        doc.setFontSize(9); doc.setFont("helvetica", "normal");
+        const lines = doc.splitTextToSize(aiText, 180);
+        doc.text(lines, 14, 26);
+      }
+
+      doc.save(`KINONI_SACCO_audit_${ai.entryType}_${format(new Date(), "yyyyMMdd")}.pdf`);
     } else {
       const ai = reportData.aiPayload;
       generateBankGroupPDF({
@@ -282,7 +472,25 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
 
     let sections: { heading: string; rows: [string, string][] }[] = [];
 
-    if (reportData.type === "group") {
+    if (reportData.type === "audit") {
+      sections = [
+        { heading: `Audit Scope — ${ai.entryTypeLabel}`, rows: [
+          ["Period", ai.period],
+          ["Records in Period", String(ai.recordCount)],
+          ["Unique Members", String(ai.uniqueMembers)],
+        ]},
+        { heading: "Period Aggregates", rows: [
+          ["Period Total", `UGX ${Number(ai.periodTotal).toLocaleString()}`],
+          ["Average Amount", `UGX ${Number(ai.avgAmount).toLocaleString()}`],
+          ["Largest Entry", `UGX ${Number(ai.maxAmount).toLocaleString()}`],
+          ["Smallest Entry", `UGX ${Number(ai.minAmount).toLocaleString()}`],
+        ]},
+        { heading: "All-Time Totals", rows: [
+          ["All-Time Records", String(ai.allTimeCount)],
+          ["All-Time Total", `UGX ${Number(ai.allTimeTotal).toLocaleString()}`],
+        ]},
+      ];
+    } else if (reportData.type === "group") {
       sections = [
         { heading: "Organisation Overview", rows: [
           ["Total Members", String(ai.totalMembers)],
@@ -340,7 +548,34 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
     const ai = reportData.aiPayload;
     const d  = reportData.rawData;
 
-    const sheets = reportData.type === "group"
+    const sheets = reportData.type === "audit"
+      ? [
+          { name: "Audit Summary", data: [
+            ["KINONI SACCO — AUDIT REPORT"],
+            [`Entry Type: ${ai.entryTypeLabel}`],
+            [`Period: ${ai.period}`],
+            [`Generated: ${ai.generatedAt}`],
+            [],
+            ["AGGREGATES"],
+            ["Records in Period", ai.recordCount],
+            ["Period Total (UGX)", ai.periodTotal],
+            ["All-Time Records", ai.allTimeCount],
+            ["All-Time Total (UGX)", ai.allTimeTotal],
+            ["Average (UGX)", ai.avgAmount],
+            ["Largest (UGX)", ai.maxAmount],
+            ["Smallest (UGX)", ai.minAmount],
+            ["Unique Members", ai.uniqueMembers],
+          ]},
+          { name: "Member Breakdown", data: [
+            ["Member", "Account No.", "Count", "Total (UGX)"],
+            ...(ai.memberBreakdown || []).map((m: any) => [m.name, m.accountNumber, m.count, m.total]),
+          ]},
+          { name: "Top Entries", data: [
+            ["Description", "Amount (UGX)", "Notes"],
+            ...(ai.topRecords || []).slice(0, 100).map((r: any) => [r.label, r.amount, r.extra || ""]),
+          ]},
+        ]
+      : reportData.type === "group"
       ? [
           { name: "Summary", data: [
             ["KINONI SACCO — GROUP FINANCIAL REPORT"],
@@ -447,6 +682,7 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
                 <SelectContent>
                   <SelectItem value="group">🏦 Group (All Members)</SelectItem>
                   <SelectItem value="member">👤 Individual Member</SelectItem>
+                  <SelectItem value="audit">🔍 Audit by Entry Type</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -459,6 +695,25 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
                     {members.map(m => (
                       <SelectItem key={m.id} value={m.id}>{m.full_name}</SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            {reportType === "audit" && (
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Entry Type</label>
+                <Select value={entryType} onValueChange={(v) => { setEntryType(v as EntryType); setAiText(""); setReportData(null); }}>
+                  <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="deposit">💰 Deposits</SelectItem>
+                    <SelectItem value="withdrawal">💸 Withdrawals</SelectItem>
+                    <SelectItem value="loan_disbursement">📤 Loan Disbursements</SelectItem>
+                    <SelectItem value="loan_repayment">📥 Loan Repayments</SelectItem>
+                    <SelectItem value="interest_received">📈 Interest Received</SelectItem>
+                    <SelectItem value="savings">🏦 Weekly Savings</SelectItem>
+                    <SelectItem value="welfare">🤝 Welfare Contributions</SelectItem>
+                    <SelectItem value="loans_active">📋 Active Loans Portfolio</SelectItem>
+                    <SelectItem value="loans_overdue">⚠️ Overdue Loans</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

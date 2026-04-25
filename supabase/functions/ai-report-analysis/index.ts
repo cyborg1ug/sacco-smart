@@ -15,6 +15,56 @@ serve(async (req) => {
     const { reportType, data } = await req.json();
 
     const buildPrompt = (type: string, d: any): string => {
+      if (type === "audit") {
+        const entryLabel = d.entryTypeLabel || d.entryType;
+        const top = (d.topRecords || []).slice(0, 15).map((r: any, i: number) =>
+          `${i + 1}. ${r.label} — UGX ${Number(r.amount || 0).toLocaleString()}${r.extra ? ` (${r.extra})` : ""}`
+        ).join("\n") || "No records in this period.";
+
+        const memberBreak = (d.memberBreakdown || []).slice(0, 15).map((m: any, i: number) =>
+          `${i + 1}. ${m.name} (${m.accountNumber}) — Count: ${m.count}, Total: UGX ${Number(m.total).toLocaleString()}`
+        ).join("\n") || "No member activity.";
+
+        return `You are a senior SACCO auditor for KINONI SACCO (Uganda). Conduct a DEEP FORENSIC AUDIT focused exclusively on the entry type: ${entryLabel}.
+
+Report Period: ${d.period}
+Generated: ${d.generatedAt}
+Entry Type Audited: ${entryLabel}
+
+AGGREGATE FIGURES (${entryLabel}):
+- Total Records in Period: ${d.recordCount}
+- Total Value in Period: UGX ${Number(d.periodTotal).toLocaleString()}
+- All-Time Records: ${d.allTimeCount}
+- All-Time Total: UGX ${Number(d.allTimeTotal).toLocaleString()}
+- Average Transaction Size: UGX ${Number(d.avgAmount).toLocaleString()}
+- Largest Single Entry: UGX ${Number(d.maxAmount).toLocaleString()}
+- Smallest Single Entry: UGX ${Number(d.minAmount).toLocaleString()}
+- Unique Members Involved: ${d.uniqueMembers}
+- Period vs All-Time Share: ${d.allTimeTotal > 0 ? ((d.periodTotal / d.allTimeTotal) * 100).toFixed(1) : 0}%
+
+${d.extraMetrics ? `SPECIALISED METRICS:\n${d.extraMetrics}\n` : ""}
+TOP 15 ENTRIES BY VALUE:
+${top}
+
+TOP 15 MEMBERS BY ACTIVITY:
+${memberBreak}
+
+Write a thorough audit report with these EXACT sections:
+
+1. AUDIT SCOPE & METHODOLOGY (2-3 sentences explaining what was audited and how)
+2. EXECUTIVE SUMMARY (4-5 sentences — overall health of this entry type)
+3. KEY FINDINGS (5-7 bullet observations from the data — concentrations, anomalies, trends)
+4. STATISTICAL ANALYSIS (deep numerical interpretation — averages, distribution, member concentration ratios)
+5. RISK FLAGS & ANOMALIES (specific concerns: unusual volumes, single-member concentration, missing controls, irregular patterns) — explicitly state if NONE found
+6. COMPLIANCE OBSERVATIONS (relevance to Uganda SACCO regulations and internal controls)
+7. AI REMARKS (clear professional remarks summarising the auditor's verdict — Healthy / Watch / Concern)
+8. RECOMMENDATIONS TO COUNTERACT REMARKS (5-7 SPECIFIC actionable steps to address each remark or risk; if no risks, give 3 recommendations to maintain quality)
+9. SUGGESTED FOLLOW-UP ACTIONS (3-5 immediate next steps for management)
+10. AUDITOR'S CERTIFICATION NOTE
+
+Use UGX currency throughout. Be precise with numbers and percentages. Speak directly and professionally as a forensic auditor.`;
+      }
+
       if (type === "member") {
         const overdueInfo = d.overdueLoans?.length > 0
           ? `OVERDUE LOANS: ${d.overdueLoans.map((l: any) => `Principal UGX ${l.amount?.toLocaleString()}, Outstanding UGX ${l.outstanding_balance?.toLocaleString()}, ${l.daysOverdue} days overdue`).join("; ")}`
