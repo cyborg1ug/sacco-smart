@@ -129,7 +129,7 @@ const TransactionHistory = () => {
                 <TableHead>TXN ID</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
-                <TableHead className="text-right">Balance After</TableHead>
+                <TableHead className="text-right">Balance</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Receipt</TableHead>
               </TableRow>
@@ -157,7 +157,9 @@ const TransactionHistory = () => {
                       UGX {transaction.amount.toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right whitespace-nowrap">
-                      UGX {transaction.balance_after.toLocaleString()}
+                      {transaction.status === "approved"
+                        ? `UGX ${transaction.running_balance.toLocaleString()}`
+                        : "—"}
                     </TableCell>
                     <TableCell>
                       <Badge variant={
