@@ -8,6 +8,7 @@ import { Loader2, Download, Receipt } from "lucide-react";
 import { format } from "date-fns";
 import { generateTransactionReceiptPDF } from "@/lib/pdfGenerator";
 import { useToast } from "@/hooks/use-toast";
+import { withRunningBalance } from "@/lib/runningBalance";
 
 interface Transaction {
   id: string;
@@ -19,6 +20,7 @@ interface Transaction {
   status: string;
   created_at: string;
   approved_at: string | null;
+  running_balance: number;
 }
 
 const TransactionHistory = () => {
@@ -30,6 +32,15 @@ const TransactionHistory = () => {
 
   useEffect(() => {
     loadTransactions();
+
+    const channel = supabase
+      .channel("member-transactions-history")
+      .on("postgres_changes", { event: "*", schema: "public", table: "transactions" }, () => loadTransactions())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const loadTransactions = async () => {
@@ -62,7 +73,8 @@ const TransactionHistory = () => {
           .order("created_at", { ascending: false });
 
         if (data) {
-          setTransactions(data);
+          // Compute bank-style running balance (oldest → newest), keep newest-first order
+          setTransactions(withRunningBalance(data));
         }
       }
     }
@@ -79,7 +91,7 @@ const TransactionHistory = () => {
       accountNumber: accountData.account_number,
       transactionType: transaction.transaction_type,
       amount: transaction.amount,
-      balanceAfter: transaction.balance_after,
+      balanceAfter: transaction.running_balance,
       currentBalance: accountData.balance,
       totalSavings: accountData.total_savings,
       description: transaction.description,
@@ -117,7 +129,7 @@ const TransactionHistory = () => {
                 <TableHead>TXN ID</TableHead>
                 <TableHead>Type</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
-                <TableHead className="text-right">Balance After</TableHead>
+                <TableHead className="text-right">Balance</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Receipt</TableHead>
               </TableRow>
@@ -145,7 +157,9 @@ const TransactionHistory = () => {
                       UGX {transaction.amount.toLocaleString()}
                     </TableCell>
                     <TableCell className="text-right whitespace-nowrap">
-                      UGX {transaction.balance_after.toLocaleString()}
+                      {transaction.status === "approved"
+                        ? `UGX ${transaction.running_balance.toLocaleString()}`
+                        : "—"}
                     </TableCell>
                     <TableCell>
                       <Badge variant={
