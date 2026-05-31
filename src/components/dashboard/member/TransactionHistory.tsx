@@ -8,6 +8,7 @@ import { Loader2, Download, Receipt } from "lucide-react";
 import { format } from "date-fns";
 import { generateTransactionReceiptPDF } from "@/lib/pdfGenerator";
 import { useToast } from "@/hooks/use-toast";
+import { withRunningBalance } from "@/lib/runningBalance";
 
 interface Transaction {
   id: string;
@@ -19,6 +20,7 @@ interface Transaction {
   status: string;
   created_at: string;
   approved_at: string | null;
+  running_balance: number;
 }
 
 const TransactionHistory = () => {
