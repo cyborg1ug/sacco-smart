@@ -91,7 +91,7 @@ const TransactionHistory = () => {
       accountNumber: accountData.account_number,
       transactionType: transaction.transaction_type,
       amount: transaction.amount,
-      balanceAfter: transaction.balance_after,
+      balanceAfter: transaction.running_balance,
       currentBalance: accountData.balance,
       totalSavings: accountData.total_savings,
       description: transaction.description,
