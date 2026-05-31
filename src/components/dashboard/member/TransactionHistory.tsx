@@ -32,6 +32,15 @@ const TransactionHistory = () => {
 
   useEffect(() => {
     loadTransactions();
+
+    const channel = supabase
+      .channel("member-transactions-history")
+      .on("postgres_changes", { event: "*", schema: "public", table: "transactions" }, () => loadTransactions())
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const loadTransactions = async () => {
@@ -64,7 +73,8 @@ const TransactionHistory = () => {
           .order("created_at", { ascending: false });
 
         if (data) {
-          setTransactions(data);
+          // Compute bank-style running balance (oldest → newest), keep newest-first order
+          setTransactions(withRunningBalance(data));
         }
       }
     }
