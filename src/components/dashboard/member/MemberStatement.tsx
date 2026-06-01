@@ -7,6 +7,7 @@ import { FileDown, Loader2, FileText } from "lucide-react";
 import { format } from "date-fns";
 import { generateMemberStatementPDF } from "@/lib/pdfGenerator";
 import FinancialCharts from "../charts/FinancialCharts";
+import { withRunningBalance } from "@/lib/runningBalance";
 
 const MemberStatement = () => {
   const { toast } = useToast();
