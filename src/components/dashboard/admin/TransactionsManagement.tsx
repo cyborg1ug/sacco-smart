@@ -90,6 +90,25 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
     loadTransactions();
     loadMembers();
     loadActiveLoans();
+
+    // Real-time refresh: keep admin transactions, members and loans in sync
+    const channel = supabase
+      .channel("admin-transactions-realtime")
+      .on("postgres_changes", { event: "*", schema: "public", table: "transactions" }, () => {
+        loadTransactions();
+        loadActiveLoans();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "loans" }, () => {
+        loadActiveLoans();
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "accounts" }, () => {
+        loadMembers();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const loadTransactions = async () => {

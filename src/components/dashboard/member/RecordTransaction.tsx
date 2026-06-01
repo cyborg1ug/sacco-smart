@@ -119,15 +119,18 @@ const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) =>
   const loadActiveLoan = async () => {
     if (!selectedAccountId) return;
 
-    const { data: loan } = await supabase
+    // A member may have more than one active loan; fetch all outstanding ones
+    // (oldest first) and repay against the earliest. Using maybeSingle() here
+    // would error out whenever 2+ active loans exist and hide the loan entirely.
+    const { data: loans } = await supabase
       .from("loans")
       .select("id, amount, total_amount, outstanding_balance, interest_rate, status")
       .eq("account_id", selectedAccountId)
       .in("status", ["approved", "disbursed", "active"])
       .gt("outstanding_balance", 0)
-      .maybeSingle();
+      .order("created_at", { ascending: true });
 
-    setActiveLoan(loan);
+    setActiveLoan(loans && loans.length > 0 ? loans[0] : null);
   };
 
   const handlePayFullAmount = () => {
