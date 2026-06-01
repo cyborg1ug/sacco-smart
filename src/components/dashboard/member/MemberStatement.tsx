@@ -192,10 +192,17 @@ const MemberStatement = () => {
       subAccountSavings = subSav || [];
     }
 
-    const allTransactions = includeSubAccounts 
+    const allTransactionsRaw = includeSubAccounts 
       ? [...(transactions || []), ...subAccountTransactions].sort((a, b) => 
           new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       : transactions || [];
+
+    // Compute a bank-style running balance (oldest → newest) and surface it via
+    // balance_after so both the PDF and text statements show a true ledger balance.
+    const allTransactions = withRunningBalance(allTransactionsRaw).map((t) => ({
+      ...t,
+      balance_after: t.running_balance,
+    }));
 
     const allSavings = includeSubAccounts
       ? [...(savings || []), ...subAccountSavings]
