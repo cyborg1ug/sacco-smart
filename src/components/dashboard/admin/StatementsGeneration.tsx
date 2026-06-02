@@ -283,6 +283,19 @@ const StatementsGeneration = () => {
     const { data: loans } = await supabase.from("loans").select("*");
     const { data: welfare } = await supabase.from("welfare").select("*");
 
+    // Account balance = total savings minus outstanding active loans (override the
+    // stored cash-ledger balance so every section of the statement is consistent).
+    const groupOutstanding: Record<string, number> = {};
+    (loans || []).forEach((l: any) => {
+      if (ACTIVE_LOAN_STATUSES.includes(l.status) && Number(l.outstanding_balance) > 0) {
+        groupOutstanding[l.account_id] = (groupOutstanding[l.account_id] || 0) + Number(l.outstanding_balance);
+      }
+    });
+    (accounts || []).forEach((acc: any) => {
+      acc.balance = netAccountBalance(acc.total_savings, groupOutstanding[acc.id]);
+    });
+
+
     const getMemberName = (acc: any) => {
       if (acc.account_type === "sub") {
         const sp = subProfiles?.find((p: any) => p.account_id === acc.id);
