@@ -84,13 +84,18 @@ const MemberDashboard = () => {
       .eq("user_id", user.id).eq("account_type", "main").maybeSingle();
 
     if (!accountData) return;
-    setAccount(accountData);
 
     // Sub-accounts
     const { data: subAccountsData } = await supabase
       .from("accounts")
       .select("id, balance, total_savings, account_number")
       .eq("parent_account_id", accountData.id).eq("account_type", "sub");
+
+    // Account balance = total savings minus outstanding active loans (per account)
+    const allIds = [accountData.id, ...(subAccountsData?.map(a => a.id) || [])];
+    const outstandingMap = await fetchOutstandingByAccount(allIds);
+    const mainNet = netAccountBalance(accountData.total_savings, outstandingMap[accountData.id]);
+    setAccount({ ...accountData, balance: mainNet });
 
     if (subAccountsData && subAccountsData.length > 0) {
       setHasSubAccounts(true);
@@ -99,16 +104,22 @@ const MemberDashboard = () => {
         .select("account_id, full_name")
         .in("account_id", subAccountsData.map(a => a.id));
       const profilesMap = new Map(subProfiles?.map(p => [p.account_id, p]) || []);
-      setSubAccounts(subAccountsData.map(sa => ({ ...sa, profile: profilesMap.get(sa.id) || null })));
+      const subsWithNet = subAccountsData.map(sa => ({
+        ...sa,
+        balance: netAccountBalance(sa.total_savings, outstandingMap[sa.id]),
+        profile: profilesMap.get(sa.id) || null,
+      }));
+      setSubAccounts(subsWithNet);
       setJointTotals({
-        balance: accountData.balance + subAccountsData.reduce((s, sa) => s + Number(sa.balance), 0),
+        balance: mainNet + subsWithNet.reduce((s, sa) => s + Number(sa.balance), 0),
         total_savings: accountData.total_savings + subAccountsData.reduce((s, sa) => s + Number(sa.total_savings), 0),
       });
     } else {
       setHasSubAccounts(false);
       setSubAccounts([]);
-      setJointTotals({ balance: accountData.balance, total_savings: accountData.total_savings });
+      setJointTotals({ balance: mainNet, total_savings: accountData.total_savings });
     }
+
 
     const allAccountIds = [accountData.id, ...(subAccountsData?.map(sa => sa.id) || [])];
 
