@@ -116,8 +116,11 @@ const AdminMemberDetails = () => {
           .in("account_id", subAccountIds);
 
         const subProfilesMap = new Map(subProfiles?.map(p => [p.account_id, p]) || []);
+        // Sub-account balance = total savings minus outstanding active loans
+        const outstandingMap = await fetchOutstandingByAccount(subAccountIds);
         setSubAccounts(subAccountsData.map(a => ({
           ...a,
+          balance: netAccountBalance(a.total_savings, outstandingMap[a.id]),
           profile: subProfilesMap.get(a.id) || { full_name: "Unknown" }
         })));
       }
