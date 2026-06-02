@@ -91,7 +91,7 @@ const AlertsReminders = () => {
   const loadMembers = async () => {
     const { data: accountsData } = await supabase
       .from("accounts")
-      .select("id, account_number, balance, user_id");
+      .select("id, account_number, balance, total_savings, user_id");
 
     if (accountsData && accountsData.length > 0) {
       const userIds = [...new Set(accountsData.map(a => a.user_id))];
@@ -100,9 +100,13 @@ const AlertsReminders = () => {
         .select("id, full_name, email")
         .in("id", userIds);
 
+      // Account balance = total savings minus outstanding active loans
+      const outstandingMap = await fetchOutstandingByAccount(accountsData.map(a => a.id));
+
       const profilesMap = new Map(profilesData?.map(p => [p.id, p]) || []);
       const membersWithProfiles = accountsData.map(account => ({
         ...account,
+        balance: netAccountBalance(account.total_savings, outstandingMap[account.id]),
         user: profilesMap.get(account.user_id) || { full_name: "Unknown", email: "" }
       }));
 
