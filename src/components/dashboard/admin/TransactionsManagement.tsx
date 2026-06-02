@@ -716,12 +716,17 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
   };
 
   const handleGenerateReceipt = async (transaction: Transaction) => {
-    // Fetch current account balance
-    const { data: accountData } = await supabase
+    // Fetch current account balance (net = total savings minus active loan outstanding)
+    const { data: accountRaw } = await supabase
       .from("accounts")
       .select("balance, total_savings")
       .eq("id", transaction.account.id)
       .single();
+
+    const accOutstanding = await fetchOutstandingForAccount(transaction.account.id);
+    const accountData = accountRaw
+      ? { ...accountRaw, balance: netAccountBalance(accountRaw.total_savings, accOutstanding) }
+      : null;
 
     // For loan repayments, fetch loan info for interest breakdown
     let loanInfo: {
