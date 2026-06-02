@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, User, Phone, Mail, MapPin, Briefcase, CreditCard, Wallet, TrendingUp, FileText, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
+import { netAccountBalance, fetchOutstandingByAccount } from "@/lib/accountBalance";
 
 interface MemberDetails {
   id: string;
@@ -115,8 +116,11 @@ const AdminMemberDetails = () => {
           .in("account_id", subAccountIds);
 
         const subProfilesMap = new Map(subProfiles?.map(p => [p.account_id, p]) || []);
+        // Sub-account balance = total savings minus outstanding active loans
+        const outstandingMap = await fetchOutstandingByAccount(subAccountIds);
         setSubAccounts(subAccountsData.map(a => ({
           ...a,
+          balance: netAccountBalance(a.total_savings, outstandingMap[a.id]),
           profile: subProfilesMap.get(a.id) || { full_name: "Unknown" }
         })));
       }
@@ -258,7 +262,7 @@ const AdminMemberDetails = () => {
                 <Wallet className="h-5 w-5 text-success" />
                 <span className="text-xs text-muted-foreground">Balance</span>
               </div>
-              <p className="text-xl font-bold mt-2">UGX {member.balance.toLocaleString()}</p>
+              <p className="text-xl font-bold mt-2">UGX {netAccountBalance(member.total_savings, loanSummary.total_outstanding).toLocaleString()}</p>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">

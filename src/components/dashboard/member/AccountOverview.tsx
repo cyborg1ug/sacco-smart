@@ -8,6 +8,7 @@ import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
+import { netAccountBalance, fetchOutstandingForAccount } from "@/lib/accountBalance";
 
 interface BalanceSummary {
   balance: number;
@@ -81,7 +82,10 @@ const AccountOverview = () => {
 
     if (!account) { setLoading(false); return; }
 
-    setSummary({ balance: account.balance, total_savings: account.total_savings, account_number: account.account_number });
+    // Account balance = total savings minus outstanding active loans
+    const outstanding = await fetchOutstandingForAccount(account.id);
+    const netBalance = netAccountBalance(account.total_savings, outstanding);
+    setSummary({ balance: netBalance, total_savings: account.total_savings, account_number: account.account_number });
 
     // Fetch all approved transactions for per-type totals
     const { data: allTxns } = await supabase

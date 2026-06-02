@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import { generateTransactionReceiptPDF } from "@/lib/pdfGenerator";
 import { useToast } from "@/hooks/use-toast";
 import { withRunningBalance } from "@/lib/runningBalance";
+import { netAccountBalance, fetchOutstandingForAccount } from "@/lib/accountBalance";
 
 interface Transaction {
   id: string;
@@ -90,12 +91,15 @@ const AdminMemberTransactions = () => {
       fullName = subProfile?.full_name || "Unknown";
     }
 
+    // Account balance = total savings minus outstanding active loans
+    const outstanding = await fetchOutstandingForAccount(account.id);
     setMemberInfo({
       full_name: fullName,
       account_number: account.account_number,
-      balance: account.balance,
+      balance: netAccountBalance(account.total_savings, outstanding),
       total_savings: account.total_savings,
     });
+
 
     // Get transactions
     const { data: txns } = await supabase

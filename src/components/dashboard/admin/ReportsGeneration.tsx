@@ -10,6 +10,7 @@ import { format, startOfMonth, endOfMonth, subMonths, differenceInMonths, differ
 import FinancialCharts from "../charts/FinancialCharts";
 import { generateMemberStatementPDF, generateGroupReportPDF } from "@/lib/pdfGenerator";
 import * as XLSX from "xlsx";
+import { ACTIVE_LOAN_STATUSES, netAccountBalance } from "@/lib/accountBalance";
 
 const ReportsGeneration = () => {
   const { toast } = useToast();
@@ -74,7 +75,7 @@ const ReportsGeneration = () => {
       .from("transactions").select("*").eq("status", "approved")
       .gte("created_at", dateRange.start.toISOString())
       .lte("created_at", dateRange.end.toISOString());
-    const { data: loans } = await supabase.from("loans").select("status");
+    const { data: loans } = await supabase.from("loans").select("status, outstanding_balance");
     const { data: accounts } = await supabase.from("accounts").select("balance, total_savings, created_at");
     const { data: savings } = await supabase.from("savings").select("*")
       .gte("week_start", dateRange.start.toISOString()).order("week_start", { ascending: true });
@@ -95,7 +96,11 @@ const ReportsGeneration = () => {
     const savingsData = savings?.map((s) => ({
       week: format(new Date(s.week_start), "MMM dd"), amount: Number(s.amount),
     })) || [];
-    const totalBalance = accounts?.reduce((sum, a) => sum + Number(a.balance), 0) || 0;
+    // Total balance = total savings minus all outstanding active-loan balances
+    const totalActiveOutstanding = (loans || [])
+      .filter((l: any) => ACTIVE_LOAN_STATUSES.includes(l.status) && Number(l.outstanding_balance) > 0)
+      .reduce((sum: number, l: any) => sum + Number(l.outstanding_balance), 0);
+    const totalBalance = (accounts?.reduce((sum, a) => sum + Number(a.total_savings), 0) || 0) - totalActiveOutstanding;
     const balanceData = [{ date: format(new Date(), "MMM dd"), balance: totalBalance }];
     setChartData({ transactionData, loanData, savingsData, balanceData });
   };
@@ -158,7 +163,13 @@ const ReportsGeneration = () => {
       supabase.from("loans").select("*").eq("account_id", accountId),
     ]);
 
-    return { profile, memberAccount, periodTxns, allTxns, savings, loans, dateRange };
+    // Account balance = total savings minus outstanding active loans
+    const outstanding = (loans || [])
+      .filter((l: any) => ACTIVE_LOAN_STATUSES.includes(l.status) && Number(l.outstanding_balance) > 0)
+      .reduce((s: number, l: any) => s + Number(l.outstanding_balance), 0);
+    const memberAccountNet = { ...memberAccount, balance: netAccountBalance(memberAccount.total_savings, outstanding) };
+
+    return { profile, memberAccount: memberAccountNet, periodTxns, allTxns, savings, loans, dateRange };
   };
 
   // ─── MEMBER REPORT (TEXT) ──────────────────────────────────────────
@@ -447,6 +458,18 @@ const ReportsGeneration = () => {
     const { data: allLoans } = await supabase.from("loans").select("*");
     const { data: savings } = await supabase.from("savings").select("*")
       .gte("week_start", dateRange.start.toISOString());
+
+    // Account balance = total savings minus outstanding active loans (override the
+    // stored cash-ledger balance so every section of the report is consistent).
+    const groupOutstanding: Record<string, number> = {};
+    (allLoans || []).forEach((l: any) => {
+      if (ACTIVE_LOAN_STATUSES.includes(l.status) && Number(l.outstanding_balance) > 0) {
+        groupOutstanding[l.account_id] = (groupOutstanding[l.account_id] || 0) + Number(l.outstanding_balance);
+      }
+    });
+    (accounts || []).forEach((acc: any) => {
+      acc.balance = netAccountBalance(acc.total_savings, groupOutstanding[acc.id]);
+    });
 
     const mainAccounts = accounts?.filter(a => a.account_type === 'main') || [];
     const subAccounts = accounts?.filter(a => a.account_type === 'sub') || [];

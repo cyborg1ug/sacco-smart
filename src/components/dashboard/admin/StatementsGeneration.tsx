@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { FileDown, Loader2, FileSpreadsheet } from "lucide-react";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
+import { ACTIVE_LOAN_STATUSES, netAccountBalance } from "@/lib/accountBalance";
 
 const StatementsGeneration = () => {
   const { toast } = useToast();
@@ -66,7 +67,13 @@ const StatementsGeneration = () => {
       supabase.from("welfare").select("*").eq("account_id", account.id).order("week_date", { ascending: false }),
     ]);
 
-    return { profile, account, transactions, loans, savings, welfare };
+    // Account balance = total savings minus outstanding active loans
+    const outstanding = (loans || [])
+      .filter((l: any) => ACTIVE_LOAN_STATUSES.includes(l.status) && Number(l.outstanding_balance) > 0)
+      .reduce((s: number, l: any) => s + Number(l.outstanding_balance), 0);
+    const accountNet = { ...account, balance: netAccountBalance(account.total_savings, outstanding) };
+
+    return { profile, account: accountNet, transactions, loans, savings, welfare };
   };
 
   const generateMemberStatement = async (asExcel = false) => {
@@ -275,6 +282,19 @@ const StatementsGeneration = () => {
     const { data: transactions } = await supabase.from("transactions").select("*").eq("status", "approved").order("created_at", { ascending: false });
     const { data: loans } = await supabase.from("loans").select("*");
     const { data: welfare } = await supabase.from("welfare").select("*");
+
+    // Account balance = total savings minus outstanding active loans (override the
+    // stored cash-ledger balance so every section of the statement is consistent).
+    const groupOutstanding: Record<string, number> = {};
+    (loans || []).forEach((l: any) => {
+      if (ACTIVE_LOAN_STATUSES.includes(l.status) && Number(l.outstanding_balance) > 0) {
+        groupOutstanding[l.account_id] = (groupOutstanding[l.account_id] || 0) + Number(l.outstanding_balance);
+      }
+    });
+    (accounts || []).forEach((acc: any) => {
+      acc.balance = netAccountBalance(acc.total_savings, groupOutstanding[acc.id]);
+    });
+
 
     const getMemberName = (acc: any) => {
       if (acc.account_type === "sub") {

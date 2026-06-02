@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Save, Users, Wallet, TrendingUp } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { netAccountBalance, fetchOutstandingByAccount } from "@/lib/accountBalance";
 
 interface SubAccount {
   id: string;
@@ -78,8 +79,12 @@ const SubAccountsManager = ({ parentAccountId }: SubAccountsManagerProps) => {
 
     const profilesMap = new Map(profilesData?.map(p => [p.account_id, p]) || []);
 
+    // Account balance = total savings minus outstanding active loans
+    const outstandingMap = await fetchOutstandingByAccount(accountIds);
+
     const subAccountsWithProfiles = accountsData.map(account => ({
       ...account,
+      balance: netAccountBalance(account.total_savings, outstandingMap[account.id]),
       profile: profilesMap.get(account.id) || null
     }));
 
