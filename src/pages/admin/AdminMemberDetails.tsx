@@ -262,7 +262,7 @@ const AdminMemberDetails = () => {
                 <Wallet className="h-5 w-5 text-success" />
                 <span className="text-xs text-muted-foreground">Balance</span>
               </div>
-              <p className="text-xl font-bold mt-2">UGX {member.balance.toLocaleString()}</p>
+              <p className="text-xl font-bold mt-2">UGX {netAccountBalance(member.total_savings, loanSummary.total_outstanding).toLocaleString()}</p>
             </CardContent>
           </Card>
           <Card className="bg-gradient-to-br from-primary/10 to-primary/5 border-primary/20">
