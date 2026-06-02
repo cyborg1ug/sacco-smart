@@ -11,6 +11,7 @@ import { format } from "date-fns";
 import { generateTransactionReceiptPDF } from "@/lib/pdfGenerator";
 import { useToast } from "@/hooks/use-toast";
 import { withRunningBalance } from "@/lib/runningBalance";
+import { netAccountBalance, fetchOutstandingForAccount } from "@/lib/accountBalance";
 
 interface Transaction {
   id: string;
