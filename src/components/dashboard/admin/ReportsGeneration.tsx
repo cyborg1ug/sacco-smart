@@ -75,7 +75,7 @@ const ReportsGeneration = () => {
       .from("transactions").select("*").eq("status", "approved")
       .gte("created_at", dateRange.start.toISOString())
       .lte("created_at", dateRange.end.toISOString());
-    const { data: loans } = await supabase.from("loans").select("status");
+    const { data: loans } = await supabase.from("loans").select("status, outstanding_balance");
     const { data: accounts } = await supabase.from("accounts").select("balance, total_savings, created_at");
     const { data: savings } = await supabase.from("savings").select("*")
       .gte("week_start", dateRange.start.toISOString()).order("week_start", { ascending: true });
