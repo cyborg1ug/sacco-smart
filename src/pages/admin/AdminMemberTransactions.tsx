@@ -91,12 +91,15 @@ const AdminMemberTransactions = () => {
       fullName = subProfile?.full_name || "Unknown";
     }
 
+    // Account balance = total savings minus outstanding active loans
+    const outstanding = await fetchOutstandingForAccount(account.id);
     setMemberInfo({
       full_name: fullName,
       account_number: account.account_number,
-      balance: account.balance,
+      balance: netAccountBalance(account.total_savings, outstanding),
       total_savings: account.total_savings,
     });
+
 
     // Get transactions
     const { data: txns } = await supabase
