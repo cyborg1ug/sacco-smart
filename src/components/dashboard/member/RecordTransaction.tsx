@@ -242,7 +242,7 @@ const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) =>
           <Info className="h-4 w-4" />
           <AlertDescription>
             All transactions require admin approval before they are processed. 
-            Your current balance is UGX {currentBalance.toLocaleString()}.
+            Your current balance is UGX {displayBalance.toLocaleString()}.
           </AlertDescription>
         </Alert>
 
