@@ -10,6 +10,7 @@ import { Loader2, Download, ArrowLeft, TrendingUp, TrendingDown, CreditCard, Wal
 import { format } from "date-fns";
 import { generateTransactionReceiptPDF } from "@/lib/pdfGenerator";
 import { useToast } from "@/hooks/use-toast";
+import { withRunningBalance } from "@/lib/runningBalance";
 
 interface Transaction {
   id: string;
@@ -17,6 +18,7 @@ interface Transaction {
   transaction_type: string;
   amount: number;
   balance_after: number;
+  running_balance?: number;
   description: string;
   status: string;
   created_at: string;
