@@ -10,6 +10,7 @@ import { Loader2, Download, ArrowLeft, TrendingUp, TrendingDown, CreditCard, Wal
 import { format } from "date-fns";
 import { generateTransactionReceiptPDF } from "@/lib/pdfGenerator";
 import { useToast } from "@/hooks/use-toast";
+import { withRunningBalance } from "@/lib/runningBalance";
 
 interface Transaction {
   id: string;
@@ -17,6 +18,7 @@ interface Transaction {
   transaction_type: string;
   amount: number;
   balance_after: number;
+  running_balance?: number;
   description: string;
   status: string;
   created_at: string;
@@ -41,6 +43,17 @@ const AdminMemberTransactions = () => {
   useEffect(() => {
     if (accountId) {
       loadMemberTransactions();
+
+      // Real-time refresh: keep this member's transactions in sync system-wide
+      const channel = supabase
+        .channel(`admin-member-transactions-${accountId}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "transactions", filter: `account_id=eq.${accountId}` }, () => loadMemberTransactions())
+        .on("postgres_changes", { event: "*", schema: "public", table: "accounts", filter: `id=eq.${accountId}` }, () => loadMemberTransactions())
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [accountId]);
 
@@ -92,7 +105,9 @@ const AdminMemberTransactions = () => {
       .order("created_at", { ascending: false });
 
     if (txns) {
-      setTransactions(txns);
+      // Compute a bank-style running balance (oldest → newest) so the displayed
+      // "Balance After" matches a true ledger difference instead of a stale field.
+      setTransactions(withRunningBalance(txns));
     }
     setLoading(false);
   };
@@ -121,7 +136,7 @@ const AdminMemberTransactions = () => {
       accountNumber: memberInfo.account_number,
       transactionType: transaction.transaction_type,
       amount: transaction.amount,
-      balanceAfter: transaction.balance_after,
+      balanceAfter: transaction.running_balance ?? transaction.balance_after,
       currentBalance: memberInfo.balance,
       totalSavings: memberInfo.total_savings,
       description: transaction.description,
@@ -268,7 +283,7 @@ const AdminMemberTransactions = () => {
                           UGX {transaction.amount.toLocaleString()}
                         </TableCell>
                         <TableCell className="hidden md:table-cell text-right whitespace-nowrap text-xs">
-                          UGX {transaction.balance_after.toLocaleString()}
+                          UGX {(transaction.running_balance ?? transaction.balance_after).toLocaleString()}
                         </TableCell>
                         <TableCell>
                           <Badge variant={
