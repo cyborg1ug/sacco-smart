@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Info, CreditCard, Wallet } from "lucide-react";
+import { netAccountBalance, fetchOutstandingForAccount } from "@/lib/accountBalance";
 
 interface RecordTransactionProps {
   onTransactionRecorded: () => void;
