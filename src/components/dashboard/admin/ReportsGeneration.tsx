@@ -96,7 +96,11 @@ const ReportsGeneration = () => {
     const savingsData = savings?.map((s) => ({
       week: format(new Date(s.week_start), "MMM dd"), amount: Number(s.amount),
     })) || [];
-    const totalBalance = accounts?.reduce((sum, a) => sum + Number(a.balance), 0) || 0;
+    // Total balance = total savings minus all outstanding active-loan balances
+    const totalActiveOutstanding = (loans || [])
+      .filter((l: any) => ACTIVE_LOAN_STATUSES.includes(l.status) && Number(l.outstanding_balance) > 0)
+      .reduce((sum: number, l: any) => sum + Number(l.outstanding_balance), 0);
+    const totalBalance = (accounts?.reduce((sum, a) => sum + Number(a.total_savings), 0) || 0) - totalActiveOutstanding;
     const balanceData = [{ date: format(new Date(), "MMM dd"), balance: totalBalance }];
     setChartData({ transactionData, loanData, savingsData, balanceData });
   };
