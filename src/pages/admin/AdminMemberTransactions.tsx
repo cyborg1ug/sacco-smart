@@ -283,7 +283,7 @@ const AdminMemberTransactions = () => {
                           UGX {transaction.amount.toLocaleString()}
                         </TableCell>
                         <TableCell className="hidden md:table-cell text-right whitespace-nowrap text-xs">
-                          UGX {transaction.balance_after.toLocaleString()}
+                          UGX {(transaction.running_balance ?? transaction.balance_after).toLocaleString()}
                         </TableCell>
                         <TableCell>
                           <Badge variant={
