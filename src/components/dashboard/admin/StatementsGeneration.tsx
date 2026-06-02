@@ -67,7 +67,13 @@ const StatementsGeneration = () => {
       supabase.from("welfare").select("*").eq("account_id", account.id).order("week_date", { ascending: false }),
     ]);
 
-    return { profile, account, transactions, loans, savings, welfare };
+    // Account balance = total savings minus outstanding active loans
+    const outstanding = (loans || [])
+      .filter((l: any) => ACTIVE_LOAN_STATUSES.includes(l.status) && Number(l.outstanding_balance) > 0)
+      .reduce((s: number, l: any) => s + Number(l.outstanding_balance), 0);
+    const accountNet = { ...account, balance: netAccountBalance(account.total_savings, outstanding) };
+
+    return { profile, account: accountNet, transactions, loans, savings, welfare };
   };
 
   const generateMemberStatement = async (asExcel = false) => {
