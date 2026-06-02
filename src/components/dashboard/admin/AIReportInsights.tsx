@@ -9,6 +9,7 @@ import { Loader2, Bot, Download, FileText, Table as TableIcon, FileDown, Sparkle
 import { format, startOfMonth, endOfMonth, subMonths, differenceInDays } from "date-fns";
 import { generateBankMemberPDF, generateBankGroupPDF, generateBankTextReport, generateBankExcel } from "@/lib/bankReportGenerator";
 import * as XLSX from "xlsx";
+import { ACTIVE_LOAN_STATUSES, netAccountBalance } from "@/lib/accountBalance";
 
 interface AIReportInsightsProps {
   members: { id: string; full_name: string; accounts: any[] }[];
