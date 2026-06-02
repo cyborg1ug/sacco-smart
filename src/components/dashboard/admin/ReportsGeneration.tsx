@@ -449,6 +449,18 @@ const ReportsGeneration = () => {
     const { data: savings } = await supabase.from("savings").select("*")
       .gte("week_start", dateRange.start.toISOString());
 
+    // Account balance = total savings minus outstanding active loans (override the
+    // stored cash-ledger balance so every section of the report is consistent).
+    const groupOutstanding: Record<string, number> = {};
+    (allLoans || []).forEach((l: any) => {
+      if (ACTIVE_LOAN_STATUSES.includes(l.status) && Number(l.outstanding_balance) > 0) {
+        groupOutstanding[l.account_id] = (groupOutstanding[l.account_id] || 0) + Number(l.outstanding_balance);
+      }
+    });
+    (accounts || []).forEach((acc: any) => {
+      acc.balance = netAccountBalance(acc.total_savings, groupOutstanding[acc.id]);
+    });
+
     const mainAccounts = accounts?.filter(a => a.account_type === 'main') || [];
     const subAccounts = accounts?.filter(a => a.account_type === 'sub') || [];
 
