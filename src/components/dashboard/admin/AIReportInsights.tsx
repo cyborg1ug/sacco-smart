@@ -94,6 +94,13 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
       const sum = (arr: any[], type: string) => (arr || []).filter(t => t.transaction_type === type && t.status === "approved").reduce((s, t) => s + Number(t.amount), 0);
       const activeLoans = (loans || []).filter(l => ["disbursed","active"].includes(l.status) && l.outstanding_balance > 0);
 
+      // Account balance = total savings minus outstanding active loans
+      const outstandingSingle = (loans || [])
+        .filter(l => ACTIVE_LOAN_STATUSES.includes(l.status) && Number(l.outstanding_balance) > 0)
+        .reduce((s, l) => s + Number(l.outstanding_balance), 0);
+      acc.balance = netAccountBalance(acc.total_savings, outstandingSingle);
+
+
       const aiPayload = {
         memberName: profile.full_name,
         accountNumber: acc.account_number,
