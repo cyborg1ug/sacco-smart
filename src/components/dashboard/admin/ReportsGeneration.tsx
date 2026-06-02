@@ -159,7 +159,13 @@ const ReportsGeneration = () => {
       supabase.from("loans").select("*").eq("account_id", accountId),
     ]);
 
-    return { profile, memberAccount, periodTxns, allTxns, savings, loans, dateRange };
+    // Account balance = total savings minus outstanding active loans
+    const outstanding = (loans || [])
+      .filter((l: any) => ACTIVE_LOAN_STATUSES.includes(l.status) && Number(l.outstanding_balance) > 0)
+      .reduce((s: number, l: any) => s + Number(l.outstanding_balance), 0);
+    const memberAccountNet = { ...memberAccount, balance: netAccountBalance(memberAccount.total_savings, outstanding) };
+
+    return { profile, memberAccount: memberAccountNet, periodTxns, allTxns, savings, loans, dateRange };
   };
 
   // ─── MEMBER REPORT (TEXT) ──────────────────────────────────────────
