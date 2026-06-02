@@ -105,7 +105,9 @@ const AdminMemberTransactions = () => {
       .order("created_at", { ascending: false });
 
     if (txns) {
-      setTransactions(txns);
+      // Compute a bank-style running balance (oldest → newest) so the displayed
+      // "Balance After" matches a true ledger difference instead of a stale field.
+      setTransactions(withRunningBalance(txns));
     }
     setLoading(false);
   };
