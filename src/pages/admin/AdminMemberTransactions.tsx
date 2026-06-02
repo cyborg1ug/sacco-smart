@@ -43,6 +43,17 @@ const AdminMemberTransactions = () => {
   useEffect(() => {
     if (accountId) {
       loadMemberTransactions();
+
+      // Real-time refresh: keep this member's transactions in sync system-wide
+      const channel = supabase
+        .channel(`admin-member-transactions-${accountId}`)
+        .on("postgres_changes", { event: "*", schema: "public", table: "transactions", filter: `account_id=eq.${accountId}` }, () => loadMemberTransactions())
+        .on("postgres_changes", { event: "*", schema: "public", table: "accounts", filter: `id=eq.${accountId}` }, () => loadMemberTransactions())
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
     }
   }, [accountId]);
 
