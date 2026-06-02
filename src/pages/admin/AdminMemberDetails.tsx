@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Loader2, User, Phone, Mail, MapPin, Briefcase, CreditCard, Wallet, TrendingUp, FileText, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
+import { netAccountBalance, fetchOutstandingByAccount } from "@/lib/accountBalance";
 
 interface MemberDetails {
   id: string;
