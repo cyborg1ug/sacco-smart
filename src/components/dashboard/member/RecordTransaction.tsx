@@ -39,6 +39,9 @@ const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) =>
   const [myAccounts, setMyAccounts] = useState<AccountOption[]>([]);
   const [selectedAccountId, setSelectedAccountId] = useState("");
   const [currentBalance, setCurrentBalance] = useState(0);
+  // Net balance shown to the member = total savings minus outstanding active loans.
+  // (currentBalance stays the raw cash ledger value used for transaction balance_after.)
+  const [displayBalance, setDisplayBalance] = useState(0);
   const [transactionType, setTransactionType] = useState("");
   const [activeLoan, setActiveLoan] = useState<ActiveLoan | null>(null);
   const [repaymentAmount, setRepaymentAmount] = useState("");
@@ -52,6 +55,9 @@ const RecordTransaction = ({ onTransactionRecorded }: RecordTransactionProps) =>
       const account = myAccounts.find(a => a.id === selectedAccountId);
       if (account) {
         setCurrentBalance(account.balance);
+        fetchOutstandingForAccount(account.id).then((outstanding) =>
+          setDisplayBalance(netAccountBalance(account.total_savings, outstanding))
+        );
       }
       loadActiveLoan();
     }
