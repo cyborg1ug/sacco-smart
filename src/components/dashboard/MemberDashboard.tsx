@@ -27,6 +27,7 @@ import ProfileManagement from "./member/ProfileManagement";
 import SubAccountsManager from "./member/SubAccountsManager";
 import LoanCompletionChart from "./charts/LoanCompletionChart";
 import LoanRepaymentSchedule from "./member/LoanRepaymentSchedule";
+import { netAccountBalance, fetchOutstandingByAccount } from "@/lib/accountBalance";
 
 interface AccountData {
   id: string; balance: number; total_savings: number; account_number: string;
