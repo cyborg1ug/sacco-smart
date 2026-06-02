@@ -267,6 +267,19 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
     const activeLoans = (allLoans || []).filter(l => ["disbursed","active"].includes(l.status) && l.outstanding_balance > 0);
     const overdueL = activeLoans.filter(l => isOverdue(l));
 
+    // Account balance = total savings minus outstanding active loans (override stored
+    // cash-ledger balance so every figure in the report is consistent).
+    const groupOutstanding: Record<string, number> = {};
+    (allLoans || []).forEach((l: any) => {
+      if (ACTIVE_LOAN_STATUSES.includes(l.status) && Number(l.outstanding_balance) > 0) {
+        groupOutstanding[l.account_id] = (groupOutstanding[l.account_id] || 0) + Number(l.outstanding_balance);
+      }
+    });
+    (accounts || []).forEach((a: any) => {
+      a.balance = netAccountBalance(a.total_savings, groupOutstanding[a.id]);
+    });
+
+
     const getMemberName = (acc: any) => {
       if (acc.account_type === "sub") return subProfiles?.find(p => p.account_id === acc.id)?.full_name || "Unknown (Sub)";
       return profiles?.find(p => p.id === acc.user_id)?.full_name || "Unknown";
