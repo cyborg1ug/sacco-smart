@@ -43,7 +43,6 @@ const MemberStatement = () => {
         .single();
 
       if (profile && account) {
-        setAccountData({ profile, account });
         loadChartData(account.id);
 
         // Load sub-accounts
@@ -52,6 +51,12 @@ const MemberStatement = () => {
           .select("id, account_number, balance, total_savings")
           .eq("parent_account_id", account.id)
           .eq("account_type", "sub");
+
+        // Account balance = total savings minus outstanding active loans (per account)
+        const allIds = [account.id, ...(subAccounts?.map(a => a.id) || [])];
+        const outstandingMap = await fetchOutstandingByAccount(allIds);
+        const mainNet = netAccountBalance(account.total_savings, outstandingMap[account.id]);
+        setAccountData({ profile, account: { ...account, balance: mainNet } });
 
         if (subAccounts && subAccounts.length > 0) {
           // Get sub-account profiles
@@ -64,12 +69,13 @@ const MemberStatement = () => {
           const profilesMap = new Map(subProfiles?.map(p => [p.account_id, p]) || []);
           const subAccountsWithProfiles = subAccounts.map(sa => ({
             ...sa,
+            balance: netAccountBalance(sa.total_savings, outstandingMap[sa.id]),
             profile: profilesMap.get(sa.id) || null
           }));
           setSubAccountsData(subAccountsWithProfiles);
 
           // Calculate joint totals
-          const jointBalance = account.balance + subAccounts.reduce((sum, sa) => sum + Number(sa.balance), 0);
+          const jointBalance = mainNet + subAccountsWithProfiles.reduce((sum, sa) => sum + Number(sa.balance), 0);
           const jointSavings = account.total_savings + subAccounts.reduce((sum, sa) => sum + Number(sa.total_savings), 0);
           setJointTotals({ balance: jointBalance, total_savings: jointSavings });
         }
