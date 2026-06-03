@@ -90,10 +90,9 @@ export default function DashboardLayout({
     navigate("/auth?mode=login");
   };
 
-  const SidebarContent = ({ alwaysExpanded = false }: { alwaysExpanded?: boolean } = {}) => {
-    const expanded = alwaysExpanded || isExpanded;
+  const isExpanded = !collapsed || hovered;
 
-    return (
+  const SidebarContent = ({ alwaysExpanded = false }: { alwaysExpanded?: boolean } = {}) => {
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className={cn(
