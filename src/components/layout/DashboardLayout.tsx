@@ -275,7 +275,7 @@ export default function DashboardLayout({
               className="md:hidden fixed left-0 top-0 bottom-0 w-64 bg-sidebar z-50 overflow-hidden"
               style={{ boxShadow: "4px 0 24px hsl(0 0% 0% / 0.3)" }}
             >
-              <SidebarContent />
+              <SidebarContent alwaysExpanded={true} />
             </motion.aside>
           </>
         )}
