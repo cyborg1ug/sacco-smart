@@ -93,6 +93,8 @@ export default function DashboardLayout({
   const isExpanded = !collapsed || hovered;
 
   const SidebarContent = ({ alwaysExpanded = false }: { alwaysExpanded?: boolean } = {}) => {
+    const expanded = alwaysExpanded || isExpanded;
+    return (
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className={cn(
