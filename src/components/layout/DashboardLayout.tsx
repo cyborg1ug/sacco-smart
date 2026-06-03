@@ -90,20 +90,21 @@ export default function DashboardLayout({
     navigate("/auth?mode=login");
   };
 
-  const isExpanded = !collapsed || hovered;
+  const SidebarContent = ({ alwaysExpanded = false }: { alwaysExpanded?: boolean } = {}) => {
+    const expanded = alwaysExpanded || isExpanded;
 
-  const SidebarContent = () => (
+    return (
     <div className="flex flex-col h-full">
       {/* Logo */}
       <div className={cn(
         "flex items-center gap-3 px-4 py-5 border-b border-sidebar-border",
-        !isExpanded && "justify-center px-3"
+        !expanded && "justify-center px-3"
       )}>
         <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center shrink-0">
           <Building2 className="w-4 h-4 text-primary-foreground" />
         </div>
         <AnimatePresence>
-          {isExpanded && (
+          {expanded && (
             <motion.div
               initial={{ opacity: 0, width: 0 }}
               animate={{ opacity: 1, width: "auto" }}
@@ -121,7 +122,7 @@ export default function DashboardLayout({
       </div>
 
       {/* User Info */}
-      {isExpanded && (
+      {expanded && (
         <div className="px-4 py-3 border-b border-sidebar-border">
           <div className="flex items-center gap-3">
             <Avatar className="w-8 h-8 shrink-0">
@@ -143,7 +144,7 @@ export default function DashboardLayout({
 
       {/* Nav Items */}
       <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
-        {isExpanded && (
+        {expanded && (
           <p className="section-heading px-2 pb-2 text-sidebar-foreground/40">
             {isAdmin ? "Management" : "Navigation"}
           </p>
@@ -157,7 +158,7 @@ export default function DashboardLayout({
               onClick={() => { navigate(item.path); setMobileOpen(false); }}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-all duration-150 group relative",
-                !isExpanded && "justify-center px-2",
+                !expanded && "justify-center px-2",
                 isActive
                   ? "bg-primary/15 text-primary font-semibold"
                   : "text-sidebar-foreground/70 hover:bg-white/6 hover:text-white"
@@ -165,7 +166,7 @@ export default function DashboardLayout({
             >
               <item.icon className={cn("shrink-0 w-4 h-4", isActive ? "text-primary" : "text-sidebar-foreground/60 group-hover:text-white")} />
               <AnimatePresence>
-                {isExpanded && (
+                {expanded && (
                   <motion.span
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
@@ -177,16 +178,16 @@ export default function DashboardLayout({
                   </motion.span>
                 )}
               </AnimatePresence>
-              {isExpanded && item.badge !== undefined && item.badge > 0 && (
+              {expanded && item.badge !== undefined && item.badge > 0 && (
                 <Badge className="ml-auto text-[10px] px-1.5 py-0 h-4 bg-destructive text-white border-0">
                   {item.badge}
                 </Badge>
               )}
-              {!isExpanded && item.badge !== undefined && item.badge > 0 && (
+              {!expanded && item.badge !== undefined && item.badge > 0 && (
                 <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-destructive" />
               )}
               {/* Tooltip for collapsed state */}
-              {!isExpanded && (
+              {!expanded && (
                 <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded-md bg-popover text-popover-foreground text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none shadow-lg border border-border z-50 transition-opacity duration-150">
                   {item.label}
                   {item.badge !== undefined && item.badge > 0 && (
@@ -205,14 +206,14 @@ export default function DashboardLayout({
           onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
           className={cn(
             "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-sidebar-foreground/60 hover:bg-white/6 hover:text-white transition-all relative group",
-            !isExpanded && "justify-center px-2"
+            !expanded && "justify-center px-2"
           )}
         >
           {theme === "dark"
             ? <Sun className="w-4 h-4 shrink-0" />
             : <Moon className="w-4 h-4 shrink-0" />}
-          {isExpanded && <span className="whitespace-nowrap">{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>}
-          {!isExpanded && (
+          {expanded && <span className="whitespace-nowrap">{theme === "dark" ? "Light Mode" : "Dark Mode"}</span>}
+          {!expanded && (
             <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded-md bg-popover text-popover-foreground text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none shadow-lg border border-border z-50 transition-opacity duration-150">
               {theme === "dark" ? "Light Mode" : "Dark Mode"}
             </div>
@@ -222,12 +223,12 @@ export default function DashboardLayout({
           onClick={handleLogout}
           className={cn(
             "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-destructive/70 hover:bg-destructive/10 hover:text-destructive transition-all relative group",
-            !isExpanded && "justify-center px-2"
+            !expanded && "justify-center px-2"
           )}
         >
           <LogOut className="w-4 h-4 shrink-0" />
-          {isExpanded && <span className="whitespace-nowrap">Sign Out</span>}
-          {!isExpanded && (
+          {expanded && <span className="whitespace-nowrap">Sign Out</span>}
+          {!expanded && (
             <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 rounded-md bg-popover text-popover-foreground text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none shadow-lg border border-border z-50 transition-opacity duration-150">
               Sign Out
             </div>
@@ -236,6 +237,7 @@ export default function DashboardLayout({
       </div>
     </div>
   );
+  };
 
   return (
     <div className="flex h-screen w-full overflow-hidden bg-background">
