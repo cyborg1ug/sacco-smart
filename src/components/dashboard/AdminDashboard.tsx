@@ -293,7 +293,7 @@ const AdminDashboard = () => {
     ? Math.round((stats.totalRepaid / (stats.totalRepaid + stats.outstandingBalance || 1)) * 100) : 0;
 
   const bigStats: BigStat[] = [
-    { title: "Total Savings", value: fmtFull(stats.totalSavings).replace("UGX", "UGX "), subtitle: "Across all member accounts", icon: PiggyBank, tone: "success", trend: stats.savingsTrend },
+    { title: "Total Savings", value: fmtFull(stats.totalSavings), subtitle: "Across all member accounts", icon: PiggyBank, tone: "success", trend: stats.savingsTrend },
     { title: "Total Loans Issued", value: fmtFull(stats.totalLoanAmount), subtitle: `${stats.activeLoans} active loan accounts`, icon: CreditCard, tone: "info", trend: stats.loansTrend },
     { title: "Outstanding Loans", value: fmtFull(stats.outstandingBalance), subtitle: `Collection rate: ${collectionRate}%`, icon: Wallet, tone: "warning", trend: stats.collectionTrend, trendLabel: "collection" },
     { title: "Active Members", value: `${stats.activeMembers}/${stats.totalMembers}`, subtitle: `${stats.pendingLoanApps} pending applications`, icon: Users, tone: "success", trend: stats.depositsTrend },
