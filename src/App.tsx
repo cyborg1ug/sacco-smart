@@ -66,15 +66,15 @@ const App = () => (
             <Route path="/member/profile" element={<ProtectedRoute><MemberProfilePage /></ProtectedRoute>} />
             
             {/* Admin routes */}
-            <Route path="/admin/members" element={<ProtectedRoute><AdminMembersPage /></ProtectedRoute>} />
-            <Route path="/admin/members/:accountId" element={<ProtectedRoute><AdminMemberDetails /></ProtectedRoute>} />
-            <Route path="/admin/transactions" element={<ProtectedRoute><AdminTransactionsPage /></ProtectedRoute>} />
-            <Route path="/admin/transactions/:accountId" element={<ProtectedRoute><AdminMemberTransactions /></ProtectedRoute>} />
-            <Route path="/admin/loans" element={<ProtectedRoute><AdminLoansPage /></ProtectedRoute>} />
-            <Route path="/admin/welfare" element={<ProtectedRoute><AdminWelfarePage /></ProtectedRoute>} />
-            <Route path="/admin/reminders" element={<ProtectedRoute><AdminRemindersPage /></ProtectedRoute>} />
-            <Route path="/admin/statements" element={<ProtectedRoute><AdminStatementsPage /></ProtectedRoute>} />
-            <Route path="/admin/reports" element={<ProtectedRoute><AdminReportsPage /></ProtectedRoute>} />
+            <Route path="/admin/members" element={<ProtectedRoute requireAdmin><AdminMembersPage /></ProtectedRoute>} />
+            <Route path="/admin/members/:accountId" element={<ProtectedRoute requireAdmin><AdminMemberDetails /></ProtectedRoute>} />
+            <Route path="/admin/transactions" element={<ProtectedRoute requireAdmin><AdminTransactionsPage /></ProtectedRoute>} />
+            <Route path="/admin/transactions/:accountId" element={<ProtectedRoute requireAdmin><AdminMemberTransactions /></ProtectedRoute>} />
+            <Route path="/admin/loans" element={<ProtectedRoute requireAdmin><AdminLoansPage /></ProtectedRoute>} />
+            <Route path="/admin/welfare" element={<ProtectedRoute requireAdmin><AdminWelfarePage /></ProtectedRoute>} />
+            <Route path="/admin/reminders" element={<ProtectedRoute requireAdmin><AdminRemindersPage /></ProtectedRoute>} />
+            <Route path="/admin/statements" element={<ProtectedRoute requireAdmin><AdminStatementsPage /></ProtectedRoute>} />
+            <Route path="/admin/reports" element={<ProtectedRoute requireAdmin><AdminReportsPage /></ProtectedRoute>} />
             
             <Route path="/terms" element={<TermsAndConditions />} />
             <Route path="/changelog" element={<Changelog />} />
