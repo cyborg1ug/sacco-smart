@@ -16,6 +16,23 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
     );
 
+    // ── Authentication: caller must be signed in ────────────────────────────
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "No authorization header" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      return new Response(JSON.stringify({ error: "Invalid token" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const {
       accountId,
       loanAmount,
@@ -33,6 +50,40 @@ serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // ── Authorization: caller must own accountId (directly or via parent) or be admin ──
+    const { data: isAdminRow } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "admin")
+      .maybeSingle();
+    const isAdmin = !!isAdminRow;
+
+    if (!isAdmin) {
+      const { data: ownAccount } = await supabase
+        .from("accounts")
+        .select("id, user_id, parent_account_id")
+        .eq("id", accountId)
+        .maybeSingle();
+
+      let owns = !!ownAccount && ownAccount.user_id === user.id;
+      if (!owns && ownAccount?.parent_account_id) {
+        const { data: parent } = await supabase
+          .from("accounts")
+          .select("user_id")
+          .eq("id", ownAccount.parent_account_id)
+          .maybeSingle();
+        owns = !!parent && parent.user_id === user.id;
+      }
+
+      if (!owns) {
+        return new Response(JSON.stringify({ error: "Forbidden: you do not own this account" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // ── 1. Fetch applicant account ──────────────────────────────────────────
