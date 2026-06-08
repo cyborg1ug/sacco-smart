@@ -180,13 +180,14 @@ const AdminDashboard = () => {
       return { key: format(d, "yyyy-MM"), label: format(d, "MMM") };
     });
     const bucket = () => months.reduce((acc, m) => { acc[m.key] = 0; return acc; }, {} as Record<string, number>);
-    const deposits = bucket(), withdrawals = bucket(), collected = bucket(), overdueM = bucket();
+    const deposits = bucket(), withdrawals = bucket(), disbursements = bucket(), collected = bucket(), overdueM = bucket();
     txns.forEach(t => {
       const k = format(new Date(t.created_at), "yyyy-MM");
       if (!(k in deposits)) return;
       const amt = Number(t.amount);
       if (t.transaction_type === "deposit") deposits[k] += amt;
-      else if (t.transaction_type === "loan_disbursement") withdrawals[k] += amt;
+      else if (t.transaction_type === "withdrawal") withdrawals[k] += amt;
+      else if (t.transaction_type === "loan_disbursement") disbursements[k] += amt;
       else if (t.transaction_type === "loan_repayment") collected[k] += amt;
       else if (t.transaction_type === "overdue_interest") overdueM[k] += amt;
     });
