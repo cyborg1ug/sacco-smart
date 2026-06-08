@@ -140,7 +140,7 @@ const AdminDashboard = () => {
 
   const loadStatsAndCharts = async () => {
     const [accountsRes, allTxnsRes, activeLoansRes, pendingTxnRes, pendingLoanRes, loanAmtsRes] = await Promise.all([
-      supabase.from("accounts").select("id", { count: "exact" }).eq("account_type", "main"),
+      supabase.from("accounts").select("id, total_savings, account_type, user_id"),
       supabase.from("transactions").select("transaction_type, amount, created_at, account_id, loan_id").eq("status", "approved"),
       supabase.from("loans").select("id", { count: "exact" }).in("status", ["approved", "disbursed", "active"]).gt("outstanding_balance", 0),
       supabase.from("transactions").select("id", { count: "exact" }).eq("status", "pending"),
