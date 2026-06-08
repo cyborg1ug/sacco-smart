@@ -199,21 +199,20 @@ const AdminDashboard = () => {
 
     // Current vs previous month trends
     const curKey = months[5].key, prevKey = months[4].key;
-    const disbThis = txns.filter(t => t.transaction_type === "loan_disbursement" && format(new Date(t.created_at), "yyyy-MM") === curKey).reduce((s, t) => s + Number(t.amount), 0);
-    const disbPrev = txns.filter(t => t.transaction_type === "loan_disbursement" && format(new Date(t.created_at), "yyyy-MM") === prevKey).reduce((s, t) => s + Number(t.amount), 0);
+    const disbThis = disbursements[curKey];
+    const disbPrev = disbursements[prevKey];
     const monthDeposits = deposits[curKey];
     const monthRepayments = collected[curKey];
 
-    // Member contributions (top 6 by deposits)
-    const byAccount: Record<string, number> = {};
-    txns.filter(t => t.transaction_type === "deposit").forEach(t => {
-      byAccount[t.account_id] = (byAccount[t.account_id] || 0) + Number(t.amount);
-    });
-    const topAccounts = Object.entries(byAccount).sort((a, b) => b[1] - a[1]).slice(0, 6);
-    const nameMap = await resolveNames(topAccounts.map(([id]) => id));
-    const memberContributions = topAccounts.map(([id, amount]) => ({
-      name: (nameMap[id] || "Member").split(" ").slice(0, 2).map((w, i) => i === 1 ? `${w[0]}.` : w).join(" "),
-      amount,
+    // Member contributions — total savings by member (matches reports' per-member savings)
+    const topAccounts = accounts
+      .filter((a: any) => Number(a.total_savings || 0) > 0)
+      .sort((a: any, b: any) => Number(b.total_savings) - Number(a.total_savings))
+      .slice(0, 6);
+    const nameMap = await resolveNames(topAccounts.map((a: any) => a.id));
+    const memberContributions = topAccounts.map((a: any) => ({
+      name: (nameMap[a.id] || "Member").split(" ").slice(0, 2).map((w, i) => i === 1 ? `${w[0]}.` : w).join(" "),
+      amount: Number(a.total_savings),
     }));
 
     // Loan distribution by purpose
