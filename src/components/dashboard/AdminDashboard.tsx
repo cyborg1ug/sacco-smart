@@ -139,13 +139,14 @@ const AdminDashboard = () => {
   };
 
   const loadStatsAndCharts = async () => {
-    const [accountsRes, allTxnsRes, activeLoansRes, pendingTxnRes, pendingLoanRes, loanAmtsRes] = await Promise.all([
+    const [accountsRes, allTxnsRes, activeLoansRes, pendingTxnRes, pendingLoanRes, loanAmtsRes, scheduleLoansRes] = await Promise.all([
       supabase.from("accounts").select("id, total_savings, account_type, user_id"),
       supabase.from("transactions").select("transaction_type, amount, created_at, account_id, loan_id").eq("status", "approved"),
       supabase.from("loans").select("id", { count: "exact" }).in("status", ["approved", "disbursed", "active"]).gt("outstanding_balance", 0),
       supabase.from("transactions").select("id", { count: "exact" }).eq("status", "pending"),
       supabase.from("loans").select("id", { count: "exact" }).eq("status", "pending"),
       supabase.from("loans").select("amount, outstanding_balance, status, purpose, disbursed_at, repayment_months").in("status", ["approved", "disbursed", "active"]),
+      supabase.from("loans").select("total_amount, repayment_months, disbursed_at, status").in("status", ["disbursed", "active", "completed", "fully_paid"]).not("disbursed_at", "is", null),
     ]);
 
     const txns = allTxnsRes.data ?? [];
