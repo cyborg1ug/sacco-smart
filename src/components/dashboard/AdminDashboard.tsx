@@ -224,8 +224,8 @@ const AdminDashboard = () => {
     const loanDistribution = Object.entries(byPurpose).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
 
     setStats({
-      totalMembers: accountsRes.count || 0,
-      activeMembers: Math.min(activeMembers, accountsRes.count || activeMembers),
+      totalMembers: mainAccounts.length,
+      activeMembers: Math.min(activeMembers, mainAccounts.length || activeMembers),
       totalSavings, activeLoans: activeLoansRes.count || 0,
       pendingTransactions: pendingTxnRes.count || 0,
       pendingLoanApps: pendingLoanRes.count || 0,
