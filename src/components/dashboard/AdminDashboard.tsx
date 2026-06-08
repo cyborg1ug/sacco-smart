@@ -139,13 +139,14 @@ const AdminDashboard = () => {
   };
 
   const loadStatsAndCharts = async () => {
-    const [accountsRes, allTxnsRes, activeLoansRes, pendingTxnRes, pendingLoanRes, loanAmtsRes] = await Promise.all([
+    const [accountsRes, allTxnsRes, activeLoansRes, pendingTxnRes, pendingLoanRes, loanAmtsRes, scheduleLoansRes] = await Promise.all([
       supabase.from("accounts").select("id, total_savings, account_type, user_id"),
       supabase.from("transactions").select("transaction_type, amount, created_at, account_id, loan_id").eq("status", "approved"),
       supabase.from("loans").select("id", { count: "exact" }).in("status", ["approved", "disbursed", "active"]).gt("outstanding_balance", 0),
       supabase.from("transactions").select("id", { count: "exact" }).eq("status", "pending"),
       supabase.from("loans").select("id", { count: "exact" }).eq("status", "pending"),
       supabase.from("loans").select("amount, outstanding_balance, status, purpose, disbursed_at, repayment_months").in("status", ["approved", "disbursed", "active"]),
+      supabase.from("loans").select("total_amount, repayment_months, disbursed_at, status").in("status", ["disbursed", "active", "completed", "fully_paid"]).not("disbursed_at", "is", null),
     ]);
 
     const txns = allTxnsRes.data ?? [];
@@ -180,7 +181,7 @@ const AdminDashboard = () => {
       return { key: format(d, "yyyy-MM"), label: format(d, "MMM") };
     });
     const bucket = () => months.reduce((acc, m) => { acc[m.key] = 0; return acc; }, {} as Record<string, number>);
-    const deposits = bucket(), withdrawals = bucket(), disbursements = bucket(), collected = bucket(), overdueM = bucket();
+    const deposits = bucket(), withdrawals = bucket(), disbursements = bucket(), collected = bucket(), expectedB = bucket();
     txns.forEach(t => {
       const k = format(new Date(t.created_at), "yyyy-MM");
       if (!(k in deposits)) return;
@@ -189,12 +190,31 @@ const AdminDashboard = () => {
       else if (t.transaction_type === "withdrawal") withdrawals[k] += amt;
       else if (t.transaction_type === "loan_disbursement") disbursements[k] += amt;
       else if (t.transaction_type === "loan_repayment") collected[k] += amt;
-      else if (t.transaction_type === "overdue_interest") overdueM[k] += amt;
     });
+
+    // Expected repayments = scheduled monthly installments due in each month.
+    // For every disbursed loan, one installment (total_amount / repayment_months)
+    // is expected each month from the month after disbursal through the term.
+    const scheduleLoans = scheduleLoansRes.data ?? [];
+    scheduleLoans.forEach((l: any) => {
+      const months_ = Number(l.repayment_months);
+      const total = Number(l.total_amount);
+      if (!l.disbursed_at || !months_ || !total) return;
+      const installment = total / months_;
+      for (let i = 1; i <= months_; i++) {
+        const due = startOfMonth(new Date(l.disbursed_at));
+        due.setMonth(due.getMonth() + i);
+        const dk = format(due, "yyyy-MM");
+        if (dk in expectedB) expectedB[dk] += installment;
+      }
+    });
+
     const savingsActivity = months.map(m => ({ month: m.label, deposits: deposits[m.key], withdrawals: withdrawals[m.key] }));
     const repaymentTrends = months.map(m => ({
-      month: m.label, collected: collected[m.key], overdue: overdueM[m.key],
-      expected: collected[m.key] + overdueM[m.key],
+      month: m.label,
+      expected: Math.round(expectedB[m.key]),
+      collected: Math.round(collected[m.key]),
+      overdue: Math.round(Math.max(expectedB[m.key] - collected[m.key], 0)),
     }));
 
     // Current vs previous month trends
