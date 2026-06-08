@@ -140,7 +140,7 @@ const AdminDashboard = () => {
 
   const loadStatsAndCharts = async () => {
     const [accountsRes, allTxnsRes, activeLoansRes, pendingTxnRes, pendingLoanRes, loanAmtsRes] = await Promise.all([
-      supabase.from("accounts").select("id", { count: "exact" }).eq("account_type", "main"),
+      supabase.from("accounts").select("id, total_savings, account_type, user_id"),
       supabase.from("transactions").select("transaction_type, amount, created_at, account_id, loan_id").eq("status", "approved"),
       supabase.from("loans").select("id", { count: "exact" }).in("status", ["approved", "disbursed", "active"]).gt("outstanding_balance", 0),
       supabase.from("transactions").select("id", { count: "exact" }).eq("status", "pending"),
@@ -149,7 +149,10 @@ const AdminDashboard = () => {
     ]);
 
     const txns = allTxnsRes.data ?? [];
-    const totalSavings = txns.filter(t => t.transaction_type === "deposit").reduce((s, t) => s + Number(t.amount), 0);
+    const accounts = accountsRes.data ?? [];
+    const mainAccounts = accounts.filter((a: any) => a.account_type === "main");
+    // Total Savings = combined total_savings across all accounts (matches reports' "Combined Total Savings")
+    const totalSavings = accounts.reduce((s: number, a: any) => s + Number(a.total_savings || 0), 0);
     const totalRepaid = txns.filter(t => t.transaction_type === "loan_repayment").reduce((s, t) => s + Number(t.amount), 0);
     const totalPenalties = txns.filter(t => t.transaction_type === "overdue_interest").reduce((s, t) => s + Number(t.amount), 0);
     const loans = loanAmtsRes.data ?? [];
@@ -177,13 +180,14 @@ const AdminDashboard = () => {
       return { key: format(d, "yyyy-MM"), label: format(d, "MMM") };
     });
     const bucket = () => months.reduce((acc, m) => { acc[m.key] = 0; return acc; }, {} as Record<string, number>);
-    const deposits = bucket(), withdrawals = bucket(), collected = bucket(), overdueM = bucket();
+    const deposits = bucket(), withdrawals = bucket(), disbursements = bucket(), collected = bucket(), overdueM = bucket();
     txns.forEach(t => {
       const k = format(new Date(t.created_at), "yyyy-MM");
       if (!(k in deposits)) return;
       const amt = Number(t.amount);
       if (t.transaction_type === "deposit") deposits[k] += amt;
-      else if (t.transaction_type === "loan_disbursement") withdrawals[k] += amt;
+      else if (t.transaction_type === "withdrawal") withdrawals[k] += amt;
+      else if (t.transaction_type === "loan_disbursement") disbursements[k] += amt;
       else if (t.transaction_type === "loan_repayment") collected[k] += amt;
       else if (t.transaction_type === "overdue_interest") overdueM[k] += amt;
     });
@@ -195,21 +199,20 @@ const AdminDashboard = () => {
 
     // Current vs previous month trends
     const curKey = months[5].key, prevKey = months[4].key;
-    const disbThis = txns.filter(t => t.transaction_type === "loan_disbursement" && format(new Date(t.created_at), "yyyy-MM") === curKey).reduce((s, t) => s + Number(t.amount), 0);
-    const disbPrev = txns.filter(t => t.transaction_type === "loan_disbursement" && format(new Date(t.created_at), "yyyy-MM") === prevKey).reduce((s, t) => s + Number(t.amount), 0);
+    const disbThis = disbursements[curKey];
+    const disbPrev = disbursements[prevKey];
     const monthDeposits = deposits[curKey];
     const monthRepayments = collected[curKey];
 
-    // Member contributions (top 6 by deposits)
-    const byAccount: Record<string, number> = {};
-    txns.filter(t => t.transaction_type === "deposit").forEach(t => {
-      byAccount[t.account_id] = (byAccount[t.account_id] || 0) + Number(t.amount);
-    });
-    const topAccounts = Object.entries(byAccount).sort((a, b) => b[1] - a[1]).slice(0, 6);
-    const nameMap = await resolveNames(topAccounts.map(([id]) => id));
-    const memberContributions = topAccounts.map(([id, amount]) => ({
-      name: (nameMap[id] || "Member").split(" ").slice(0, 2).map((w, i) => i === 1 ? `${w[0]}.` : w).join(" "),
-      amount,
+    // Member contributions — total savings by member (matches reports' per-member savings)
+    const topAccounts = accounts
+      .filter((a: any) => Number(a.total_savings || 0) > 0)
+      .sort((a: any, b: any) => Number(b.total_savings) - Number(a.total_savings))
+      .slice(0, 6);
+    const nameMap = await resolveNames(topAccounts.map((a: any) => a.id));
+    const memberContributions = topAccounts.map((a: any) => ({
+      name: (nameMap[a.id] || "Member").split(" ").slice(0, 2).map((w, i) => i === 1 ? `${w[0]}.` : w).join(" "),
+      amount: Number(a.total_savings),
     }));
 
     // Loan distribution by purpose
@@ -221,8 +224,8 @@ const AdminDashboard = () => {
     const loanDistribution = Object.entries(byPurpose).sort((a, b) => b[1] - a[1]).map(([name, value]) => ({ name, value }));
 
     setStats({
-      totalMembers: accountsRes.count || 0,
-      activeMembers: Math.min(activeMembers, accountsRes.count || activeMembers),
+      totalMembers: mainAccounts.length,
+      activeMembers: Math.min(activeMembers, mainAccounts.length || activeMembers),
       totalSavings, activeLoans: activeLoansRes.count || 0,
       pendingTransactions: pendingTxnRes.count || 0,
       pendingLoanApps: pendingLoanRes.count || 0,
