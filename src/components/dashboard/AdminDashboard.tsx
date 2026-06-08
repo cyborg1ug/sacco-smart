@@ -149,7 +149,10 @@ const AdminDashboard = () => {
     ]);
 
     const txns = allTxnsRes.data ?? [];
-    const totalSavings = txns.filter(t => t.transaction_type === "deposit").reduce((s, t) => s + Number(t.amount), 0);
+    const accounts = accountsRes.data ?? [];
+    const mainAccounts = accounts.filter((a: any) => a.account_type === "main");
+    // Total Savings = combined total_savings across all accounts (matches reports' "Combined Total Savings")
+    const totalSavings = accounts.reduce((s: number, a: any) => s + Number(a.total_savings || 0), 0);
     const totalRepaid = txns.filter(t => t.transaction_type === "loan_repayment").reduce((s, t) => s + Number(t.amount), 0);
     const totalPenalties = txns.filter(t => t.transaction_type === "overdue_interest").reduce((s, t) => s + Number(t.amount), 0);
     const loans = loanAmtsRes.data ?? [];
