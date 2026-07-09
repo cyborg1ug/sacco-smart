@@ -1,21 +1,73 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Users, TrendingUp, Clock, Heart, BarChart3, CreditCard, FileText, Bell,
   ArrowUpRight, ArrowDownRight, AlertTriangle, PiggyBank, Wallet, Activity,
-  RefreshCw, ArrowRight,
+  RefreshCw, ArrowRight, CalendarRange,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { format, subMonths, startOfMonth } from "date-fns";
+import {
+  format, subMonths, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter,
+  startOfYear, endOfYear, subQuarters, subYears,
+  eachMonthOfInterval, eachQuarterOfInterval, eachYearOfInterval,
+} from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import EnhancedMobileNavCard from "./EnhancedMobileNavCard";
 import OverviewCharts from "./charts/OverviewCharts";
+
+type Granularity = "month" | "quarter" | "year";
+
+const periodKey = (d: Date, g: Granularity) =>
+  g === "year" ? format(d, "yyyy")
+    : g === "quarter" ? `${format(d, "yyyy")}-Q${Math.floor(d.getMonth() / 3) + 1}`
+    : format(d, "yyyy-MM");
+
+const periodLabel = (d: Date, g: Granularity) =>
+  g === "year" ? format(d, "yyyy")
+    : g === "quarter" ? `Q${Math.floor(d.getMonth() / 3) + 1} '${format(d, "yy")}`
+    : format(d, "MMM yy");
+
+const buildBuckets = (start: Date, end: Date, g: Granularity) => {
+  if (end < start) return [];
+  const dates = g === "year" ? eachYearOfInterval({ start, end })
+    : g === "quarter" ? eachQuarterOfInterval({ start, end })
+    : eachMonthOfInterval({ start, end });
+  return dates.map((d) => ({ key: periodKey(d, g), label: periodLabel(d, g) }));
+};
+
+const resolveRange = (
+  preset: string,
+  customFrom?: string,
+  customTo?: string,
+  customGran: Granularity = "month",
+): { start: Date; end: Date; g: Granularity } => {
+  const now = new Date();
+  switch (preset) {
+    case "this_month": return { start: startOfMonth(now), end: endOfMonth(now), g: "month" };
+    case "3m": return { start: startOfMonth(subMonths(now, 2)), end: endOfMonth(now), g: "month" };
+    case "12m": return { start: startOfMonth(subMonths(now, 11)), end: endOfMonth(now), g: "month" };
+    case "ytd": return { start: startOfYear(now), end: endOfMonth(now), g: "month" };
+    case "quarterly": return { start: startOfQuarter(subQuarters(now, 3)), end: endOfQuarter(now), g: "quarter" };
+    case "yearly": return { start: startOfYear(subYears(now, 2)), end: endOfYear(now), g: "year" };
+    case "custom": {
+      const start = customFrom ? startOfMonth(new Date(customFrom)) : startOfMonth(subMonths(now, 5));
+      const end = customTo ? endOfMonth(new Date(customTo)) : endOfMonth(now);
+      return { start, end, g: customGran };
+    }
+    case "6m":
+    default: return { start: startOfMonth(subMonths(now, 5)), end: endOfMonth(now), g: "month" };
+  }
+};
+
 
 const fmtUGX = (n: number) =>
   n >= 1_000_000 ? `UGX ${(n / 1_000_000).toFixed(1)}M`
@@ -87,9 +139,17 @@ const AdminDashboard = () => {
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [pendingLoans, setPendingLoans] = useState<any[]>([]);
   const [charts, setCharts] = useState({
-    repaymentTrends: [] as any[], savingsActivity: [] as any[],
     memberContributions: [] as any[], loanDistribution: [] as any[],
   });
+  // Raw time-series source data for period-aware charts
+  const [rawTxns, setRawTxns] = useState<{ transaction_type: string; amount: number; created_at: string }[]>([]);
+  const [rawSchedule, setRawSchedule] = useState<{ total_amount: number; repayment_months: number; disbursed_at: string }[]>([]);
+
+  // Period controls
+  const [period, setPeriod] = useState<string>("6m");
+  const [customFrom, setCustomFrom] = useState<string>("");
+  const [customTo, setCustomTo] = useState<string>("");
+  const [customGran, setCustomGran] = useState<Granularity>("month");
 
   useEffect(() => {
     loadUserName();
@@ -209,13 +269,10 @@ const AdminDashboard = () => {
       }
     });
 
-    const savingsActivity = months.map(m => ({ month: m.label, deposits: deposits[m.key], withdrawals: withdrawals[m.key] }));
-    const repaymentTrends = months.map(m => ({
-      month: m.label,
-      expected: Math.round(expectedB[m.key]),
-      collected: Math.round(collected[m.key]),
-      overdue: Math.round(Math.max(expectedB[m.key] - collected[m.key], 0)),
-    }));
+    // Store raw source data — period-aware time-series charts derive from these.
+    setRawTxns(txns.map((t: any) => ({ transaction_type: t.transaction_type, amount: Number(t.amount), created_at: t.created_at })));
+    setRawSchedule(scheduleLoans.map((l: any) => ({ total_amount: Number(l.total_amount), repayment_months: Number(l.repayment_months), disbursed_at: l.disbursed_at })));
+
 
     // Current vs previous month trends
     const curKey = months[5].key, prevKey = months[4].key;
@@ -256,7 +313,7 @@ const AdminDashboard = () => {
       savingsTrend: trendPct(monthDeposits, deposits[prevKey]),
       collectionTrend: trendPct(monthRepayments, collected[prevKey]),
     });
-    setCharts({ repaymentTrends, savingsActivity, memberContributions, loanDistribution });
+    setCharts({ memberContributions, loanDistribution });
   };
 
   const loadRecentTransactions = async () => {
@@ -329,6 +386,61 @@ const AdminDashboard = () => {
     { label: "Penalties Collected", value: fmtFull(stats.totalPenalties), icon: Activity, color: "text-warning", bg: "bg-warning/10" },
   ];
 
+  // ── Period-aware time-series (repayment trends + savings activity) ──
+  const { repaymentTrends, savingsActivity, periodDescription } = useMemo(() => {
+    const { start, end, g } = resolveRange(period, customFrom, customTo, customGran);
+    const buckets = buildBuckets(start, end, g);
+    const zero = () => buckets.reduce((acc, b) => { acc[b.key] = 0; return acc; }, {} as Record<string, number>);
+    const deposits = zero(), withdrawals = zero(), collected = zero(), expected = zero();
+
+    rawTxns.forEach((t) => {
+      const d = new Date(t.created_at);
+      if (d < start || d > end) return;
+      const k = periodKey(d, g);
+      if (!(k in deposits)) return;
+      if (t.transaction_type === "deposit") deposits[k] += t.amount;
+      else if (t.transaction_type === "withdrawal") withdrawals[k] += t.amount;
+      else if (t.transaction_type === "loan_repayment") collected[k] += t.amount;
+    });
+
+    rawSchedule.forEach((l) => {
+      if (!l.disbursed_at || !l.repayment_months || !l.total_amount) return;
+      const installment = l.total_amount / l.repayment_months;
+      for (let i = 1; i <= l.repayment_months; i++) {
+        const due = startOfMonth(new Date(l.disbursed_at));
+        due.setMonth(due.getMonth() + i);
+        if (due < start || due > end) continue;
+        const k = periodKey(due, g);
+        if (k in expected) expected[k] += installment;
+      }
+    });
+
+    const repaymentTrends = buckets.map((b) => ({
+      month: b.label,
+      expected: Math.round(expected[b.key]),
+      collected: Math.round(collected[b.key]),
+      overdue: Math.round(Math.max(expected[b.key] - collected[b.key], 0)),
+    }));
+    const savingsActivity = buckets.map((b) => ({
+      month: b.label,
+      deposits: Math.round(deposits[b.key]),
+      withdrawals: Math.round(withdrawals[b.key]),
+    }));
+    const periodDescription = `${format(start, "dd MMM yyyy")} – ${format(end, "dd MMM yyyy")} · ${g}ly`;
+    return { repaymentTrends, savingsActivity, periodDescription };
+  }, [rawTxns, rawSchedule, period, customFrom, customTo, customGran]);
+
+  const periodOptions = [
+    { value: "this_month", label: "This Month" },
+    { value: "3m", label: "Last 3 Months" },
+    { value: "6m", label: "Last 6 Months" },
+    { value: "12m", label: "Last 12 Months" },
+    { value: "ytd", label: "This Year (Monthly)" },
+    { value: "quarterly", label: "Quarterly (Last 4Q)" },
+    { value: "yearly", label: "Yearly (Last 3Y)" },
+    { value: "custom", label: "Custom Range…" },
+  ];
+
   return (
     <DashboardLayout isAdmin userName={userName} pendingCount={stats.pendingTransactions}>
       {/* Heading */}
@@ -394,14 +506,60 @@ const AdminDashboard = () => {
 
       {/* Charts */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.3 }} className="mb-6">
+        transition={{ duration: 0.4, delay: 0.3 }} className="mb-6 space-y-4">
+        {/* Period controls */}
+        <Card className="rounded-2xl border border-border/60 shadow-sm">
+          <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <CalendarRange className="w-4 h-4 text-primary" />
+              <span>Time period</span>
+              <span className="text-xs font-normal text-muted-foreground hidden sm:inline">· {periodDescription}</span>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="w-full sm:w-56">
+                <Select value={period} onValueChange={setPeriod}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {periodOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {period === "custom" && (
+                <div className="flex flex-wrap items-end gap-2">
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground">From</Label>
+                    <Input type="month" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-9 w-[140px]" />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground">To</Label>
+                    <Input type="month" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="h-9 w-[140px]" />
+                  </div>
+                  <div className="w-[130px]">
+                    <Label className="text-[10px] text-muted-foreground">Group by</Label>
+                    <Select value={customGran} onValueChange={(v) => setCustomGran(v as Granularity)}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="month">Monthly</SelectItem>
+                        <SelectItem value="quarter">Quarterly</SelectItem>
+                        <SelectItem value="year">Yearly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
         <OverviewCharts
-          repaymentTrends={charts.repaymentTrends}
-          savingsActivity={charts.savingsActivity}
+          repaymentTrends={repaymentTrends}
+          savingsActivity={savingsActivity}
           memberContributions={charts.memberContributions}
           loanDistribution={charts.loanDistribution}
         />
       </motion.div>
+
 
       {/* Recent transactions + Pending loan applications */}
       <div className="grid gap-5 lg:grid-cols-2 mb-6">

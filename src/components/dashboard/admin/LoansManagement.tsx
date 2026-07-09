@@ -194,7 +194,8 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     const { data: loansData } = await supabase
       .from("loans")
       .select("*")
-      .order("created_at", { ascending: false });
+      .order("created_at", { ascending: false })
+      .limit(2000);
 
     if (!loansData) { setLoading(false); return; }
 

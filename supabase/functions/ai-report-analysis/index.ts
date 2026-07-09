@@ -49,6 +49,23 @@ serve(async (req) => {
       });
     }
 
+    // ── Rate limiting: max 15 report analyses per admin per minute ───────────
+    const { data: allowed, error: rlError } = await supabaseClient.rpc("check_rate_limit", {
+      _identifier: user.id,
+      _action: "ai-report-analysis",
+      _max_count: 15,
+      _window_seconds: 60,
+    });
+    if (rlError) console.error("rate limit check failed:", rlError.message);
+    if (allowed === false) {
+      console.log(`[ai-report-analysis] rate limit exceeded for user ${user.id}`);
+      return new Response(
+        JSON.stringify({ error: "Too many requests. Please wait a moment and try again." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    console.log(`[ai-report-analysis] request by user ${user.id}`);
+
     // ── Input validation ────────────────────────────────────────────────────
     const rawBody = await req.text();
     if (rawBody.length > MAX_PAYLOAD_BYTES) {

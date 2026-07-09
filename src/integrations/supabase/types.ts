@@ -58,6 +58,39 @@ export type Database = {
           },
         ]
       }
+      audit_logs: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          id: string
+          new_data: Json | null
+          old_data: Json | null
+          operation: string
+          record_id: string | null
+          table_name: string
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          operation: string
+          record_id?: string | null
+          table_name: string
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          id?: string
+          new_data?: Json | null
+          old_data?: Json | null
+          operation?: string
+          record_id?: string | null
+          table_name?: string
+        }
+        Relationships: []
+      }
       loans: {
         Row: {
           account_id: string
@@ -166,6 +199,33 @@ export type Database = {
           occupation?: string | null
           phone_number?: string | null
           updated_at?: string
+        }
+        Relationships: []
+      }
+      rate_limits: {
+        Row: {
+          action: string
+          count: number
+          id: string
+          identifier: string
+          updated_at: string
+          window_start: string
+        }
+        Insert: {
+          action: string
+          count?: number
+          id?: string
+          identifier: string
+          updated_at?: string
+          window_start?: string
+        }
+        Update: {
+          action?: string
+          count?: number
+          id?: string
+          identifier?: string
+          updated_at?: string
+          window_start?: string
         }
         Relationships: []
       }
@@ -420,6 +480,15 @@ export type Database = {
     }
     Functions: {
       check_loan_eligibility: { Args: { p_account_id: string }; Returns: Json }
+      check_rate_limit: {
+        Args: {
+          _action: string
+          _identifier: string
+          _max_count: number
+          _window_seconds: number
+        }
+        Returns: boolean
+      }
       generate_tnx_id: { Args: never; Returns: string }
       get_email_by_phone: { Args: { p_phone_number: string }; Returns: string }
       get_guarantor_candidates:
@@ -450,13 +519,14 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_super_admin: { Args: { _user_id: string }; Returns: boolean }
       user_owns_parent_account: {
         Args: { account_parent_id: string }
         Returns: boolean
       }
     }
     Enums: {
-      app_role: "admin" | "member"
+      app_role: "admin" | "member" | "super_admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -584,7 +654,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      app_role: ["admin", "member"],
+      app_role: ["admin", "member", "super_admin"],
     },
   },
 } as const
