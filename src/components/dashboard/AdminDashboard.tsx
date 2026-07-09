@@ -139,9 +139,17 @@ const AdminDashboard = () => {
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
   const [pendingLoans, setPendingLoans] = useState<any[]>([]);
   const [charts, setCharts] = useState({
-    repaymentTrends: [] as any[], savingsActivity: [] as any[],
     memberContributions: [] as any[], loanDistribution: [] as any[],
   });
+  // Raw time-series source data for period-aware charts
+  const [rawTxns, setRawTxns] = useState<{ transaction_type: string; amount: number; created_at: string }[]>([]);
+  const [rawSchedule, setRawSchedule] = useState<{ total_amount: number; repayment_months: number; disbursed_at: string }[]>([]);
+
+  // Period controls
+  const [period, setPeriod] = useState<string>("6m");
+  const [customFrom, setCustomFrom] = useState<string>("");
+  const [customTo, setCustomTo] = useState<string>("");
+  const [customGran, setCustomGran] = useState<Granularity>("month");
 
   useEffect(() => {
     loadUserName();
