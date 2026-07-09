@@ -1,6 +1,7 @@
 import { useState } from "react";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import LoansManagement from "@/components/dashboard/admin/LoansManagement";
+import LoanTransactions from "@/components/dashboard/admin/LoanTransactions";
 
 const AdminLoansPage = () => {
   const [, setRefresh] = useState(0);
@@ -11,6 +12,7 @@ const AdminLoansPage = () => {
         <p className="text-sm text-muted-foreground mt-0.5">Manage loan applications and disbursements</p>
       </div>
       <LoansManagement onUpdate={() => setRefresh(r => r + 1)} />
+      <LoanTransactions />
     </DashboardLayout>
   );
 };
