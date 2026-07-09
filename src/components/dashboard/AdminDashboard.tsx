@@ -313,7 +313,7 @@ const AdminDashboard = () => {
       savingsTrend: trendPct(monthDeposits, deposits[prevKey]),
       collectionTrend: trendPct(monthRepayments, collected[prevKey]),
     });
-    setCharts({ repaymentTrends, savingsActivity, memberContributions, loanDistribution });
+    setCharts({ memberContributions, loanDistribution });
   };
 
   const loadRecentTransactions = async () => {
