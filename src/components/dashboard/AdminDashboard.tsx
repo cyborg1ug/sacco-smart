@@ -1,21 +1,73 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Users, TrendingUp, Clock, Heart, BarChart3, CreditCard, FileText, Bell,
   ArrowUpRight, ArrowDownRight, AlertTriangle, PiggyBank, Wallet, Activity,
-  RefreshCw, ArrowRight,
+  RefreshCw, ArrowRight, CalendarRange,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
-import { format, subMonths, startOfMonth } from "date-fns";
+import {
+  format, subMonths, startOfMonth, endOfMonth, startOfQuarter, endOfQuarter,
+  startOfYear, endOfYear, subQuarters, subYears,
+  eachMonthOfInterval, eachQuarterOfInterval, eachYearOfInterval,
+} from "date-fns";
 import { useIsMobile } from "@/hooks/use-mobile";
 import DashboardLayout from "@/components/layout/DashboardLayout";
 import EnhancedMobileNavCard from "./EnhancedMobileNavCard";
 import OverviewCharts from "./charts/OverviewCharts";
+
+type Granularity = "month" | "quarter" | "year";
+
+const periodKey = (d: Date, g: Granularity) =>
+  g === "year" ? format(d, "yyyy")
+    : g === "quarter" ? `${format(d, "yyyy")}-Q${Math.floor(d.getMonth() / 3) + 1}`
+    : format(d, "yyyy-MM");
+
+const periodLabel = (d: Date, g: Granularity) =>
+  g === "year" ? format(d, "yyyy")
+    : g === "quarter" ? `Q${Math.floor(d.getMonth() / 3) + 1} '${format(d, "yy")}`
+    : format(d, "MMM yy");
+
+const buildBuckets = (start: Date, end: Date, g: Granularity) => {
+  if (end < start) return [];
+  const dates = g === "year" ? eachYearOfInterval({ start, end })
+    : g === "quarter" ? eachQuarterOfInterval({ start, end })
+    : eachMonthOfInterval({ start, end });
+  return dates.map((d) => ({ key: periodKey(d, g), label: periodLabel(d, g) }));
+};
+
+const resolveRange = (
+  preset: string,
+  customFrom?: string,
+  customTo?: string,
+  customGran: Granularity = "month",
+): { start: Date; end: Date; g: Granularity } => {
+  const now = new Date();
+  switch (preset) {
+    case "this_month": return { start: startOfMonth(now), end: endOfMonth(now), g: "month" };
+    case "3m": return { start: startOfMonth(subMonths(now, 2)), end: endOfMonth(now), g: "month" };
+    case "12m": return { start: startOfMonth(subMonths(now, 11)), end: endOfMonth(now), g: "month" };
+    case "ytd": return { start: startOfYear(now), end: endOfMonth(now), g: "month" };
+    case "quarterly": return { start: startOfQuarter(subQuarters(now, 3)), end: endOfQuarter(now), g: "quarter" };
+    case "yearly": return { start: startOfYear(subYears(now, 2)), end: endOfYear(now), g: "year" };
+    case "custom": {
+      const start = customFrom ? startOfMonth(new Date(customFrom)) : startOfMonth(subMonths(now, 5));
+      const end = customTo ? endOfMonth(new Date(customTo)) : endOfMonth(now);
+      return { start, end, g: customGran };
+    }
+    case "6m":
+    default: return { start: startOfMonth(subMonths(now, 5)), end: endOfMonth(now), g: "month" };
+  }
+};
+
 
 const fmtUGX = (n: number) =>
   n >= 1_000_000 ? `UGX ${(n / 1_000_000).toFixed(1)}M`
