@@ -269,13 +269,10 @@ const AdminDashboard = () => {
       }
     });
 
-    const savingsActivity = months.map(m => ({ month: m.label, deposits: deposits[m.key], withdrawals: withdrawals[m.key] }));
-    const repaymentTrends = months.map(m => ({
-      month: m.label,
-      expected: Math.round(expectedB[m.key]),
-      collected: Math.round(collected[m.key]),
-      overdue: Math.round(Math.max(expectedB[m.key] - collected[m.key], 0)),
-    }));
+    // Store raw source data — period-aware time-series charts derive from these.
+    setRawTxns(txns.map((t: any) => ({ transaction_type: t.transaction_type, amount: Number(t.amount), created_at: t.created_at })));
+    setRawSchedule(scheduleLoans.map((l: any) => ({ total_amount: Number(l.total_amount), repayment_months: Number(l.repayment_months), disbursed_at: l.disbursed_at })));
+
 
     // Current vs previous month trends
     const curKey = months[5].key, prevKey = months[4].key;
