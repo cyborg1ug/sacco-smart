@@ -506,14 +506,60 @@ const AdminDashboard = () => {
 
       {/* Charts */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, delay: 0.3 }} className="mb-6">
+        transition={{ duration: 0.4, delay: 0.3 }} className="mb-6 space-y-4">
+        {/* Period controls */}
+        <Card className="rounded-2xl border border-border/60 shadow-sm">
+          <CardContent className="p-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+              <CalendarRange className="w-4 h-4 text-primary" />
+              <span>Time period</span>
+              <span className="text-xs font-normal text-muted-foreground hidden sm:inline">· {periodDescription}</span>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+              <div className="w-full sm:w-56">
+                <Select value={period} onValueChange={setPeriod}>
+                  <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {periodOptions.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              {period === "custom" && (
+                <div className="flex flex-wrap items-end gap-2">
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground">From</Label>
+                    <Input type="month" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="h-9 w-[140px]" />
+                  </div>
+                  <div>
+                    <Label className="text-[10px] text-muted-foreground">To</Label>
+                    <Input type="month" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="h-9 w-[140px]" />
+                  </div>
+                  <div className="w-[130px]">
+                    <Label className="text-[10px] text-muted-foreground">Group by</Label>
+                    <Select value={customGran} onValueChange={(v) => setCustomGran(v as Granularity)}>
+                      <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="month">Monthly</SelectItem>
+                        <SelectItem value="quarter">Quarterly</SelectItem>
+                        <SelectItem value="year">Yearly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              )}
+            </div>
+          </CardContent>
+        </Card>
         <OverviewCharts
-          repaymentTrends={charts.repaymentTrends}
-          savingsActivity={charts.savingsActivity}
+          repaymentTrends={repaymentTrends}
+          savingsActivity={savingsActivity}
           memberContributions={charts.memberContributions}
           loanDistribution={charts.loanDistribution}
         />
       </motion.div>
+
 
       {/* Recent transactions + Pending loan applications */}
       <div className="grid gap-5 lg:grid-cols-2 mb-6">
