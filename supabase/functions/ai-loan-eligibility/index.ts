@@ -33,6 +33,23 @@ serve(async (req) => {
       });
     }
 
+    // ── Rate limiting: max 10 eligibility checks per user per minute ─────────
+    const { data: allowed, error: rlError } = await supabase.rpc("check_rate_limit", {
+      _identifier: user.id,
+      _action: "ai-loan-eligibility",
+      _max_count: 10,
+      _window_seconds: 60,
+    });
+    if (rlError) console.error("rate limit check failed:", rlError.message);
+    if (allowed === false) {
+      console.log(`[ai-loan-eligibility] rate limit exceeded for user ${user.id}`);
+      return new Response(
+        JSON.stringify({ error: "Too many requests. Please wait a moment and try again." }),
+        { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+    console.log(`[ai-loan-eligibility] request by user ${user.id}`);
+
     const {
       accountId,
       loanAmount,
