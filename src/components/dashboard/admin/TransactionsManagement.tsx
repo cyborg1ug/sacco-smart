@@ -13,7 +13,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
-import { Check, X, Plus, Loader2, FileText, Banknote, TrendingUp, TrendingDown, CreditCard, Wallet, CalendarIcon, Trash2, Users, Edit, Search, RefreshCw } from "lucide-react";
+import { Check, X, Plus, Loader2, FileText, Banknote, TrendingUp, TrendingDown, CreditCard, Wallet, CalendarIcon, Trash2, Users, Edit, Search, RefreshCw, Pencil } from "lucide-react";
+import { useUserRole } from "@/hooks/useUserRole";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { format, startOfDay, endOfDay, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval } from "date-fns";
 import { generateTransactionReceiptPDF } from "@/lib/pdfGenerator";
@@ -87,6 +88,50 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
   const [selectedTransactionType, setSelectedTransactionType] = useState<string>("");
   const [searchQuery, setSearchQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const { isSuperAdmin } = useUserRole();
+  // Super-admin transaction editing
+  const [editTxnDialogOpen, setEditTxnDialogOpen] = useState(false);
+  const [selectedTxnForEdit, setSelectedTxnForEdit] = useState<Transaction | null>(null);
+  const [editAmount, setEditAmount] = useState<string>("");
+  const [editDescription, setEditDescription] = useState<string>("");
+  const [editDate, setEditDate] = useState<string>("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const openEditTxnDialog = (t: Transaction) => {
+    setSelectedTxnForEdit(t);
+    setEditAmount(String(t.amount));
+    setEditDescription(t.description || "");
+    setEditDate(format(new Date(t.created_at), "yyyy-MM-dd'T'HH:mm"));
+    setEditTxnDialogOpen(true);
+  };
+
+  const handleEditTransaction = async () => {
+    if (!selectedTxnForEdit) return;
+    const amountNum = Number(editAmount);
+    if (!Number.isFinite(amountNum) || amountNum <= 0) {
+      toast({ title: "Invalid amount", description: "Enter a valid positive amount", variant: "destructive" });
+      return;
+    }
+    setSavingEdit(true);
+    const { error } = await supabase
+      .from("transactions")
+      .update({
+        amount: amountNum,
+        description: editDescription,
+        created_at: new Date(editDate).toISOString(),
+      })
+      .eq("id", selectedTxnForEdit.id);
+    setSavingEdit(false);
+    if (error) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+      return;
+    }
+    toast({ title: "Transaction updated", description: "Changes saved and recorded in the audit log." });
+    setEditTxnDialogOpen(false);
+    loadTransactions();
+    onUpdate();
+  };
+
   useEffect(() => {
     loadTransactions();
     loadMembers();
@@ -1390,37 +1435,52 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
                           </Button>
                         </>
                       )}
-                      
-                      {/* Delete button for all transactions - admin only */}
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            title="Delete"
-                            className="h-7 w-7 sm:h-8 sm:w-8 p-0"
-                          >
-                            <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-destructive" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent className="max-w-[95vw] sm:max-w-md">
-                          <AlertDialogHeader>
-                            <AlertDialogTitle className="text-base sm:text-lg">Delete Transaction</AlertDialogTitle>
-                            <AlertDialogDescription className="text-xs sm:text-sm">
-                              Delete transaction {transaction.tnx_id}? This cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter className="gap-2 sm:gap-0">
-                            <AlertDialogCancel className="h-8 sm:h-9 text-xs sm:text-sm">Cancel</AlertDialogCancel>
-                            <AlertDialogAction 
-                              onClick={() => handleDelete(transaction.id)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 h-8 sm:h-9 text-xs sm:text-sm"
+
+                      {/* Super-admin only: edit transaction details */}
+                      {isSuperAdmin && (
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => openEditTxnDialog(transaction)}
+                          title="Edit details (Super Admin)"
+                          className="h-7 w-7 sm:h-8 sm:w-8 p-0"
+                        >
+                          <Pencil className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-primary" />
+                        </Button>
+                      )}
+
+                      {/* Delete button - super admin only */}
+                      {isSuperAdmin && (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              title="Delete"
+                              className="h-7 w-7 sm:h-8 sm:w-8 p-0"
                             >
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                              <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-destructive" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent className="max-w-[95vw] sm:max-w-md">
+                            <AlertDialogHeader>
+                              <AlertDialogTitle className="text-base sm:text-lg">Delete Transaction</AlertDialogTitle>
+                              <AlertDialogDescription className="text-xs sm:text-sm">
+                                Delete transaction {transaction.tnx_id}? This cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter className="gap-2 sm:gap-0">
+                              <AlertDialogCancel className="h-8 sm:h-9 text-xs sm:text-sm">Cancel</AlertDialogCancel>
+                              <AlertDialogAction 
+                                onClick={() => handleDelete(transaction.id)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90 h-8 sm:h-9 text-xs sm:text-sm"
+                              >
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -1484,6 +1544,46 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
             Add Receipt Number
           </Button>
         </div>
+      </DialogContent>
+    </Dialog>
+
+    {/* Super-admin: Edit Transaction Details Dialog */}
+    <Dialog open={editTxnDialogOpen} onOpenChange={setEditTxnDialogOpen}>
+      <DialogContent className="max-w-[95vw] sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-base sm:text-lg">Edit Transaction Details</DialogTitle>
+          <DialogDescription className="text-xs sm:text-sm">
+            Super admin edit for transaction {selectedTxnForEdit?.tnx_id}. Every change is saved to the audit log.
+          </DialogDescription>
+        </DialogHeader>
+        {selectedTxnForEdit && (
+          <div className="space-y-4">
+            <div className="p-3 bg-muted rounded-md space-y-1 text-sm">
+              <p><span className="font-medium">Member:</span> {selectedTxnForEdit.account.user.full_name}</p>
+              <p><span className="font-medium">Type:</span> {selectedTxnForEdit.transaction_type.replace(/_/g, " ")}</p>
+              <p><span className="font-medium">Status:</span> {selectedTxnForEdit.status}</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Amount (UGX)</Label>
+              <Input type="number" min={0} value={editAmount} onChange={(e) => setEditAmount(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Date of Entry</Label>
+              <Input type="datetime-local" value={editDate} onChange={(e) => setEditDate(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Input value={editDescription} onChange={(e) => setEditDescription(e.target.value)} placeholder="Transaction description" />
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              Note: editing amounts does not automatically recompute account balances. Adjust balances separately if required.
+            </p>
+            <Button onClick={handleEditTransaction} className="w-full" disabled={savingEdit}>
+              {savingEdit ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Pencil className="mr-2 h-4 w-4" />}
+              Save Changes
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
     </div>
