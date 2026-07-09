@@ -386,6 +386,61 @@ const AdminDashboard = () => {
     { label: "Penalties Collected", value: fmtFull(stats.totalPenalties), icon: Activity, color: "text-warning", bg: "bg-warning/10" },
   ];
 
+  // ── Period-aware time-series (repayment trends + savings activity) ──
+  const { repaymentTrends, savingsActivity, periodDescription } = useMemo(() => {
+    const { start, end, g } = resolveRange(period, customFrom, customTo, customGran);
+    const buckets = buildBuckets(start, end, g);
+    const zero = () => buckets.reduce((acc, b) => { acc[b.key] = 0; return acc; }, {} as Record<string, number>);
+    const deposits = zero(), withdrawals = zero(), collected = zero(), expected = zero();
+
+    rawTxns.forEach((t) => {
+      const d = new Date(t.created_at);
+      if (d < start || d > end) return;
+      const k = periodKey(d, g);
+      if (!(k in deposits)) return;
+      if (t.transaction_type === "deposit") deposits[k] += t.amount;
+      else if (t.transaction_type === "withdrawal") withdrawals[k] += t.amount;
+      else if (t.transaction_type === "loan_repayment") collected[k] += t.amount;
+    });
+
+    rawSchedule.forEach((l) => {
+      if (!l.disbursed_at || !l.repayment_months || !l.total_amount) return;
+      const installment = l.total_amount / l.repayment_months;
+      for (let i = 1; i <= l.repayment_months; i++) {
+        const due = startOfMonth(new Date(l.disbursed_at));
+        due.setMonth(due.getMonth() + i);
+        if (due < start || due > end) continue;
+        const k = periodKey(due, g);
+        if (k in expected) expected[k] += installment;
+      }
+    });
+
+    const repaymentTrends = buckets.map((b) => ({
+      month: b.label,
+      expected: Math.round(expected[b.key]),
+      collected: Math.round(collected[b.key]),
+      overdue: Math.round(Math.max(expected[b.key] - collected[b.key], 0)),
+    }));
+    const savingsActivity = buckets.map((b) => ({
+      month: b.label,
+      deposits: Math.round(deposits[b.key]),
+      withdrawals: Math.round(withdrawals[b.key]),
+    }));
+    const periodDescription = `${format(start, "dd MMM yyyy")} – ${format(end, "dd MMM yyyy")} · ${g}ly`;
+    return { repaymentTrends, savingsActivity, periodDescription };
+  }, [rawTxns, rawSchedule, period, customFrom, customTo, customGran]);
+
+  const periodOptions = [
+    { value: "this_month", label: "This Month" },
+    { value: "3m", label: "Last 3 Months" },
+    { value: "6m", label: "Last 6 Months" },
+    { value: "12m", label: "Last 12 Months" },
+    { value: "ytd", label: "This Year (Monthly)" },
+    { value: "quarterly", label: "Quarterly (Last 4Q)" },
+    { value: "yearly", label: "Yearly (Last 3Y)" },
+    { value: "custom", label: "Custom Range…" },
+  ];
+
   return (
     <DashboardLayout isAdmin userName={userName} pendingCount={stats.pendingTransactions}>
       {/* Heading */}
