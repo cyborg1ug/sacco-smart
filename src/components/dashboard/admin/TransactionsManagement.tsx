@@ -671,6 +671,43 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
       }
     }
 
+    // For loan disbursements recorded directly by an admin, create the loan
+    // record so it reflects on the loans page and loan counts. Without this the
+    // disbursement transaction is orphaned (loan_id null, no loans row).
+    let disbursementLoanId: string | null = null;
+    if (type === "loan_disbursement") {
+      const months = parseInt(formData.get("repaymentMonths") as string) || 1;
+      const interestRate = 2.0;
+      const totalAmount = amount + amount * (interestRate / 100) * months;
+      const nowIso = new Date().toISOString();
+      const { data: newLoan, error: loanError } = await supabase
+        .from("loans")
+        .insert({
+          account_id: accountId,
+          amount,
+          interest_rate: interestRate,
+          total_amount: totalAmount,
+          outstanding_balance: totalAmount,
+          status: "active",
+          repayment_months: months,
+          purpose: description || "Loan disbursement (recorded by admin)",
+          disbursed_at: nowIso,
+          approved_at: nowIso,
+        } as any)
+        .select("id")
+        .single();
+
+      if (loanError || !newLoan) {
+        toast({
+          title: "Error",
+          description: loanError?.message || "Failed to create loan record",
+          variant: "destructive",
+        });
+        return;
+      }
+      disbursementLoanId = newLoan.id;
+    }
+
     const { error } = await supabase
       .from("transactions")
       .insert({
@@ -680,7 +717,12 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
         description,
         balance_after: account.balance,
         status: "pending",
-        loan_id: type === "loan_repayment" && loanId ? loanId : null,
+        loan_id:
+          type === "loan_repayment" && loanId
+            ? loanId
+            : type === "loan_disbursement"
+            ? disbursementLoanId
+            : null,
       } as any);
 
     if (error) {
