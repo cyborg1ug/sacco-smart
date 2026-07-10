@@ -1301,6 +1301,15 @@ const TransactionsManagement = ({ onUpdate }: TransactionsManagementProps) => {
                       </p>
                     )}
                   </div>
+                  {selectedTransactionType === "loan_disbursement" && (
+                    <div className="space-y-1.5 sm:space-y-2">
+                      <Label htmlFor="repaymentMonths" className="text-xs sm:text-sm">Repayment Period (months)</Label>
+                      <Input id="repaymentMonths" name="repaymentMonths" type="number" min="1" step="1" defaultValue="1" required />
+                      <p className="text-[10px] sm:text-xs text-muted-foreground">
+                        A loan record is created so this reflects on the loans page. Interest is 2% per month.
+                      </p>
+                    </div>
+                  )}
                   <div className="space-y-1.5 sm:space-y-2">
                     <Label htmlFor="description" className="text-xs sm:text-sm">Description</Label>
                     <Input id="description" name="description" />
