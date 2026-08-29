@@ -37,6 +37,9 @@ const AdminReportsPage = () => {
           <TabsTrigger value="ai" className="gap-2">
             <Sparkles className="w-4 h-4" /> AI Reports
           </TabsTrigger>
+          <TabsTrigger value="custom" className="gap-2">
+            <Sliders className="w-4 h-4" /> Custom Reports
+          </TabsTrigger>
           <TabsTrigger value="reports" className="gap-2">
             <BarChart3 className="w-4 h-4" /> Standard Reports
           </TabsTrigger>
@@ -47,6 +50,9 @@ const AdminReportsPage = () => {
         <TabsContent value="ai">
           <AIReportInsights members={members} />
         </TabsContent>
+        <TabsContent value="custom">
+          <CustomReports />
+        </TabsContent>
         <TabsContent value="reports">
           <ReportsGeneration />
         </TabsContent>
@@ -54,6 +60,7 @@ const AdminReportsPage = () => {
           <FinancialIntegrityChecker />
         </TabsContent>
       </Tabs>
+
     </DashboardLayout>
   );
 };
