@@ -4,8 +4,10 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import ReportsGeneration from "@/components/dashboard/admin/ReportsGeneration";
 import FinancialIntegrityChecker from "@/components/dashboard/admin/FinancialIntegrityChecker";
 import AIReportInsights from "@/components/dashboard/admin/AIReportInsights";
+import CustomReports from "@/components/dashboard/admin/CustomReports";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bot, BarChart3, Sparkles } from "lucide-react";
+import { Bot, BarChart3, Sparkles, Sliders } from "lucide-react";
+
 
 const AdminReportsPage = () => {
   const [members, setMembers] = useState<{ id: string; full_name: string; accounts: any[] }[]>([]);
