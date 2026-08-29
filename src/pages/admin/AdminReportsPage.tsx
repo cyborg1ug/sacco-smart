@@ -4,8 +4,10 @@ import DashboardLayout from "@/components/layout/DashboardLayout";
 import ReportsGeneration from "@/components/dashboard/admin/ReportsGeneration";
 import FinancialIntegrityChecker from "@/components/dashboard/admin/FinancialIntegrityChecker";
 import AIReportInsights from "@/components/dashboard/admin/AIReportInsights";
+import CustomReports from "@/components/dashboard/admin/CustomReports";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Bot, BarChart3, Sparkles } from "lucide-react";
+import { Bot, BarChart3, Sparkles, Sliders } from "lucide-react";
+
 
 const AdminReportsPage = () => {
   const [members, setMembers] = useState<{ id: string; full_name: string; accounts: any[] }[]>([]);
@@ -37,6 +39,9 @@ const AdminReportsPage = () => {
           <TabsTrigger value="ai" className="gap-2">
             <Sparkles className="w-4 h-4" /> AI Reports
           </TabsTrigger>
+          <TabsTrigger value="custom" className="gap-2">
+            <Sliders className="w-4 h-4" /> Custom Reports
+          </TabsTrigger>
           <TabsTrigger value="reports" className="gap-2">
             <BarChart3 className="w-4 h-4" /> Standard Reports
           </TabsTrigger>
@@ -47,6 +52,9 @@ const AdminReportsPage = () => {
         <TabsContent value="ai">
           <AIReportInsights members={members} />
         </TabsContent>
+        <TabsContent value="custom">
+          <CustomReports />
+        </TabsContent>
         <TabsContent value="reports">
           <ReportsGeneration />
         </TabsContent>
@@ -54,6 +62,7 @@ const AdminReportsPage = () => {
           <FinancialIntegrityChecker />
         </TabsContent>
       </Tabs>
+
     </DashboardLayout>
   );
 };

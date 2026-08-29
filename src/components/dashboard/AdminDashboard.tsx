@@ -400,7 +400,7 @@ const AdminDashboard = () => {
       if (!(k in deposits)) return;
       if (t.transaction_type === "deposit") deposits[k] += t.amount;
       else if (t.transaction_type === "withdrawal") withdrawals[k] += t.amount;
-      else if (t.transaction_type === "loan_repayment") collected[k] += t.amount;
+      else if (t.transaction_type === "loan_repayment" || t.transaction_type === "interest_received") collected[k] += t.amount;
     });
 
     rawSchedule.forEach((l) => {
@@ -415,12 +415,18 @@ const AdminDashboard = () => {
       }
     });
 
-    const repaymentTrends = buckets.map((b) => ({
-      month: b.label,
-      expected: Math.round(expected[b.key]),
-      collected: Math.round(collected[b.key]),
-      overdue: Math.round(Math.max(expected[b.key] - collected[b.key], 0)),
-    }));
+    // Bank-style arrears: cumulative unpaid balance carried forward per bucket.
+    let arrears = 0;
+    const repaymentTrends = buckets.map((b) => {
+      arrears = Math.max(arrears + expected[b.key] - collected[b.key], 0);
+      return {
+        month: b.label,
+        expected: Math.round(expected[b.key]),
+        collected: Math.round(collected[b.key]),
+        overdue: Math.round(arrears),
+      };
+    });
+
     const savingsActivity = buckets.map((b) => ({
       month: b.label,
       deposits: Math.round(deposits[b.key]),
