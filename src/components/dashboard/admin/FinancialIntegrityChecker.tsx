@@ -11,9 +11,12 @@ import { useToast } from "@/hooks/use-toast";
 import {
   ShieldCheck, AlertTriangle, XCircle, Loader2, RefreshCw,
   TrendingUp, TrendingDown, Wallet, PiggyBank, CreditCard, Banknote,
-  CheckCircle2, Bot, Wrench,
+  CheckCircle2, Bot, Wrench, Pencil,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 interface GrandTotals {
   deposits: number;
@@ -109,6 +112,74 @@ export default function FinancialIntegrityChecker() {
   const [fixing, setFixing] = useState(false);
   const [result, setResult] = useState<IntegrityResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [editAcc, setEditAcc] = useState<AccountReport | null>(null);
+  const [editLoan, setEditLoan] = useState<LoanReport | null>(null);
+  const [editBalance, setEditBalance] = useState("");
+  const [editSavings, setEditSavings] = useState("");
+  const [editOutstanding, setEditOutstanding] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
+
+  const openAccountEdit = (acc: AccountReport) => {
+    setEditAcc(acc);
+    setEditBalance(String(acc.stored_balance));
+    setEditSavings(String(acc.stored_savings));
+  };
+  const openLoanEdit = (loan: LoanReport) => {
+    setEditLoan(loan);
+    setEditOutstanding(String(loan.stored_outstanding));
+  };
+
+  const sendFixes = async (fixes: Array<{ type: string; id: string; correct_value: number }>) => {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error("Not authenticated");
+    const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/fix-integrity-errors`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+      },
+      body: JSON.stringify({ fixes }),
+    });
+    const json = await res.json();
+    if (!res.ok) throw new Error(json.error || "Update failed");
+    return json;
+  };
+
+  const saveManualEdit = async () => {
+    const fixes: Array<{ type: string; id: string; correct_value: number }> = [];
+    if (editAcc) {
+      const b = Number(editBalance), s = Number(editSavings);
+      if (!Number.isFinite(b) || !Number.isFinite(s)) {
+        toast({ title: "Invalid value", description: "Enter valid numbers.", variant: "destructive" });
+        return;
+      }
+      if (Math.abs(b - editAcc.stored_balance) > 0.001) fixes.push({ type: "account_balance", id: editAcc.account_id, correct_value: b });
+      if (Math.abs(s - editAcc.stored_savings) > 0.001) fixes.push({ type: "account_savings", id: editAcc.account_id, correct_value: s });
+    } else if (editLoan) {
+      const o = Number(editOutstanding);
+      if (!Number.isFinite(o) || o < 0) {
+        toast({ title: "Invalid value", description: "Enter a valid amount.", variant: "destructive" });
+        return;
+      }
+      if (Math.abs(o - editLoan.stored_outstanding) > 0.001) fixes.push({ type: "loan_outstanding", id: editLoan.loan_id, correct_value: o });
+    }
+    if (fixes.length === 0) {
+      setEditAcc(null); setEditLoan(null);
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      const r = await sendFixes(fixes);
+      toast({ title: "Record updated", description: r.message });
+      setEditAcc(null); setEditLoan(null);
+      await runCheck();
+    } catch (e) {
+      toast({ title: "Update failed", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
+    } finally {
+      setSavingEdit(false);
+    }
+  };
 
   const runCheck = async () => {
     setLoading(true);
@@ -373,7 +444,7 @@ export default function FinancialIntegrityChecker() {
               <Alert className="border-destructive/30 bg-destructive/5">
                 <AlertTriangle className="w-4 h-4 text-destructive" />
                 <AlertDescription className="text-destructive">
-                  {totalDiscrepancies} discrepanc{totalDiscrepancies > 1 ? "ies" : "y"} detected. Click the <strong>"Fix Errors"</strong> button above to automatically correct stored values to match recalculated transaction totals.
+                  {totalDiscrepancies} discrepanc{totalDiscrepancies > 1 ? "ies" : "y"} detected. Click the <strong>"Fix Errors"</strong> button above to automatically correct stored values, or use the pencil icon on any row to edit values manually.
                 </AlertDescription>
               </Alert>
             )}
@@ -406,6 +477,7 @@ export default function FinancialIntegrityChecker() {
                         <TableHead className="text-xs text-right">Calc. Bal.</TableHead>
                         <TableHead className="text-xs text-center">Bal. Diff</TableHead>
                         <TableHead className="text-xs text-center">Sav. Diff</TableHead>
+                        <TableHead className="text-xs text-center">Edit</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -428,6 +500,11 @@ export default function FinancialIntegrityChecker() {
                             <TableCell className="text-right text-xs font-mono">{fmt(acc.calculated_balance)}</TableCell>
                             <TableCell className="text-center"><DiscBadge val={acc.balance_discrepancy} /></TableCell>
                             <TableCell className="text-center"><DiscBadge val={acc.savings_discrepancy} /></TableCell>
+                            <TableCell className="text-center">
+                              <Button size="sm" variant="outline" className="h-7 w-7 p-0" title="Edit account values" onClick={() => openAccountEdit(acc)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                            </TableCell>
                           </TableRow>
                         );
                       })}
@@ -460,6 +537,7 @@ export default function FinancialIntegrityChecker() {
                         <TableHead className="text-xs text-right">Calc. Outstanding</TableHead>
                         <TableHead className="text-xs text-center">Difference</TableHead>
                         <TableHead className="text-xs">Status</TableHead>
+                        <TableHead className="text-xs text-center">Edit</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -491,7 +569,13 @@ export default function FinancialIntegrityChecker() {
                                 {loan.status}
                               </Badge>
                             </TableCell>
+                            <TableCell className="text-center">
+                              <Button size="sm" variant="outline" className="h-7 w-7 p-0" title="Edit loan values" onClick={() => openLoanEdit(loan)}>
+                                <Pencil className="h-3.5 w-3.5" />
+                              </Button>
+                            </TableCell>
                           </TableRow>
+
                         );
                       })}
                     </TableBody>
@@ -524,6 +608,51 @@ export default function FinancialIntegrityChecker() {
           </TabsContent>
         </Tabs>
       )}
+
+      <Dialog open={!!editAcc || !!editLoan} onOpenChange={(o) => { if (!o) { setEditAcc(null); setEditLoan(null); } }}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editAcc ? "Edit Account Values" : "Edit Loan Outstanding"}</DialogTitle>
+            <DialogDescription>
+              {editAcc ? `${editAcc.owner_name} · ${editAcc.account_number}` : editLoan ? `${editLoan.owner_name} · ${editLoan.account_number}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {editAcc && (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label>Stored Balance</Label>
+                <Input type="number" value={editBalance} onChange={(e) => setEditBalance(e.target.value)} />
+                <button type="button" className="text-[11px] text-primary underline" onClick={() => setEditBalance(String(editAcc.calculated_balance))}>
+                  Use calculated: {fmt(editAcc.calculated_balance)}
+                </button>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Total Savings</Label>
+                <Input type="number" value={editSavings} onChange={(e) => setEditSavings(e.target.value)} />
+                <button type="button" className="text-[11px] text-primary underline" onClick={() => setEditSavings(String(editAcc.calculated_savings))}>
+                  Use calculated: {fmt(editAcc.calculated_savings)}
+                </button>
+              </div>
+            </div>
+          )}
+          {editLoan && (
+            <div className="space-y-1.5">
+              <Label>Outstanding Balance</Label>
+              <Input type="number" min={0} value={editOutstanding} onChange={(e) => setEditOutstanding(e.target.value)} />
+              <button type="button" className="text-[11px] text-primary underline" onClick={() => setEditOutstanding(String(editLoan.calculated_outstanding))}>
+                Use calculated: {fmt(editLoan.calculated_outstanding)}
+              </button>
+              <p className="text-[11px] text-muted-foreground">Setting 0 marks the loan as fully paid.</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setEditAcc(null); setEditLoan(null); }}>Cancel</Button>
+            <Button onClick={saveManualEdit} disabled={savingEdit}>
+              {savingEdit && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

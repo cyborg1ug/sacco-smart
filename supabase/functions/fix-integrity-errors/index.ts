@@ -34,7 +34,7 @@ serve(async (req) => {
     }
 
     const { data: roleData } = await userClient
-      .from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").single();
+      .from("user_roles").select("role").eq("user_id", user.id).in("role", ["admin", "super_admin"]).limit(1).maybeSingle();
     if (!roleData) {
       return new Response(JSON.stringify({ error: "Forbidden: Admin access required" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
