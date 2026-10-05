@@ -444,7 +444,7 @@ export default function FinancialIntegrityChecker() {
               <Alert className="border-destructive/30 bg-destructive/5">
                 <AlertTriangle className="w-4 h-4 text-destructive" />
                 <AlertDescription className="text-destructive">
-                  {totalDiscrepancies} discrepanc{totalDiscrepancies > 1 ? "ies" : "y"} detected. Click the <strong>"Fix Errors"</strong> button above to automatically correct stored values to match recalculated transaction totals.
+                  {totalDiscrepancies} discrepanc{totalDiscrepancies > 1 ? "ies" : "y"} detected. Click the <strong>"Fix Errors"</strong> button above to automatically correct stored values, or use the pencil icon on any row to edit values manually.
                 </AlertDescription>
               </Alert>
             )}
@@ -608,6 +608,51 @@ export default function FinancialIntegrityChecker() {
           </TabsContent>
         </Tabs>
       )}
+
+      <Dialog open={!!editAcc || !!editLoan} onOpenChange={(o) => { if (!o) { setEditAcc(null); setEditLoan(null); } }}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editAcc ? "Edit Account Values" : "Edit Loan Outstanding"}</DialogTitle>
+            <DialogDescription>
+              {editAcc ? `${editAcc.owner_name} · ${editAcc.account_number}` : editLoan ? `${editLoan.owner_name} · ${editLoan.account_number}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {editAcc && (
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label>Stored Balance</Label>
+                <Input type="number" value={editBalance} onChange={(e) => setEditBalance(e.target.value)} />
+                <button type="button" className="text-[11px] text-primary underline" onClick={() => setEditBalance(String(editAcc.calculated_balance))}>
+                  Use calculated: {fmt(editAcc.calculated_balance)}
+                </button>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Total Savings</Label>
+                <Input type="number" value={editSavings} onChange={(e) => setEditSavings(e.target.value)} />
+                <button type="button" className="text-[11px] text-primary underline" onClick={() => setEditSavings(String(editAcc.calculated_savings))}>
+                  Use calculated: {fmt(editAcc.calculated_savings)}
+                </button>
+              </div>
+            </div>
+          )}
+          {editLoan && (
+            <div className="space-y-1.5">
+              <Label>Outstanding Balance</Label>
+              <Input type="number" min={0} value={editOutstanding} onChange={(e) => setEditOutstanding(e.target.value)} />
+              <button type="button" className="text-[11px] text-primary underline" onClick={() => setEditOutstanding(String(editLoan.calculated_outstanding))}>
+                Use calculated: {fmt(editLoan.calculated_outstanding)}
+              </button>
+              <p className="text-[11px] text-muted-foreground">Setting 0 marks the loan as fully paid.</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => { setEditAcc(null); setEditLoan(null); }}>Cancel</Button>
+            <Button onClick={saveManualEdit} disabled={savingEdit}>
+              {savingEdit && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
