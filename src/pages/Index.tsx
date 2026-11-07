@@ -26,14 +26,6 @@ const Index = () => {
             </div>
             <span className="font-bold text-foreground text-sm tracking-tight">KINONI SACCO</span>
           </div>
-          <div className="flex items-center gap-2">
-            <Button size="sm" variant="ghost" className="text-sm" onClick={() => navigate("/auth?mode=login")}>
-              Sign In
-            </Button>
-            <Button size="sm" onClick={() => navigate("/auth?mode=signup")}>
-              Get Started
-            </Button>
-          </div>
         </div>
       </header>
 
@@ -58,7 +50,7 @@ const Index = () => {
             </p>
             <div className="flex gap-3 justify-center flex-wrap">
               <Button size="lg" className="gap-2 px-8" onClick={() => navigate("/auth?mode=login")}>
-                Access Dashboard <ArrowRight className="w-4 h-4" />
+                Log in <ArrowRight className="w-4 h-4" />
               </Button>
               <Button size="lg" variant="outline" onClick={() => navigate("/auth?mode=signup")}>
                 Create Account

@@ -12,7 +12,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { Check, X, Send, Loader2, Users, UserPlus, CheckCircle, Edit, Clock, CheckCircle2, TrendingUp, Search, Calendar, AlertTriangle, Zap, Eye, Target, PieChart as PieChartIcon } from "lucide-react";
-import { format, differenceInMonths, differenceInDays } from "date-fns";
+import { format, addMonths, differenceInDays } from "date-fns";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { MobileCardList, MobileCard } from "@/components/ui/MobileCardList";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -76,14 +76,12 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   const isLoanOverdue = (loan: Loan): boolean => {
     if (!loan.disbursed_at || !loan.repayment_months) return false;
     if (loan.outstanding_balance <= 0) return false;
-    const monthsElapsed = differenceInMonths(new Date(), new Date(loan.disbursed_at));
-    return monthsElapsed > loan.repayment_months;
+    return new Date() > addMonths(new Date(loan.disbursed_at), loan.repayment_months);
   };
 
   const getDaysOverdue = (loan: Loan): number => {
     if (!loan.disbursed_at || !loan.repayment_months) return 0;
-    const dueDate = new Date(loan.disbursed_at);
-    dueDate.setMonth(dueDate.getMonth() + loan.repayment_months);
+    const dueDate = addMonths(new Date(loan.disbursed_at), loan.repayment_months);
     if (new Date() <= dueDate) return 0;
     return differenceInDays(new Date(), dueDate);
   };
@@ -442,25 +440,13 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
   const handleUpdateLoanDetails = async () => {
     if (!selectedLoan) return;
 
-    const { data: repaymentData } = await supabase
-      .from("transactions").select("amount")
-      .eq("loan_id", selectedLoan.id).eq("transaction_type", "loan_repayment").eq("status", "approved");
-
-    const totalRepaid = repaymentData?.reduce((sum, t) => sum + Number(t.amount), 0) || 0;
-    const monthlyInterest = selectedLoan.amount * (selectedLoan.interest_rate / 100);
-    const totalInterest = monthlyInterest * editRepaymentMonths;
-    const newTotalAmount = selectedLoan.amount + totalInterest;
-    const newOutstanding = Math.max(0, newTotalAmount - totalRepaid);
-    
-    let newStatus = selectedLoan.status;
-    if (newOutstanding <= 0) newStatus = "fully_paid";
-    else if (selectedLoan.disbursed_at || editDisbursedAt) newStatus = "disbursed";
-
-    const updateData: any = {
+    if (!Number.isInteger(editRepaymentMonths) || editRepaymentMonths < 1 || (editDisbursedAt && !Number.isFinite(new Date(editDisbursedAt).getTime()))) {
+      toast({ title: "Invalid loan details", description: "Enter a valid repayment period and date.", variant: "destructive" });
+      return;
+    }
+    // The database recalculates interest, penalties and linked transactions in one operation.
+    const updateData: { repayment_months: number; disbursed_at?: string; guarantor_account_id?: string | null; guarantor_status?: string | null } = {
       repayment_months: editRepaymentMonths,
-      total_amount: newTotalAmount,
-      outstanding_balance: newOutstanding,
-      status: newStatus,
     };
 
     if (editDisbursedAt) updateData.disbursed_at = new Date(editDisbursedAt).toISOString();
@@ -477,7 +463,8 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
     if (error) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     } else {
-      toast({ title: "Success", description: "Loan details updated successfully" });
+      toast({ title: "Success", description: "Loan dates, interest, penalties and balances updated." });
+      window.dispatchEvent(new Event("financial-records-updated"));
       setEditLoanDialogOpen(false);
       loadLoans();
       onUpdate();
@@ -502,7 +489,7 @@ const LoansManagement = ({ onUpdate }: LoansManagementProps) => {
         loadLoans(); onUpdate();
         toast({ title: "Overdue Charges Applied", description: `2% penalty applied to ${result.updated} overdue loan(s)` });
       } else {
-        toast({ title: "No Changes Needed", description: "No overdue loans require penalty charges this month" });
+        toast({ title: "No Changes Needed", description: "No overdue loans require additional daily charges" });
       }
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });

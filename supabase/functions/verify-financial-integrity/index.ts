@@ -58,8 +58,9 @@ serve(async (req) => {
       .from("user_roles")
       .select("role")
       .eq("user_id", user.id)
-      .eq("role", "admin")
-      .single();
+      .in("role", ["admin", "super_admin"])
+      .limit(1)
+      .maybeSingle();
 
     if (!roleData) {
       return new Response(JSON.stringify({ error: "Forbidden: Admin access required" }), {
@@ -239,7 +240,7 @@ serve(async (req) => {
       const repaid = repaymentsByLoan[loan.id] ?? 0;
       const overdueAccrued = overdueInterestByLoan[loan.id] ?? 0;
 
-      const calcOutstanding = Math.max(Number(loan.total_amount) + overdueAccrued - repaid, 0);
+      const calcOutstanding = loan.status === "rejected" ? 0 : Math.max(Number(loan.total_amount) + overdueAccrued - repaid, 0);
       const storedOutstanding = Math.round(Number(loan.outstanding_balance) * 100) / 100;
       const diff = Math.round((storedOutstanding - calcOutstanding) * 100) / 100;
 

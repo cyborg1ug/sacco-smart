@@ -367,6 +367,7 @@ export type Database = {
           id: string
           loan_id: string | null
           receipt_number: string | null
+          source_transaction_id: string | null
           status: string
           tnx_id: string
           transaction_type: string
@@ -382,6 +383,7 @@ export type Database = {
           id?: string
           loan_id?: string | null
           receipt_number?: string | null
+          source_transaction_id?: string | null
           status?: string
           tnx_id: string
           transaction_type: string
@@ -397,6 +399,7 @@ export type Database = {
           id?: string
           loan_id?: string | null
           receipt_number?: string | null
+          source_transaction_id?: string | null
           status?: string
           tnx_id?: string
           transaction_type?: string
@@ -414,6 +417,13 @@ export type Database = {
             columns: ["loan_id"]
             isOneToOne: false
             referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_source_transaction_id_fkey"
+            columns: ["source_transaction_id"]
+            isOneToOne: false
+            referencedRelation: "transactions"
             referencedColumns: ["id"]
           },
         ]
@@ -479,6 +489,7 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      apply_overdue_reconciliation: { Args: never; Returns: Json }
       check_loan_eligibility: { Args: { p_account_id: string }; Returns: Json }
       check_rate_limit: {
         Args: {
@@ -520,6 +531,14 @@ export type Database = {
         Returns: boolean
       }
       is_super_admin: { Args: { _user_id: string }; Returns: boolean }
+      reconcile_account_ledger: {
+        Args: { p_account_id: string }
+        Returns: undefined
+      }
+      reconcile_loan_ledger: {
+        Args: { p_loan_id: string; p_rebuild_penalties?: boolean }
+        Returns: undefined
+      }
       user_owns_parent_account: {
         Args: { account_parent_id: string }
         Returns: boolean

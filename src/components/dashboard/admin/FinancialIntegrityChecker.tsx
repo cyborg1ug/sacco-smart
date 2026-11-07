@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -108,6 +109,7 @@ const HealthBadge = ({ discrepancies }: { discrepancies: number }) => {
 
 export default function FinancialIntegrityChecker() {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [fixing, setFixing] = useState(false);
   const [result, setResult] = useState<IntegrityResult | null>(null);
@@ -142,7 +144,7 @@ export default function FinancialIntegrityChecker() {
       body: JSON.stringify({ fixes }),
     });
     const json = await res.json();
-    if (!res.ok) throw new Error(json.error || "Update failed");
+    if (!res.ok || !json.success || json.results?.some((r: { success: boolean }) => !r.success)) throw new Error(json.error || "Some corrections could not be saved. Re-run the check before retrying.");
     return json;
   };
 
@@ -150,7 +152,7 @@ export default function FinancialIntegrityChecker() {
     const fixes: Array<{ type: string; id: string; correct_value: number }> = [];
     if (editAcc) {
       const b = Number(editBalance), s = Number(editSavings);
-      if (!Number.isFinite(b) || !Number.isFinite(s)) {
+      if (!editBalance.trim() || !editSavings.trim() || !Number.isFinite(b) || !Number.isFinite(s) || s < 0) {
         toast({ title: "Invalid value", description: "Enter valid numbers.", variant: "destructive" });
         return;
       }
@@ -158,7 +160,7 @@ export default function FinancialIntegrityChecker() {
       if (Math.abs(s - editAcc.stored_savings) > 0.001) fixes.push({ type: "account_savings", id: editAcc.account_id, correct_value: s });
     } else if (editLoan) {
       const o = Number(editOutstanding);
-      if (!Number.isFinite(o) || o < 0) {
+      if (!editOutstanding.trim() || !Number.isFinite(o) || o < 0) {
         toast({ title: "Invalid value", description: "Enter a valid amount.", variant: "destructive" });
         return;
       }
@@ -173,6 +175,7 @@ export default function FinancialIntegrityChecker() {
       const r = await sendFixes(fixes);
       toast({ title: "Record updated", description: r.message });
       setEditAcc(null); setEditLoan(null);
+      window.dispatchEvent(new Event("financial-records-updated"));
       await runCheck();
     } catch (e) {
       toast({ title: "Update failed", description: e instanceof Error ? e.message : "Unknown error", variant: "destructive" });
@@ -244,27 +247,9 @@ export default function FinancialIntegrityChecker() {
         return;
       }
 
-      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-      const res = await fetch(`${supabaseUrl}/functions/v1/fix-integrity-errors`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${session.access_token}`,
-          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-        },
-        body: JSON.stringify({ fixes }),
-      });
-
-      if (!res.ok) {
-        const body = await res.json();
-        throw new Error(body.error ?? `HTTP ${res.status}`);
-      }
-
-      const fixResult = await res.json();
-      toast({
-        title: "Fixes Applied",
-        description: fixResult.message,
-      });
+      const fixResult = await sendFixes(fixes);
+      toast({ title: "Fixes Applied", description: fixResult.message });
+      window.dispatchEvent(new Event("financial-records-updated"));
 
       // Re-run the integrity check to verify
       await runCheck();
@@ -501,7 +486,7 @@ export default function FinancialIntegrityChecker() {
                             <TableCell className="text-center"><DiscBadge val={acc.balance_discrepancy} /></TableCell>
                             <TableCell className="text-center"><DiscBadge val={acc.savings_discrepancy} /></TableCell>
                             <TableCell className="text-center">
-                              <Button size="sm" variant="outline" className="h-7 w-7 p-0" title="Edit account values" onClick={() => openAccountEdit(acc)}>
+                              <Button size="sm" variant="outline" className="h-7 w-7 p-0" aria-label={`Edit account values for ${acc.owner_name}`} title="Edit account values" onClick={() => openAccountEdit(acc)}>
                                 <Pencil className="h-3.5 w-3.5" />
                               </Button>
                             </TableCell>
@@ -570,7 +555,7 @@ export default function FinancialIntegrityChecker() {
                               </Badge>
                             </TableCell>
                             <TableCell className="text-center">
-                              <Button size="sm" variant="outline" className="h-7 w-7 p-0" title="Edit loan values" onClick={() => openLoanEdit(loan)}>
+                              <Button size="sm" variant="outline" className="h-7 w-7 p-0" aria-label={`Edit loan values for ${loan.owner_name}`} title="Edit loan values" onClick={() => openLoanEdit(loan)}>
                                 <Pencil className="h-3.5 w-3.5" />
                               </Button>
                             </TableCell>
@@ -620,31 +605,32 @@ export default function FinancialIntegrityChecker() {
           {editAcc && (
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label>Stored Balance</Label>
-                <Input type="number" value={editBalance} onChange={(e) => setEditBalance(e.target.value)} />
-                <button type="button" className="text-[11px] text-primary underline" onClick={() => setEditBalance(String(editAcc.calculated_balance))}>
+                <Label htmlFor="integrity-balance">Cash ledger balance</Label>
+                <Input id="integrity-balance" type="number" step="0.01" value={editBalance} onChange={(e) => setEditBalance(e.target.value)} />
+                <Button type="button" variant="link" className="h-auto p-0 text-[11px]" onClick={() => setEditBalance(String(editAcc.calculated_balance))}>
                   Use calculated: {fmt(editAcc.calculated_balance)}
-                </button>
+                </Button>
               </div>
               <div className="space-y-1.5">
-                <Label>Total Savings</Label>
-                <Input type="number" value={editSavings} onChange={(e) => setEditSavings(e.target.value)} />
-                <button type="button" className="text-[11px] text-primary underline" onClick={() => setEditSavings(String(editAcc.calculated_savings))}>
+                <Label htmlFor="integrity-savings">Total Savings</Label>
+                <Input id="integrity-savings" type="number" min={0} step="0.01" value={editSavings} onChange={(e) => setEditSavings(e.target.value)} />
+                <Button type="button" variant="link" className="h-auto p-0 text-[11px]" onClick={() => setEditSavings(String(editAcc.calculated_savings))}>
                   Use calculated: {fmt(editAcc.calculated_savings)}
-                </button>
+                </Button>
               </div>
             </div>
           )}
           {editLoan && (
             <div className="space-y-1.5">
-              <Label>Outstanding Balance</Label>
-              <Input type="number" min={0} value={editOutstanding} onChange={(e) => setEditOutstanding(e.target.value)} />
-              <button type="button" className="text-[11px] text-primary underline" onClick={() => setEditOutstanding(String(editLoan.calculated_outstanding))}>
+              <Label htmlFor="integrity-outstanding">Outstanding Balance</Label>
+              <Input id="integrity-outstanding" type="number" min={0} step="0.01" value={editOutstanding} onChange={(e) => setEditOutstanding(e.target.value)} />
+              <Button type="button" variant="link" className="h-auto p-0 text-[11px]" onClick={() => setEditOutstanding(String(editLoan.calculated_outstanding))}>
                 Use calculated: {fmt(editLoan.calculated_outstanding)}
-              </button>
+              </Button>
               <p className="text-[11px] text-muted-foreground">Setting 0 marks the loan as fully paid.</p>
             </div>
           )}
+          {editAcc && <Button variant="outline" onClick={() => navigate(`/admin/transactions?account=${editAcc.account_id}`)}>Open transaction records</Button>}
           <DialogFooter>
             <Button variant="outline" onClick={() => { setEditAcc(null); setEditLoan(null); }}>Cancel</Button>
             <Button onClick={saveManualEdit} disabled={savingEdit}>
