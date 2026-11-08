@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { useToast } from "@/hooks/use-toast";
 import { format, startOfMonth, subMonths, differenceInDays } from "date-fns";
 import { Loader2, FileDown, FileSpreadsheet, FileText, Sliders } from "lucide-react";
-import { ACTIVE_LOAN_STATUSES } from "@/lib/accountBalance";
+import { ACTIVE_LOAN_STATUSES, BALANCE_FORMULA_NOTE } from "@/lib/accountBalance";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import * as XLSX from "xlsx";
@@ -324,6 +324,7 @@ const CustomReports = () => {
       styles: { fontSize: 7 },
       headStyles: { fillColor: [23, 37, 84] },
     });
+    doc.setFontSize(7); doc.text(doc.splitTextToSize(BALANCE_FORMULA_NOTE, doc.internal.pageSize.getWidth() - 20), 10, doc.internal.pageSize.getHeight() - 18);
     doc.save(`${result.title.replace(/\s+/g, "-").toLowerCase()}-${format(new Date(), "yyyyMMdd")}.pdf`);
   };
 
@@ -336,6 +337,7 @@ const CustomReports = () => {
       result.columns, ...result.rows,
     ]);
     XLSX.utils.book_append_sheet(wb, sheet, "Report");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Balance Method"], [BALANCE_FORMULA_NOTE]]), "Balance Method");
     XLSX.writeFile(wb, `${result.title.replace(/\s+/g, "-").toLowerCase()}-${format(new Date(), "yyyyMMdd")}.xlsx`);
   };
 
@@ -343,7 +345,7 @@ const CustomReports = () => {
     if (!result) return;
     const esc = (v: any) => `"${String(v).replace(/"/g, '""')}"`;
     const csv = [result.columns.map(esc).join(","), ...result.rows.map(r => r.map(esc).join(","))].join("\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+    const url = URL.createObjectURL(new Blob([csv + "\n\n\"" + BALANCE_FORMULA_NOTE + "\"\n"], { type: "text/csv;charset=utf-8;" }));
     const a = document.createElement("a");
     a.href = url;
     a.download = `${result.title.replace(/\s+/g, "-").toLowerCase()}.csv`;

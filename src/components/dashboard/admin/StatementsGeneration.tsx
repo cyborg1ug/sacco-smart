@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { FileDown, Loader2, FileSpreadsheet } from "lucide-react";
 import { format } from "date-fns";
 import * as XLSX from "xlsx";
-import { ACTIVE_LOAN_STATUSES, netAccountBalance } from "@/lib/accountBalance";
+import { ACTIVE_LOAN_STATUSES, netAccountBalance, BALANCE_FORMULA_NOTE } from "@/lib/accountBalance";
 
 const StatementsGeneration = () => {
   const { toast } = useToast();
@@ -177,6 +177,7 @@ const StatementsGeneration = () => {
       ]);
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([welfareHeaders, ...welfareRows]), "Welfare");
 
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Balance Method"], [BALANCE_FORMULA_NOTE]]), "Balance Method");
       XLSX.writeFile(wb, `statement_${account.account_number}_${format(new Date(), "yyyyMMdd")}.xlsx`);
       toast({ title: "Success", description: "Excel statement downloaded" });
       setLoading(false);
@@ -262,7 +263,7 @@ const StatementsGeneration = () => {
 
     statement += `\n${"═".repeat(80)}\nEnd of Statement - KINONI SACCO Management System\n`;
 
-    const blob = new Blob([statement], { type: "text/plain" });
+    const blob = new Blob([statement + "\n\n" + BALANCE_FORMULA_NOTE + "\n"], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -377,6 +378,7 @@ const StatementsGeneration = () => {
       });
       XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([welfareHeaders, ...welfareRows]), "Welfare");
 
+      XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Balance Method"], [BALANCE_FORMULA_NOTE]]), "Balance Method");
       XLSX.writeFile(wb, `group_statement_${format(new Date(), "yyyyMMdd")}.xlsx`);
       toast({ title: "Success", description: "Excel group statement downloaded" });
       setLoading(false);
@@ -416,7 +418,7 @@ const StatementsGeneration = () => {
 
     statement += `${"═".repeat(90)}\nEnd of Group Statement - KINONI SACCO Management System\n`;
 
-    const blob = new Blob([statement], { type: "text/plain" });
+    const blob = new Blob([statement + "\n\n" + BALANCE_FORMULA_NOTE + "\n"], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;

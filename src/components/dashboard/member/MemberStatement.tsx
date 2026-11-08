@@ -8,7 +8,7 @@ import { format } from "date-fns";
 import { generateMemberStatementPDF } from "@/lib/pdfGenerator";
 import FinancialCharts from "../charts/FinancialCharts";
 import { withRunningBalance } from "@/lib/runningBalance";
-import { netAccountBalance, fetchOutstandingByAccount } from "@/lib/accountBalance";
+import { netAccountBalance, fetchOutstandingByAccount, BALANCE_FORMULA_NOTE } from "@/lib/accountBalance";
 
 const MemberStatement = () => {
   const { toast } = useToast();
@@ -340,7 +340,7 @@ const MemberStatement = () => {
       statement += `For any queries, please contact the administrator.\n`;
 
       // Download as text file
-      const blob = new Blob([statement], { type: "text/plain" });
+      const blob = new Blob([statement + "\n\n" + BALANCE_FORMULA_NOTE + "\n"], { type: "text/plain" });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

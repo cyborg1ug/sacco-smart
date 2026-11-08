@@ -10,7 +10,7 @@ import { format, startOfMonth, endOfMonth, subMonths, differenceInMonths, differ
 import FinancialCharts from "../charts/FinancialCharts";
 import { generateMemberStatementPDF, generateGroupReportPDF } from "@/lib/pdfGenerator";
 import * as XLSX from "xlsx";
-import { ACTIVE_LOAN_STATUSES, netAccountBalance } from "@/lib/accountBalance";
+import { ACTIVE_LOAN_STATUSES, netAccountBalance, BALANCE_FORMULA_NOTE } from "@/lib/accountBalance";
 
 const ReportsGeneration = () => {
   const { toast } = useToast();
@@ -344,7 +344,7 @@ const ReportsGeneration = () => {
 
     report += `\n${"═".repeat(75)}\nEnd of Report - KINONI SACCO Management System\n`;
 
-    const blob = new Blob([report], { type: "text/plain" });
+    const blob = new Blob([report + "\n\n" + BALANCE_FORMULA_NOTE + "\n"], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -439,6 +439,7 @@ const ReportsGeneration = () => {
     const wsSavings = XLSX.utils.aoa_to_sheet([savingsHeaders, ...savingsRows]);
     XLSX.utils.book_append_sheet(wb, wsSavings, "Savings");
 
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Balance Method"], [BALANCE_FORMULA_NOTE]]), "Balance Method");
     XLSX.writeFile(wb, `kinoni_member_report_${memberAccount.account_number}_${format(new Date(), "yyyyMMdd")}.xlsx`);
     toast({ title: "Success", description: "Excel report downloaded" });
   };
@@ -713,7 +714,7 @@ const ReportsGeneration = () => {
 
     report += `${"═".repeat(75)}\nEnd of Report - KINONI SACCO Management System\n`;
 
-    const blob = new Blob([report], { type: "text/plain" });
+    const blob = new Blob([report + "\n\n" + BALANCE_FORMULA_NOTE + "\n"], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -829,6 +830,7 @@ const ReportsGeneration = () => {
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([txnHeaders, ...txnRows]), "Period Transactions");
 
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Balance Method"], [BALANCE_FORMULA_NOTE]]), "Balance Method");
     XLSX.writeFile(wb, `kinoni_group_report_${format(new Date(), "yyyyMMdd")}.xlsx`);
     toast({ title: "Success", description: "Excel group report downloaded" });
   };

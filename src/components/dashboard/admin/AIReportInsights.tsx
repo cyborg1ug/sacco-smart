@@ -9,7 +9,7 @@ import { Loader2, Bot, Download, FileText, Table as TableIcon, FileDown, Sparkle
 import { format, startOfMonth, endOfMonth, subMonths, differenceInDays } from "date-fns";
 import { generateBankMemberPDF, generateBankGroupPDF, generateBankTextReport, generateBankExcel } from "@/lib/bankReportGenerator";
 import * as XLSX from "xlsx";
-import { ACTIVE_LOAN_STATUSES, netAccountBalance } from "@/lib/accountBalance";
+import { ACTIVE_LOAN_STATUSES, netAccountBalance, BALANCE_FORMULA_NOTE } from "@/lib/accountBalance";
 
 interface AIReportInsightsProps {
   members: { id: string; full_name: string; accounts: any[] }[];
@@ -462,6 +462,7 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
         doc.text(lines, 14, 26);
       }
 
+      doc.setFontSize(7); doc.text(doc.splitTextToSize(BALANCE_FORMULA_NOTE, doc.internal.pageSize.getWidth() - 20), 10, doc.internal.pageSize.getHeight() - 18);
       doc.save(`KINONI_SACCO_audit_${ai.entryType}_${format(new Date(), "yyyyMMdd")}.pdf`);
     } else {
       const ai = reportData.aiPayload;
@@ -554,7 +555,7 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
       sections, aiAnalysis: aiText || undefined, refNo, period: periodStr,
     });
 
-    const blob = new Blob([txt], { type: "text/plain" });
+    const blob = new Blob([txt + "\n\n" + BALANCE_FORMULA_NOTE + "\n"], { type: "text/plain" });
     const url  = URL.createObjectURL(blob);
     const a    = document.createElement("a");
     a.href     = url;

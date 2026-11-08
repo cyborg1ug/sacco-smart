@@ -12,6 +12,10 @@
 
 import { supabase } from "@/integrations/supabase/client";
 
+/** Plain-language balance rule printed on every report and statement. */
+export const BALANCE_FORMULA_NOTE =
+  "Balance method: Account Balance = Total Savings − Loan Owed. Loan Owed = Principal + Agreed Interest (rate × months) + Overdue Interest charged − Repayments made. Repayments clear interest first.";
+
 export const ACTIVE_LOAN_STATUSES = ["approved", "disbursed", "active"];
 
 /** Net account balance = total savings minus outstanding active-loan balances. */

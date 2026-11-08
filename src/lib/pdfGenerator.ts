@@ -1,6 +1,7 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { format, differenceInDays, differenceInMonths } from "date-fns";
+import { BALANCE_FORMULA_NOTE } from "./accountBalance";
 
 interface Transaction {
   created_at: string;
@@ -288,6 +289,7 @@ export const generateMemberStatementPDF = (data: MemberStatementData): void => {
     const fY = doc.internal.pageSize.getHeight() - 10;
     doc.setFontSize(7);
     doc.setTextColor(130, 130, 130);
+    doc.text(doc.splitTextToSize(BALANCE_FORMULA_NOTE, pageWidth - 20), pageWidth / 2, fY - 8, { align: "center" });
     doc.text(`Page ${i} of ${totalPages} — KINONI SACCO Management System — Confidential`, pageWidth / 2, fY, { align: "center" });
   }
 
@@ -440,6 +442,7 @@ export const generateGroupReportPDF = (data: GroupReportData): void => {
     const fY = doc.internal.pageSize.getHeight() - 10;
     doc.setFontSize(7);
     doc.setTextColor(130, 130, 130);
+    doc.text(doc.splitTextToSize(BALANCE_FORMULA_NOTE, pageWidth - 20), pageWidth / 2, fY - 8, { align: "center" });
     doc.text(`Page ${i} of ${totalPages} — KINONI SACCO Management System — Confidential`, pageWidth / 2, fY, { align: "center" });
   }
 
