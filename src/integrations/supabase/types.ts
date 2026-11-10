@@ -500,6 +500,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      financial_cutoff_date: { Args: never; Returns: string }
       generate_tnx_id: { Args: never; Returns: string }
       get_email_by_phone: { Args: { p_phone_number: string }; Returns: string }
       get_guarantor_candidates:

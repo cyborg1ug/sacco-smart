@@ -1,0 +1,1 @@
+DO $$ BEGIN PERFORM cron.unschedule(jobid) FROM cron.job WHERE command ILIKE '%apply-overdue-interest%'; END $$;

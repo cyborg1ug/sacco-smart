@@ -22,6 +22,20 @@
       "when": 1794132820085,
       "tag": "0002_admin_savings_deduction",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794293306734,
+      "tag": "0003_financial_cutoff_2026_09_30",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794293334789,
+      "tag": "0004_stop_overdue_cron_after_closing",
+      "breakpoints": true
     }
   ]
 }

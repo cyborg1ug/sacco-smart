@@ -64,6 +64,14 @@ Deno.serve(async (req) => {
     }
 
     const today = new Date();
+    // Books closed on 30 Sep 2026: no overdue charges accrue after this date.
+    const CLOSING_DATE = new Date("2026-09-30T23:59:59Z");
+    if (today > CLOSING_DATE) {
+      return new Response(
+        JSON.stringify({ success: true, message: "Books closed at 30 Sep 2026 — overdue accrual stopped", updated: 0, skipped: 0 }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
     // Use UTC date string YYYY-MM-DD for idempotency key (one accrual per day)
     const todayKey = today.toISOString().split('T')[0];
 

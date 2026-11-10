@@ -34,7 +34,7 @@ const AdminReportsPage = () => {
         <h2 className="text-2xl font-bold text-foreground">Reports & Integrity</h2>
         <p className="text-sm text-muted-foreground mt-0.5">Generate financial reports, AI-enhanced bank statements, and verify balance integrity</p>
       </div>
-      <Tabs defaultValue="ai" className="space-y-4">
+      <Tabs defaultValue="custom" className="space-y-4">
         <TabsList className="bg-muted/50">
           <TabsTrigger value="ai" className="gap-2">
             <Sparkles className="w-4 h-4" /> AI Reports
