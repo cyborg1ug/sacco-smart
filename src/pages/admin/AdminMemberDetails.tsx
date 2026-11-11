@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, User, Phone, Mail, MapPin, Briefcase, CreditCard, Wallet, TrendingUp, FileText, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 import { netAccountBalance, fetchOutstandingByAccount } from "@/lib/accountBalance";
+import AccountBreakdown from "@/components/dashboard/admin/AccountBreakdown";
 
 interface MemberDetails {
   id: string;
@@ -138,7 +139,7 @@ const AdminMemberDetails = () => {
         total_loans: loansData.length,
         active_loans: activeLoans.length,
         total_borrowed: loansData.reduce((sum, l) => sum + l.amount, 0),
-        total_outstanding: loansData.reduce((sum, l) => sum + (l.outstanding_balance || 0), 0)
+        total_outstanding: loansData.filter(l => !['pending','rejected'].includes(l.status)).reduce((sum, l) => sum + (l.outstanding_balance || 0), 0)
       });
     }
 
@@ -355,6 +356,16 @@ const AdminMemberDetails = () => {
               </div>
             </CardContent>
           </Card>
+        )}
+
+        {member.account_type === 'main' && subAccounts.length > 0 && (
+          <AccountBreakdown
+            mainAccountId={member.id}
+            accounts={[
+              { id: member.id, account_number: member.account_number, name: member.profile.full_name, type: "main" },
+              ...subAccounts.map((s) => ({ id: s.id, account_number: s.account_number, name: s.profile?.full_name || "Sub-account", type: "sub" as const })),
+            ]}
+          />
         )}
 
         {/* Account Info */}

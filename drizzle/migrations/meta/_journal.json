@@ -36,6 +36,13 @@
       "when": 1794293334789,
       "tag": "0004_stop_overdue_cron_after_closing",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1794371765958,
+      "tag": "0005_loan_waiver_pending_zero_origin_account",
+      "breakpoints": true
     }
   ]
 }

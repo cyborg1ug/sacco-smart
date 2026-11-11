@@ -1,0 +1,1 @@
+- Transactions keep `origin_account_id` (the account they were first recorded on) so consolidated parent accounts can still be split per original account; never overwrite it when moving rows.

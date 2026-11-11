@@ -105,6 +105,7 @@ export type Database = {
           interest_rate: number
           max_loan_amount: number | null
           outstanding_balance: number
+          penalty_waived: boolean
           purpose: string | null
           repayment_months: number | null
           status: string
@@ -124,6 +125,7 @@ export type Database = {
           interest_rate?: number
           max_loan_amount?: number | null
           outstanding_balance: number
+          penalty_waived?: boolean
           purpose?: string | null
           repayment_months?: number | null
           status?: string
@@ -143,6 +145,7 @@ export type Database = {
           interest_rate?: number
           max_loan_amount?: number | null
           outstanding_balance?: number
+          penalty_waived?: boolean
           purpose?: string | null
           repayment_months?: number | null
           status?: string
@@ -366,6 +369,7 @@ export type Database = {
           description: string | null
           id: string
           loan_id: string | null
+          origin_account_id: string | null
           receipt_number: string | null
           source_transaction_id: string | null
           status: string
@@ -382,6 +386,7 @@ export type Database = {
           description?: string | null
           id?: string
           loan_id?: string | null
+          origin_account_id?: string | null
           receipt_number?: string | null
           source_transaction_id?: string | null
           status?: string
@@ -398,6 +403,7 @@ export type Database = {
           description?: string | null
           id?: string
           loan_id?: string | null
+          origin_account_id?: string | null
           receipt_number?: string | null
           source_transaction_id?: string | null
           status?: string
@@ -417,6 +423,13 @@ export type Database = {
             columns: ["loan_id"]
             isOneToOne: false
             referencedRelation: "loans"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "transactions_origin_account_id_fkey"
+            columns: ["origin_account_id"]
+            isOneToOne: false
+            referencedRelation: "accounts"
             referencedColumns: ["id"]
           },
           {
