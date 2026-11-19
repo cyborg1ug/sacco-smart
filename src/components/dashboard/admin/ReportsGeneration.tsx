@@ -10,6 +10,7 @@ import { format, startOfMonth, endOfMonth, subMonths, differenceInMonths, differ
 import FinancialCharts from "../charts/FinancialCharts";
 import { generateMemberStatementPDF, generateGroupReportPDF } from "@/lib/pdfGenerator";
 import * as XLSX from "xlsx";
+import { snapshotAsOf, PERIOD_NOTE } from "@/lib/periodLedger";
 import { ACTIVE_LOAN_STATUSES, netAccountBalance, BALANCE_FORMULA_NOTE } from "@/lib/accountBalance";
 
 const ReportsGeneration = () => {
@@ -75,8 +76,10 @@ const ReportsGeneration = () => {
       .from("transactions").select("*").eq("status", "approved")
       .gte("created_at", dateRange.start.toISOString())
       .lte("created_at", dateRange.end.toISOString());
-    const { data: loans } = await supabase.from("loans").select("status, outstanding_balance");
-    const { data: accounts } = await supabase.from("accounts").select("balance, total_savings, created_at");
+    const { data: liveLoans } = await supabase.from("loans").select("*");
+    const { data: liveAccs } = await supabase.from("accounts").select("id, balance, total_savings, created_at");
+    const snapC = await snapshotAsOf((liveAccs || []) as any[], (liveLoans || []) as any[], dateRange.end);
+    const loans = snapC.loans as any[]; const accounts = snapC.accounts as any[];
     const { data: savings } = await supabase.from("savings").select("*")
       .gte("week_start", dateRange.start.toISOString()).order("week_start", { ascending: true });
 
@@ -101,22 +104,20 @@ const ReportsGeneration = () => {
       .filter((l: any) => ACTIVE_LOAN_STATUSES.includes(l.status) && Number(l.outstanding_balance) > 0)
       .reduce((sum: number, l: any) => sum + Number(l.outstanding_balance), 0);
     const totalBalance = (accounts?.reduce((sum, a) => sum + Number(a.total_savings), 0) || 0) - totalActiveOutstanding;
-    const balanceData = [{ date: format(new Date(), "MMM dd"), balance: totalBalance }];
+    const balanceData = [{ date: format(dateRange.end, "MMM dd"), balance: totalBalance }];
     setChartData({ transactionData, loanData, savingsData, balanceData });
   };
 
-  const isLoanOverdue = (loan: any): boolean => {
-    if (!loan.disbursed_at || !loan.repayment_months) return false;
-    const monthsElapsed = differenceInMonths(new Date(), new Date(loan.disbursed_at));
-    return monthsElapsed > loan.repayment_months;
-  };
+  // Overdue status is measured at the report period end, not today.
+  const refDate = () => { const e = getDateRange().end; return e < new Date() ? e : new Date(); };
+  const isLoanOverdue = (loan: any): boolean => getDaysOverdue(loan) > 0;
 
   const getDaysOverdue = (loan: any): number => {
     if (!loan.disbursed_at || !loan.repayment_months) return 0;
     const dueDate = new Date(loan.disbursed_at);
     dueDate.setMonth(dueDate.getMonth() + loan.repayment_months);
-    if (new Date() <= dueDate) return 0;
-    return differenceInDays(new Date(), dueDate);
+    if (refDate() <= dueDate) return 0;
+    return differenceInDays(refDate(), dueDate);
   };
 
   const calcDailyOverdueInterest = (loan: any): number => {
@@ -163,13 +164,12 @@ const ReportsGeneration = () => {
       supabase.from("loans").select("*").eq("account_id", accountId),
     ]);
 
-    // Account balance = total savings minus outstanding active loans
-    const outstanding = (loans || [])
-      .filter((l: any) => ACTIVE_LOAN_STATUSES.includes(l.status) && Number(l.outstanding_balance) > 0)
-      .reduce((s: number, l: any) => s + Number(l.outstanding_balance), 0);
-    const memberAccountNet = { ...memberAccount, balance: netAccountBalance(memberAccount.total_savings, outstanding) };
+    // Balances shown as at the period end (savings − loan owed on that date)
+    const snap = await snapshotAsOf([memberAccount], (loans || []) as any[], dateRange.end);
+    const memberAccountNet = { ...memberAccount, ...snap.accounts[0] };
+    const allUpToEnd = (allTxns || []).filter((t: any) => new Date(t.created_at) <= dateRange.end);
 
-    return { profile, memberAccount: memberAccountNet, periodTxns, allTxns, savings, loans, dateRange };
+    return { profile, memberAccount: memberAccountNet, periodTxns, allTxns: allUpToEnd, savings, loans: snap.loans, dateRange };
   };
 
   // ─── MEMBER REPORT (TEXT) ──────────────────────────────────────────
@@ -254,11 +254,11 @@ const ReportsGeneration = () => {
     report += `Phone:            ${profile.phone_number || "N/A"}\nOccupation:       ${profile.occupation || "N/A"}\n`;
     report += `Account Number:   ${memberAccount.account_number}\n\n`;
 
-    report += `CURRENT ACCOUNT BALANCES\n${"─".repeat(75)}\n`;
+    report += `BALANCES AS AT PERIOD END\n${"─".repeat(75)}\n`;
     report += `Account Balance:              UGX ${Number(memberAccount.balance).toLocaleString()}\n`;
-    report += `Total Savings (all-time):     UGX ${Number(memberAccount.total_savings).toLocaleString()}\n\n`;
+    report += `Total Savings (at end):       UGX ${Number(memberAccount.total_savings).toLocaleString()}\n\n`;
 
-    report += `ALL-TIME TRANSACTION TOTALS\n${"─".repeat(75)}\n`;
+    report += `CUMULATIVE TOTALS TO PERIOD END\n${"─".repeat(75)}\n`;
     report += `Total Deposits:               UGX ${aDep.toLocaleString()}\n`;
     report += `Total Withdrawals:            UGX ${aWit.toLocaleString()}\n`;
     report += `Net Deposits:                 UGX ${(aDep - aWit).toLocaleString()}\n`;
@@ -344,7 +344,7 @@ const ReportsGeneration = () => {
 
     report += `\n${"═".repeat(75)}\nEnd of Report - KINONI SACCO Management System\n`;
 
-    const blob = new Blob([report + "\n\n" + BALANCE_FORMULA_NOTE + "\n"], { type: "text/plain" });
+    const blob = new Blob([report + "\n\n" + BALANCE_FORMULA_NOTE + "\n" + PERIOD_NOTE + "\n"], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -377,11 +377,11 @@ const ReportsGeneration = () => {
       ["Occupation", profile.occupation || "N/A"],
       ["Account Number", memberAccount.account_number],
       [],
-      ["CURRENT BALANCES"],
+      ["BALANCES AS AT PERIOD END"],
       ["Account Balance (UGX)", Number(memberAccount.balance)],
       ["Total Savings (UGX)", Number(memberAccount.total_savings)],
       [],
-      ["ALL-TIME TOTALS"],
+      ["CUMULATIVE TO PERIOD END"],
       ["Total Deposits (UGX)", sum(allTxns, "deposit")],
       ["Total Withdrawals (UGX)", sum(allTxns, "withdrawal")],
       ["Net Deposits (UGX)", sum(allTxns, "deposit") - sum(allTxns, "withdrawal")],
@@ -439,7 +439,7 @@ const ReportsGeneration = () => {
     const wsSavings = XLSX.utils.aoa_to_sheet([savingsHeaders, ...savingsRows]);
     XLSX.utils.book_append_sheet(wb, wsSavings, "Savings");
 
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Balance Method"], [BALANCE_FORMULA_NOTE]]), "Balance Method");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Balance Method"], [BALANCE_FORMULA_NOTE], [PERIOD_NOTE]]), "Balance Method");
     XLSX.writeFile(wb, `kinoni_member_report_${memberAccount.account_number}_${format(new Date(), "yyyyMMdd")}.xlsx`);
     toast({ title: "Success", description: "Excel report downloaded" });
   };
@@ -449,28 +449,27 @@ const ReportsGeneration = () => {
     setLoading(true);
     const dateRange = getDateRange();
 
-    const { data: accounts } = await supabase.from("accounts").select("*");
+    const { data: liveAccounts } = await supabase.from("accounts").select("*");
     const { data: profiles } = await supabase.from("profiles").select("*");
     const { data: subProfiles } = await supabase.from("sub_account_profiles").select("*");
     const { data: allPeriodTxns } = await supabase.from("transactions").select("*")
       .gte("created_at", dateRange.start.toISOString())
       .lte("created_at", dateRange.end.toISOString());
-    const { data: allTxns } = await supabase.from("transactions").select("*").eq("status", "approved");
-    const { data: allLoans } = await supabase.from("loans").select("*");
+    const { data: allTxnsLive } = await supabase.from("transactions").select("*").eq("status", "approved")
+      .lte("created_at", dateRange.end.toISOString()).limit(10000);
+    const allTxns = allTxnsLive || [];
+    const { data: liveLoans } = await supabase.from("loans").select("*");
+    // Every balance in this report is as at the period end
+    const snap = await snapshotAsOf(
+      (liveAccounts || []).filter((a: any) => new Date(a.created_at) <= dateRange.end),
+      (liveLoans || []) as any[], dateRange.end);
+    const accounts = snap.accounts as any[];
+    const allLoans = snap.loans as any[];
     const { data: savings } = await supabase.from("savings").select("*")
-      .gte("week_start", dateRange.start.toISOString());
+      .gte("week_start", dateRange.start.toISOString()).lte("week_end", dateRange.end.toISOString());
 
     // Account balance = total savings minus outstanding active loans (override the
     // stored cash-ledger balance so every section of the report is consistent).
-    const groupOutstanding: Record<string, number> = {};
-    (allLoans || []).forEach((l: any) => {
-      if (ACTIVE_LOAN_STATUSES.includes(l.status) && Number(l.outstanding_balance) > 0) {
-        groupOutstanding[l.account_id] = (groupOutstanding[l.account_id] || 0) + Number(l.outstanding_balance);
-      }
-    });
-    (accounts || []).forEach((acc: any) => {
-      acc.balance = netAccountBalance(acc.total_savings, groupOutstanding[acc.id]);
-    });
 
     const mainAccounts = accounts?.filter(a => a.account_type === 'main') || [];
     const subAccounts = accounts?.filter(a => a.account_type === 'sub') || [];
@@ -497,7 +496,7 @@ const ReportsGeneration = () => {
     const activeLoans = (allLoans || []).filter(l => ["disbursed", "active"].includes(l.status) && l.outstanding_balance > 0);
     const overdueLoans = activeLoans.filter(l => isLoanOverdue(l));
     const totalOutstanding = activeLoans.reduce((sum, l) => sum + Number(l.outstanding_balance), 0);
-    const totalEverDisbursed = (allLoans || []).filter(l => ["disbursed", "active", "completed", "fully_paid"].includes(l.status))
+    const totalEverDisbursed = (allLoans || []).filter(l => l.disbursed_at && new Date(l.disbursed_at) >= dateRange.start && ["disbursed", "active", "completed", "fully_paid"].includes(l.status))
       .reduce((sum, l) => sum + Number(l.amount), 0);
     const totalOverdueBalance = overdueLoans.reduce((sum, l) => sum + Number(l.outstanding_balance), 0);
     const totalOverduePenalty = overdueLoans.reduce((sum, l) => sum + calcDailyOverdueInterest(l), 0);
@@ -586,7 +585,7 @@ const ReportsGeneration = () => {
     report += `Combined Total Savings:       UGX ${totalSavingsAmount.toLocaleString()}\n`;
     report += `Pending Transactions:         ${pendingApprovals}\n\n`;
 
-    report += `ALL-TIME FINANCIAL TOTALS\n${"─".repeat(75)}\n`;
+    report += `CUMULATIVE TOTALS TO PERIOD END\n${"─".repeat(75)}\n`;
     report += `All Deposits:                 UGX ${allTimeDeposits.toLocaleString()}\n`;
     report += `All Withdrawals:              UGX ${allTimeWithdrawals.toLocaleString()}\n`;
     report += `Net Deposits (All-time):      UGX ${(allTimeDeposits - allTimeWithdrawals).toLocaleString()}\n`;
@@ -714,7 +713,7 @@ const ReportsGeneration = () => {
 
     report += `${"═".repeat(75)}\nEnd of Report - KINONI SACCO Management System\n`;
 
-    const blob = new Blob([report + "\n\n" + BALANCE_FORMULA_NOTE + "\n"], { type: "text/plain" });
+    const blob = new Blob([report + "\n\n" + BALANCE_FORMULA_NOTE + "\n" + PERIOD_NOTE + "\n"], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -750,7 +749,7 @@ const ReportsGeneration = () => {
       ["Combined Balance (UGX)", totalBalance],
       ["Combined Savings (UGX)", totalSavingsAmount],
       [],
-      ["ALL-TIME TOTALS"],
+      ["CUMULATIVE TO PERIOD END"],
       ["All Deposits (UGX)", allTimeDeposits],
       ["All Withdrawals (UGX)", allTimeWithdrawals],
       ["Net Deposits (UGX)", allTimeDeposits - allTimeWithdrawals],
@@ -830,7 +829,7 @@ const ReportsGeneration = () => {
     });
     XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([txnHeaders, ...txnRows]), "Period Transactions");
 
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Balance Method"], [BALANCE_FORMULA_NOTE]]), "Balance Method");
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([["Balance Method"], [BALANCE_FORMULA_NOTE], [PERIOD_NOTE]]), "Balance Method");
     XLSX.writeFile(wb, `kinoni_group_report_${format(new Date(), "yyyyMMdd")}.xlsx`);
     toast({ title: "Success", description: "Excel group report downloaded" });
   };

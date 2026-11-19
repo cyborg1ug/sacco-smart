@@ -1,3 +1,4 @@
+import { snapshotAsOf } from "@/lib/periodLedger";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -58,18 +59,20 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
     return { start: subMonths(now, 12), end: now };
   };
 
+  // Overdue measured at the report period end
+  const refDate = () => { const e = getDateRange().end; return e < new Date() ? e : new Date(); };
   const isOverdue = (loan: any) => {
     if (!loan.disbursed_at || !loan.repayment_months) return false;
     const due = new Date(loan.disbursed_at);
     due.setMonth(due.getMonth() + loan.repayment_months);
-    return new Date() > due;
+    return refDate() > due;
   };
 
   const daysOverdue = (loan: any) => {
     if (!loan.disbursed_at || !loan.repayment_months) return 0;
     const due = new Date(loan.disbursed_at);
     due.setMonth(due.getMonth() + loan.repayment_months);
-    return new Date() > due ? differenceInDays(new Date(), due) : 0;
+    return refDate() > due ? differenceInDays(refDate(), due) : 0;
   };
 
   // ── Fetch data for the selected scope ────────────────────────────────
@@ -83,22 +86,21 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
       const { data: acc } = await supabase.from("accounts").select("*").eq("user_id", selectedMember).eq("account_type", "main").maybeSingle();
       if (!profile || !acc) return null;
 
-      const [{ data: allTxns }, { data: periodTxns }, { data: loans }, { data: savings }] = await Promise.all([
+      let [{ data: allTxns }, { data: periodTxns }, { data: loans }, { data: savings }] = await Promise.all([
         supabase.from("transactions").select("*").eq("account_id", acc.id).eq("status", "approved").order("created_at", { ascending: false }),
         supabase.from("transactions").select("*").eq("account_id", acc.id).eq("status", "approved")
           .gte("created_at", dr.start.toISOString()).lte("created_at", dr.end.toISOString()),
         supabase.from("loans").select("*").eq("account_id", acc.id),
-        supabase.from("savings").select("*").eq("account_id", acc.id).gte("week_start", dr.start.toISOString()),
+        supabase.from("savings").select("*").eq("account_id", acc.id).gte("week_start", dr.start.toISOString()).lte("week_end", dr.end.toISOString()),
       ]);
 
       const sum = (arr: any[], type: string) => (arr || []).filter(t => t.transaction_type === type && t.status === "approved").reduce((s, t) => s + Number(t.amount), 0);
-      const activeLoans = (loans || []).filter(l => ["disbursed","active"].includes(l.status) && l.outstanding_balance > 0);
+      let activeLoans = (loans || []).filter(l => ["disbursed","active"].includes(l.status) && l.outstanding_balance > 0);
 
       // Account balance = total savings minus outstanding active loans
-      const outstandingSingle = (loans || [])
-        .filter(l => ACTIVE_LOAN_STATUSES.includes(l.status) && Number(l.outstanding_balance) > 0)
-        .reduce((s, l) => s + Number(l.outstanding_balance), 0);
-      acc.balance = netAccountBalance(acc.total_savings, outstandingSingle);
+      const snapM = await snapshotAsOf([acc], (loans || []) as any[], dr.end);
+      acc.balance = snapM.accounts[0].balance; acc.total_savings = snapM.accounts[0].total_savings;
+      loans = snapM.loans as any; activeLoans = (loans || []).filter((l: any) => ["disbursed","active"].includes(l.status) && l.outstanding_balance > 0); allTxns = (allTxns || []).filter((t: any) => new Date(t.created_at) <= dr.end);
 
 
       const aiPayload = {
@@ -250,16 +252,20 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
     }
 
     // ── Group ─────────────────────────────────────────────────────────
-    const [{ data: accounts }, { data: profiles }, { data: subProfiles },
+    let [{ data: accounts }, { data: profiles }, { data: subProfiles },
            { data: allTxns }, { data: periodTxns }, { data: allLoans }, { data: savings }] = await Promise.all([
       supabase.from("accounts").select("*"),
       supabase.from("profiles").select("*"),
       supabase.from("sub_account_profiles").select("*"),
-      supabase.from("transactions").select("*").eq("status", "approved"),
+      supabase.from("transactions").select("*").eq("status", "approved").lte("created_at", dr.end.toISOString()).limit(10000),
       supabase.from("transactions").select("*").eq("status", "approved").gte("created_at", dr.start.toISOString()).lte("created_at", dr.end.toISOString()),
       supabase.from("loans").select("*"),
-      supabase.from("savings").select("*").gte("week_start", dr.start.toISOString()),
+      supabase.from("savings").select("*").gte("week_start", dr.start.toISOString()).lte("week_end", dr.end.toISOString()),
     ]);
+    {
+      const snapG = await snapshotAsOf(((accounts || []) as any[]).filter(a => new Date(a.created_at) <= dr.end), (allLoans || []) as any[], dr.end);
+      accounts = snapG.accounts as any; allLoans = snapG.loans as any;
+    }
 
     const mainAccs = (accounts || []).filter(a => a.account_type === "main");
     const subAccs  = (accounts || []).filter(a => a.account_type === "sub");
@@ -275,9 +281,7 @@ export default function AIReportInsights({ members }: AIReportInsightsProps) {
         groupOutstanding[l.account_id] = (groupOutstanding[l.account_id] || 0) + Number(l.outstanding_balance);
       }
     });
-    (accounts || []).forEach((a: any) => {
-      a.balance = netAccountBalance(a.total_savings, groupOutstanding[a.id]);
-    });
+
 
 
     const getMemberName = (acc: any) => {

@@ -1,3 +1,4 @@
+import { loadLedgerUpTo, loanOwedAsOf, savingsAsOf, daysOverdueAsOf, dueDateOf as ledgerDueDate } from "@/lib/periodLedger";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -168,64 +169,69 @@ const CustomReports = () => {
           ],
         };
       } else if (reportType === "loans_only" || reportType === "overdue_loans") {
-        const { data } = await supabase
-          .from("loans")
-          .select("id, account_id, amount, interest_rate, total_amount, outstanding_balance, status, purpose, disbursed_at, repayment_months, created_at")
-          .order("created_at", { ascending: false }).limit(2000);
-        let loans = data || [];
+        const periodStart = new Date(from);
+        const periodEnd = new Date(`${to}T23:59:59`);
+        const ledger = await loadLedgerUpTo(periodEnd);
         const overdueOnly = reportType === "overdue_loans";
-        if (overdueOnly) {
-          loans = loans.filter(l => {
-            const due = dueDateOf(l);
-            return due && new Date() > due && Number(l.outstanding_balance) > 0;
-          });
-        }
-        const names = await resolveNames(loans.map(l => l.account_id));
-        const rows = loans.map(l => {
-          const due = dueDateOf(l);
-          const repaid = Number(l.total_amount) - Number(l.outstanding_balance);
-          const progress = Number(l.total_amount) > 0 ? Math.round((repaid / Number(l.total_amount)) * 100) : 0;
-          const daysOverdue = due && new Date() > due ? differenceInDays(new Date(), due) : 0;
+        // Only loans that existed (were disbursed) by the period end and still mattered inside it
+        let loans = ledger.loans
+          .filter(l => l.disbursed_at && new Date(l.disbursed_at) <= periodEnd && !["pending", "rejected"].includes(l.status))
+          .map(l => {
+            const owedEnd = loanOwedAsOf(l, periodEnd, ledger.txns);
+            const owedStart = new Date(l.disbursed_at!) < periodStart ? loanOwedAsOf(l, new Date(periodStart.getTime() - 1), ledger.txns) : Number(l.total_amount);
+            const paidInPeriod = ledger.txns.filter(x => x.loan_id === l.id && x.transaction_type === "loan_repayment" && new Date(x.created_at) >= periodStart).reduce((s, x) => s + Number(x.amount), 0);
+            return { l, owedEnd, owedStart, paidInPeriod, days: daysOverdueAsOf(l, periodEnd) };
+          })
+          .filter(r => new Date(r.l.disbursed_at!) >= periodStart || r.owedStart > 0 || r.paidInPeriod > 0);
+        if (overdueOnly) loans = loans.filter(r => r.days > 0 && r.owedEnd > 0);
+        const names = await resolveNames(loans.map(r => r.l.account_id));
+        const rows = loans.map(({ l, owedEnd, paidInPeriod, days }) => {
+          const due = ledgerDueDate(l);
+          const total = Number(l.total_amount);
+          const progress = total > 0 ? Math.min(100, Math.round(((total - Math.min(owedEnd, total)) / total) * 100)) : 0;
           return [
             names[l.account_id]?.name || "Unknown",
             names[l.account_id]?.accountNumber || "—",
             Number(l.amount),
             `${Number(l.interest_rate)}%/mo`,
-            Number(l.total_amount),
-            Number(l.outstanding_balance),
+            total,
+            paidInPeriod,
+            owedEnd,
             `${progress}%`,
-            l.disbursed_at ? format(new Date(l.disbursed_at), "dd MMM yyyy") : "—",
+            format(new Date(l.disbursed_at!), "dd MMM yyyy"),
             due ? format(due, "dd MMM yyyy") : "—",
-            daysOverdue ? `${daysOverdue}d` : "—",
-            l.status,
+            days ? `${days}d` : "—",
+            owedEnd > 0 ? (days > 0 ? "overdue" : "active") : "cleared",
           ];
         });
-        const principal = loans.reduce((s, l) => s + Number(l.amount), 0);
-        const outstanding = loans.reduce((s, l) => s + Number(l.outstanding_balance), 0);
-        const collected = loans.reduce((s, l) => s + (Number(l.total_amount) - Number(l.outstanding_balance)), 0);
+        const principal = loans.reduce((s, r) => s + Number(r.l.amount), 0);
+        const outstanding = loans.reduce((s, r) => s + r.owedEnd, 0);
+        const collected = loans.reduce((s, r) => s + r.paidInPeriod, 0);
         res = {
           title: overdueOnly ? "Overdue Loans Report" : "Loans Report",
-          columns: ["Member", "Account", "Principal", "Rate", "Total Due", "Outstanding", "Progress", "Disbursed", "Due Date", "Overdue", "Status"],
-          numericCols: [2, 4, 5],
+          columns: ["Member", "Account", "Principal", "Rate", "Total Due", "Repaid in Period", "Owed at Period End", "Progress", "Disbursed", "Due Date", "Overdue (at end)", "Status (at end)"],
+          numericCols: [2, 4, 5, 6],
           rows,
           summary: [
             { label: overdueOnly ? "Overdue Loans" : "Loans", value: String(loans.length) },
             { label: "Total Principal", value: ugx(principal) },
-            { label: "Outstanding", value: ugx(outstanding) },
-            { label: "Repaid To Date", value: ugx(collected) },
+            { label: "Owed at Period End", value: ugx(outstanding) },
+            { label: "Repaid in Period", value: ugx(collected) },
           ],
         };
       } else {
-        // savings_vs_loans and savings_rankings — per member positions
-        const [{ data: accounts }, { data: loans }] = await Promise.all([
-          supabase.from("accounts").select("id, account_number, user_id, account_type, total_savings"),
-          supabase.from("loans").select("account_id, amount, outstanding_balance, status").in("status", ACTIVE_LOAN_STATUSES),
+        // savings_vs_loans and savings_rankings — positions as at the period end
+        const periodEnd = new Date(`${to}T23:59:59`);
+        const [{ data: accounts }, ledger] = await Promise.all([
+          supabase.from("accounts").select("id, account_number, user_id, account_type, created_at"),
+          loadLedgerUpTo(periodEnd),
         ]);
-        const accs = accounts || [];
+        const accs = (accounts || []).filter(a => new Date(a.created_at) <= periodEnd);
         const names = await resolveNames(accs.map(a => a.id));
         const outstandingByAcc = new Map<string, number>();
-        (loans || []).forEach(l => {
-          outstandingByAcc.set(l.account_id, (outstandingByAcc.get(l.account_id) || 0) + Number(l.outstanding_balance));
+        ledger.loans.forEach(l => {
+          const owed = loanOwedAsOf(l, periodEnd, ledger.txns);
+          if (owed > 0) outstandingByAcc.set(l.account_id, (outstandingByAcc.get(l.account_id) || 0) + owed);
         });
         const periodDeposits = new Map<string, number>();
         (await fetchTxns(["deposit"])).forEach(t => {
@@ -233,7 +239,7 @@ const CustomReports = () => {
         });
 
         const enriched = accs.map(a => {
-          const savings = Number(a.total_savings || 0);
+          const savings = savingsAsOf(a.id, periodEnd, ledger.txns, ledger.welfare);
           const owed = outstandingByAcc.get(a.id) || 0;
           return {
             name: names[a.id]?.name || a.account_number,
@@ -243,13 +249,13 @@ const CustomReports = () => {
             net: savings - owed,
             deposits: periodDeposits.get(a.id) || 0,
           };
-        });
+        }).filter(m => m.savings > 0 || m.owed > 0 || m.deposits > 0);
 
         if (reportType === "savings_rankings") {
           const ranked = [...enriched].sort((a, b) => b.savings - a.savings);
           res = {
             title: "Savings Rankings Report",
-            columns: ["Rank", "Member", "Account", "Total Savings", "Deposits in Period", "Share of Group"],
+            columns: ["Rank", "Member", "Account", "Savings at Period End", "Deposits in Period", "Share of Group"],
             numericCols: [3, 4],
             rows: (() => {
               const total = ranked.reduce((s, m) => s + m.savings, 0) || 1;
@@ -271,7 +277,7 @@ const CustomReports = () => {
           const totalOwed = list.reduce((s, m) => s + m.owed, 0);
           res = {
             title: "Savings vs Loans Report",
-            columns: ["Member", "Account", "Total Savings", "Active Loan Outstanding", "Net Position", "Exposure Ratio"],
+            columns: ["Member", "Account", "Savings at Period End", "Loan Owed at Period End", "Net Position", "Exposure Ratio"],
             numericCols: [2, 3, 4],
             rows: list.map(m => [
               m.name, m.accountNumber, m.savings, m.owed, m.net,
